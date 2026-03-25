@@ -21,14 +21,14 @@
 
 :root.light {
   --bg-main: #f8fafc;
-  --bg-panel: rgba(255, 255, 255, 0.9);
-  --bg-panel-hover: rgba(255, 255, 255, 1);
+  --bg-panel: rgba(255, 255, 255, 0.95);
+  --bg-panel-hover: #ffffff;
   --bg-input: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #334155; /* Darker for better contrast */
+  --text-main: #020617; /* Near black */
+  --text-muted: #1e293b; /* Dark slate (very visible) */
   --accent-primary: #0284c7;
   --accent-secondary: #0369a1;
-  --border-color: rgba(0, 0, 0, 0.12); /* Slightly darker border */
+  --border-color: rgba(0, 0, 0, 0.15);
 }
 
 * {
