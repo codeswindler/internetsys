@@ -12,13 +12,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('admin/login')
   adminLogin(@Body() body: any) {
-    return this.authService.adminLogin(body.email, body.password);
+    const identifier = body.identifier || body.email || body.username;
+    return this.authService.adminLogin(identifier, body.password);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('user/login')
   userLogin(@Body() body: any) {
-    return this.authService.userLogin(body.phone, body.password);
+    const identifier = body.identifier || body.phone || body.email || body.username;
+    return this.authService.userLogin(identifier, body.password);
   }
 
   @Post('user/register')

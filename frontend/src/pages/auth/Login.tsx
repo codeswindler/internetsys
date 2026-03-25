@@ -18,9 +18,7 @@ export default function Login() {
 
     try {
       const endpoint = role === 'admin' ? '/auth/admin/login' : '/auth/user/login';
-      const payload = role === 'admin' 
-        ? { email: identifier, password } 
-        : { phone: identifier, password };
+      const payload = { identifier, password };
         
       const res = await api.post(endpoint, payload);
       

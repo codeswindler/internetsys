@@ -33,8 +33,14 @@ export class AuthService {
     return { access_token: this.jwtService.sign(payload) };
   }
 
-  async userLogin(phone: string, pass: string) {
-    const user = await this.userRepo.findOne({ where: { phone } });
+  async userLogin(identifier: string, pass: string) {
+    const user = await this.userRepo.findOne({
+      where: [
+        { phone: identifier },
+        { email: identifier },
+        { username: identifier }
+      ]
+    });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
