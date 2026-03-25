@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -185,7 +185,7 @@ export default function Users() {
   const [resetPassword, setResetPassword] = useState('');
 
   const [hiddenUsers, setHiddenUsers] = useState<string[]>([]);
-  const deleteTimeouts = React.useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const deleteTimeouts = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
 
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
