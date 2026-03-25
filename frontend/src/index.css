@@ -25,10 +25,10 @@
   --bg-panel-hover: rgba(255, 255, 255, 1);
   --bg-input: #ffffff;
   --text-main: #0f172a;
-  --text-muted: #64748b;
+  --text-muted: #334155; /* Darker for better contrast */
   --accent-primary: #0284c7;
   --accent-secondary: #0369a1;
-  --border-color: rgba(0, 0, 0, 0.08);
+  --border-color: rgba(0, 0, 0, 0.12); /* Slightly darker border */
 }
 
 * {

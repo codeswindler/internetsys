@@ -40,8 +40,13 @@ export default function AuthLayout() {
       <div className="auth-right">
         {/* Mobile Header */}
         <div className="auth-mobile-header">
+          <div className="auth-mobile-bg">
+            <img src={bgImage} alt="" className="auth-mobile-bg-img" />
+            <div className="auth-mobile-overlay"></div>
+          </div>
           <div className="auth-logo-small animate-pulse-slow">PL</div>
           <h1 className="auth-title-small">PulseLynk</h1>
+          <p className="auth-subtitle-small">Affordable. Reliable. Flexible.</p>
         </div>
 
         {/* Dynamic Outlet Form */}
