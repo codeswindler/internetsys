@@ -676,6 +676,10 @@ export default function Users() {
               </div>
             </form>
           </div>
+        </div>,
+        document.body
+      )}
+
       {/* ── Reset Password Modal ── */}
       {resetTarget && createPortal(
         <div 
