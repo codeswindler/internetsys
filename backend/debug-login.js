@@ -16,6 +16,16 @@ async function debug() {
     await ds.initialize();
     console.log('✅ Connected to MariaDB');
     
+    const isReset = process.argv.includes('--reset');
+    const testPass = 'lynkmepulse26';
+
+    if (isReset) {
+      console.log('🔄 Resetting password to: ' + testPass);
+      const newHash = await bcrypt.hash(testPass, 10);
+      await ds.query("UPDATE admins SET username = 'pulselynk', passwordHash = ? WHERE username = 'pulselynk' OR id = '3fcd8064-9661-47ce-9aa0-988e21937ac4'", [newHash]);
+      console.log('✅ Reset complete!');
+    }
+
     // 1. Check if the user exists
     const admin = (await ds.query("SELECT * FROM admins WHERE username = 'pulselynk'"))[0];
     if (!admin) {
@@ -26,20 +36,19 @@ async function debug() {
     console.log('✅ Found admin:', admin.username, '(' + admin.email + ')');
     
     // 2. Test the password
-    const testPass = 'lynkmepulse26';
     const isMatch = await bcrypt.compare(testPass, admin.passwordHash);
     
     if (isMatch) {
-      console.log('✅ SUCCESS: The password "lynkmepulse26" matches the database hash!');
+      console.log('✅ SUCCESS: The password "' + testPass + '" matches the database hash!');
     } else {
       console.error('❌ FAILURE: The password does not match the hash in the database.');
       console.log('Database Hash:', admin.passwordHash);
-      console.log('Expected Hash example:', await bcrypt.hash(testPass, 10));
+      console.log('👉 Tip: Run: node debug-login.js --reset');
     }
     
     process.exit();
   } catch (err) {
-    console.error('❌ Database connection error:', err.message);
+    console.error('❌ Error:', err.message);
     process.exit(1);
   }
 }
