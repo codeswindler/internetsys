@@ -170,8 +170,8 @@ export default function Routers() {
       {/* ── Header ── */}
       <div id="page-top" className="flex flex-wrap justify-between items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold">Manage Routers</h2>
-          <p className="text-sm text-slate-400 mt-1">{onlineCount} online · {routers?.length ?? 0} total</p>
+          <h2 className="text-2xl font-bold text-main">Manage Routers</h2>
+          <p className="text-sm text-muted mt-1">{onlineCount} online · {routers?.length ?? 0} total</p>
         </div>
         <div className="flex gap-3 flex-wrap">
           <button
@@ -197,8 +197,8 @@ export default function Routers() {
                     <RouterIcon size={20} />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base font-bold text-white leading-tight truncate">{r.name}</h3>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">{r.host}:{r.port}</p>
+                    <h3 className="text-base font-bold text-main leading-tight truncate">{r.name}</h3>
+                    <p className="text-xs text-muted font-mono mt-0.5">{r.host}:{r.port}</p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -213,14 +213,14 @@ export default function Routers() {
             </div>
 
             <div className="p-5 flex flex-col gap-4 flex-1">
-              <div className="bg-black/20 rounded-xl p-3 border border-white/5 space-y-1.5">
+              <div className="bg-[var(--bg-main)]/50 rounded-xl p-3 border border-[var(--border-color)] space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500 text-xs">API User</span>
+                  <span className="text-muted text-xs">API User</span>
                   <span className="font-mono text-cyan-400 text-xs font-semibold">{r.apiUsername}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500 text-xs">Last Check</span>
-                  <span className="text-slate-400 text-xs">{r.lastCheckedAt ? new Date(r.lastCheckedAt).toLocaleTimeString() : 'Never'}</span>
+                  <span className="text-muted text-xs">Last Check</span>
+                  <span className="text-main text-xs">{r.lastCheckedAt ? new Date(r.lastCheckedAt).toLocaleTimeString() : 'Never'}</span>
                 </div>
               </div>
 
@@ -234,7 +234,7 @@ export default function Routers() {
               {/* Profiles */}
               {r.isOnline && r.profiles && r.profiles.length > 0 && (
                 <div>
-                  <button className="w-full flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 hover:text-slate-300" onClick={() => toggleProfiles(r.id)}>
+                  <button className="w-full flex items-center justify-between text-[10px] font-bold text-muted uppercase tracking-wider mb-2 hover:text-main" onClick={() => toggleProfiles(r.id)}>
                     <span className="flex items-center gap-1.5">
                       <ShieldCheck size={11} className="text-cyan-500/70" />
                       Profiles ({r.profiles.length})
@@ -276,7 +276,7 @@ export default function Routers() {
           </div>
         ))}
         {routers?.length === 0 && (
-          <div className="col-span-full text-center p-12 glass-panel text-slate-400">
+          <div className="col-span-full text-center p-12 glass-panel text-muted">
             No routers added yet. Add your first MikroTik router to get started.
           </div>
         )}
@@ -286,10 +286,10 @@ export default function Routers() {
       <div ref={profilesRef} className="pt-4 scroll-mt-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-bold flex items-center gap-2">
+            <h3 className="text-lg font-bold flex items-center gap-2 text-main">
               <Zap size={18} className="text-cyan-400" /> Bandwidth Profiles
             </h3>
-            <p className="text-sm text-slate-400 mt-0.5">Manage and assign profiles across your routers</p>
+            <p className="text-sm text-muted mt-0.5">Manage and assign profiles across your routers</p>
           </div>
           <button
             className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border border-cyan-500/40 text-cyan-300 hover:text-white hover:border-cyan-400/70 transition-all flex items-center gap-2 text-sm font-bold"
@@ -302,8 +302,8 @@ export default function Routers() {
         {profileRows.length > 0 ? (
           <div className="glass-panel overflow-hidden">
             <table className="w-full text-left border-collapse">
-              <thead className="bg-black/20 text-slate-400 text-xs uppercase tracking-wide">
-                <tr className="border-b border-white/5">
+              <thead className="bg-[var(--bg-main)]/50 text-muted text-xs uppercase tracking-wide">
+                <tr className="border-b border-[var(--border-color)]">
                   <th className="p-4 font-medium">#</th>
                   <th className="p-4 font-medium">Profile Name</th>
                   <th className="p-4 font-medium min-w-[300px]">Available On</th>

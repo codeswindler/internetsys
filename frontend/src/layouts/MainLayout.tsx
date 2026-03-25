@@ -147,7 +147,7 @@ export default function MainLayout({ role }: LayoutProps) {
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative ${
                   isActive 
                   ? 'bg-gradient-to-r from-cyan-500/10 to-transparent text-cyan-400 border-l-2 border-cyan-400 font-bold' 
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  : 'text-muted hover:bg-slate-500/5 hover:text-main'
                 } ${link.name === 'Support' && unreadTotal > 0 ? 'ring-1 ring-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.1)]' : ''}`}
               >
                 <div className="relative">
