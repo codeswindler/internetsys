@@ -21,6 +21,16 @@ export default function MainLayout({ role }: LayoutProps) {
   const userRole = localStorage.getItem('role');
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+  let userInitials = role[0].toUpperCase();
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      const identifier = u.username || u.name || u.firstName || u.phone || role;
+      userInitials = identifier.substring(0, 2).toUpperCase();
+    }
+  } catch(e) {}
+
   const { data: unreadTotal = 0 } = useQuery({
     queryKey: ['admin-unread-total'],
     queryFn: async () => {
@@ -205,8 +215,8 @@ export default function MainLayout({ role }: LayoutProps) {
              PulseLynk
           </span>
           
-          <div className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-[10px] font-bold text-cyan-400 uppercase">
-            {role[0]}
+          <div className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-xs font-bold text-cyan-400 uppercase shadow-inner">
+            {userInitials}
           </div>
         </header>
 

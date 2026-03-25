@@ -29,6 +29,7 @@ export default function Login() {
       });
       
       localStorage.setItem('role', profileRes.data.role);
+      localStorage.setItem('user', JSON.stringify(profileRes.data));
       
       toast.success('Authentication successful!');
       
