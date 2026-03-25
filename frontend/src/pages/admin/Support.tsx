@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { MessageCircle, Send, User, ChevronRight, Clock, Check, CheckCheck, X } from 'lucide-react';
+import { MessageCircle, Send, User, ChevronRight, ChevronLeft, Clock, Check, CheckCheck, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -85,9 +85,9 @@ const AdminSupport: React.FC = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-120px)] flex bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-white/5 overflow-hidden shadow-2xl">
+    <div className="h-[calc(100vh-120px)] flex bg-slate-900/50 backdrop-blur-xl rounded-2xl border border-white/5 overflow-hidden shadow-2xl relative">
       {/* Sidebar: Message List */}
-      <div className="w-80 border-r border-white/5 flex flex-col bg-slate-900/40">
+      <div className={`w-full md:w-80 border-r border-white/5 flex-col bg-slate-900/40 ${selectedUserId ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-6 border-b border-white/5">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <MessageCircle className="text-cyan-400" />
@@ -135,12 +135,18 @@ const AdminSupport: React.FC = () => {
       </div>
 
       {/* Main: Chat View */}
-      <div className="flex-1 flex flex-col bg-[#0a0f18]/50">
+      <div className={`flex-1 flex-col bg-[#0a0f18]/50 ${!selectedUserId ? 'hidden md:flex' : 'flex'}`}>
         {selectedUserId ? (
           <>
             {/* Thread Header */}
             <div className="p-4 bg-slate-900/60 border-b border-white/5 flex items-center justify-between">
               <div className="flex items-center gap-3 text-white">
+                <button 
+                  onClick={() => setSelectedUserId(null)}
+                  className="md:hidden w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-all mr-1"
+                >
+                  <ChevronLeft size={20} />
+                </button>
                 <button 
                   onClick={() => setShowUserDetail(true)}
                   className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/30 transition-all active:scale-95"

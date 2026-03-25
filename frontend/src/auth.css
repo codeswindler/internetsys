@@ -229,12 +229,14 @@
 }
 
 .auth-footer {
-  position: absolute;
-  bottom: 2rem;
+  margin-top: 2rem;
+  padding-bottom: 2rem;
   text-align: center;
   width: 100%;
   color: #64748b;
   font-size: 0.875rem;
+  position: relative;
+  z-index: 10;
 }
 
 /* Auth Pages Internal CSS */

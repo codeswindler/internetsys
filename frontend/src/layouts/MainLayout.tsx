@@ -39,28 +39,37 @@ export default function MainLayout({ role }: LayoutProps) {
   const initialToastDone = useRef<boolean>(false);
 
   useEffect(() => {
-    if (role === 'admin' && unreadTotal > 0 && !initialToastDone.current) {
-      toast.success(`Welcome back! You have ${unreadTotal} unread support messages.`, {
-        duration: 5000,
-        icon: '✉️'
-      });
-      initialToastDone.current = true;
-    }
-    
-    if (role === 'admin' && unreadTotal > prevUnreadRef.current && initialToastDone.current) {
-      toast('🔔 New support message received!', {
-        icon: '💬',
-        className: 'glass-panel',
-        style: {
-          borderRadius: '10px',
-          background: theme === 'dark' ? '#0f172a' : '#ffffff',
-          color: theme === 'dark' ? '#fff' : '#0f172a',
-          border: '1px solid var(--border-color)'
-        },
-      });
+    if (role === 'admin' && unreadTotal > 0) {
+      if (!initialToastDone.current) {
+        toast(`Welcome back! You have ${unreadTotal} unread support message${unreadTotal > 1 ? 's' : ''}.`, {
+          icon: '🔔',
+          duration: 5000,
+          className: 'glass-panel',
+          style: {
+            borderRadius: '10px',
+            background: theme === 'dark' ? '#0f172a' : '#ffffff',
+            color: theme === 'dark' ? '#fff' : '#0f172a',
+            border: '1px solid var(--border-color)'
+          },
+        });
+        initialToastDone.current = true;
+      } else if (unreadTotal > prevUnreadRef.current) {
+        toast('New support message received!', {
+          icon: '💬',
+          duration: 4000,
+          className: 'glass-panel',
+          style: {
+            borderRadius: '10px',
+            background: theme === 'dark' ? '#0f172a' : '#ffffff',
+            color: theme === 'dark' ? '#fff' : '#0f172a',
+            border: '1px solid var(--border-color)'
+          },
+        });
+      }
     }
     prevUnreadRef.current = unreadTotal;
-  }, [unreadTotal, role]);
+  }, [unreadTotal, role, theme]);
+
 
   // Simple auth check
   if (!token) return <Navigate to="/login" replace />;

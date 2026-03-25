@@ -224,3 +224,10 @@ th {
   background-color: transparent !important;
   user-select: none;
 }
+
+/* Mobile Specific Zoom Out */
+@media (max-width: 768px) {
+  html, body {
+    zoom: 0.75;
+  }
+}
