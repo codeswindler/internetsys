@@ -20,15 +20,15 @@
 }
 
 :root.light {
-  --bg-main: #f1f5f9;
-  --bg-panel: rgba(255, 255, 255, 0.8);
-  --bg-panel-hover: rgba(255, 255, 255, 0.95);
+  --bg-main: #f8fafc;
+  --bg-panel: rgba(255, 255, 255, 0.9);
+  --bg-panel-hover: rgba(255, 255, 255, 1);
   --bg-input: #ffffff;
   --text-main: #0f172a;
-  --text-muted: #475569;
+  --text-muted: #64748b;
   --accent-primary: #0284c7;
   --accent-secondary: #0369a1;
-  --border-color: rgba(0, 0, 0, 0.1);
+  --border-color: rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -214,4 +214,10 @@ button {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(14, 165, 233, 0.4);
+}
+
+/* Sanitize Table Style (remove blue highlight) */
+th {
+  background-color: transparent !important;
+  user-select: none;
 }

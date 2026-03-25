@@ -50,11 +50,12 @@ export default function MainLayout({ role }: LayoutProps) {
     if (role === 'admin' && unreadTotal > prevUnreadRef.current && initialToastDone.current) {
       toast('🔔 New support message received!', {
         icon: '💬',
+        className: 'glass-panel',
         style: {
           borderRadius: '10px',
-          background: '#0f172a',
-          color: '#fff',
-          border: '1px solid rgba(255,255,255,0.1)'
+          background: theme === 'dark' ? '#0f172a' : '#ffffff',
+          color: theme === 'dark' ? '#fff' : '#0f172a',
+          border: '1px solid var(--border-color)'
         },
       });
     }
@@ -95,7 +96,7 @@ export default function MainLayout({ role }: LayoutProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950">
+    <div className="flex h-screen overflow-hidden bg-[var(--bg-main)]">
       {/* Mobile Backdrop */}
       {isMenuOpen && (
         <div 
