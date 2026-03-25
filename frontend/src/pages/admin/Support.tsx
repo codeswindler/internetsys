@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { MessageCircle, Send, User, ChevronRight, ChevronLeft, Clock, Check, CheckCheck, X } from 'lucide-react';
+import { MessageCircle, Send, User, ChevronRight, ArrowLeft, Clock, Check, CheckCheck, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -148,9 +148,10 @@ const AdminSupport: React.FC = () => {
               <div className="flex items-center gap-3 text-white">
                 <button 
                   onClick={() => setSelectedUserId(null)}
-                  className="md:hidden w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-all mr-1"
+                  className="md:hidden flex items-center justify-center text-slate-400 hover:text-white transition-all mr-2 pr-2"
+                  title="Back to Inbox"
                 >
-                  <ChevronLeft size={20} />
+                  <ArrowLeft size={24} />
                 </button>
                 <button 
                   onClick={() => setShowUserDetail(true)}
