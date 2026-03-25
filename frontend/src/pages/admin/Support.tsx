@@ -13,6 +13,11 @@ const AdminSupport: React.FC = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
+  const getInitials = (name: string) => {
+    if (!name) return 'U';
+    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  };
+
   const { data: conversations = [], isLoading: loadingConvs } = useQuery({
     queryKey: ['admin-conversations'],
     queryFn: async () => {
@@ -112,8 +117,8 @@ const AdminSupport: React.FC = () => {
                   selectedUserId === conv.userId ? 'bg-cyan-500/10 border-r-2 border-r-cyan-500' : 'hover:bg-white/5'
                 }`}
               >
-                <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 relative">
-                  <User size={24} />
+                <div className="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-cyan-400 relative font-bold text-lg shadow-inner">
+                  {getInitials(conv.userName)}
                   {conv.unreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900">
                       {conv.unreadCount}
@@ -149,10 +154,10 @@ const AdminSupport: React.FC = () => {
                 </button>
                 <button 
                   onClick={() => setShowUserDetail(true)}
-                  className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/30 transition-all active:scale-95"
+                  className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-400 hover:bg-cyan-500/30 transition-all active:scale-95 font-bold border border-cyan-500/20"
                   title="View Customer Details"
                 >
-                  <User size={20} />
+                  {getInitials(conversations.find((c: any) => c.userId === selectedUserId)?.userName || '')}
                 </button>
                 <div>
                   <h3 className="font-bold">{conversations.find((c: any) => c.userId === selectedUserId)?.userName}</h3>
@@ -182,8 +187,8 @@ const AdminSupport: React.FC = () => {
                       return (
                         <div className="space-y-4">
                           <div className="flex items-center gap-4 p-4 bg-white/5 rounded-xl border border-white/5">
-                            <div className="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400">
-                              <User size={24} />
+                            <div className="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 font-bold text-lg border border-cyan-500/20">
+                              {getInitials(conv?.userName || '')}
                             </div>
                             <div>
                               <p className="font-bold text-white">{conv?.userName || 'Customer'}</p>

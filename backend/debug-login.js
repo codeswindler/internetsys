@@ -27,10 +27,17 @@ async function debug() {
     }
 
     // 1. Check if the user exists
-    const admin = (await ds.query("SELECT * FROM admins WHERE username = 'pulselynk'"))[0];
+    let admin = (await ds.query("SELECT * FROM admins WHERE username = 'pulselynk' OR email = 'admin@pulselynk.co.ke'"))[0];
+    
     if (!admin) {
-      console.error('❌ ERROR: User "pulselynk" not found in database!');
-      process.exit(1);
+      console.log('📝 User "pulselynk" not found. Creating default admin...');
+      const newHash = await bcrypt.hash(testPass, 10);
+      await ds.query(
+        "INSERT INTO admins (id, username, email, passwordHash, phone) VALUES (?, ?, ?, ?, ?)",
+        ['3fcd8064-9661-47ce-9aa0-988e21937ac4', 'pulselynk', 'admin@pulselynk.co.ke', newHash, '0700000000']
+      );
+      console.log('✅ Default admin created!');
+      admin = (await ds.query("SELECT * FROM admins WHERE username = 'pulselynk'"))[0];
     }
     
     console.log('✅ Found admin:', admin.username, '(' + admin.email + ')');
