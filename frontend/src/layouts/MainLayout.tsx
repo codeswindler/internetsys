@@ -105,7 +105,7 @@ export default function MainLayout({ role }: LayoutProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--bg-main)]">
+    <div className="flex h-[118vh] md:h-screen overflow-hidden bg-[var(--bg-main)]">
       {/* Mobile Backdrop */}
       {isMenuOpen && (
         <div 

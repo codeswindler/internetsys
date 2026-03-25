@@ -239,6 +239,13 @@
   z-index: 10;
 }
 
+/* Compensate for the 0.85 scale applied in index.css so the background full covers screen */
+@media (max-width: 768px) {
+  .auth-wrapper {
+    min-height: 118vh;
+  }
+}
+
 /* Auth Pages Internal CSS */
 .auth-header {
   margin-bottom: 2rem;
