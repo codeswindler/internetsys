@@ -26,8 +26,10 @@ export default function MainLayout({ role }: LayoutProps) {
     const userStr = localStorage.getItem('user');
     if (userStr) {
       const u = JSON.parse(userStr);
-      const identifier = u.username || u.name || u.firstName || u.phone || role;
-      userInitials = identifier.substring(0, 2).toUpperCase();
+      const identifier = u.username || u.name || u.firstName || u.phone;
+      if (identifier) {
+        userInitials = identifier.substring(0, 2).toUpperCase();
+      }
     }
   } catch(e) {}
 
