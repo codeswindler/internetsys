@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Bot, User, UserSquare2, Sparkles, Ghost, Rocket, Smile, Star, ShieldAlert } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
@@ -49,11 +49,22 @@ export const renderAvatar = (avatarId: string | undefined, initials: string, cla
 };
 
 export default function ProfileModal({ isOpen, onClose, currentUser, onSuccess }: ProfileModalProps) {
-  const [name, setName] = useState(currentUser?.name || '');
-  const [username, setUsername] = useState(currentUser?.username || '');
-  const [phone, setPhone] = useState(currentUser?.phone || '');
-  const [avatar, setAvatar] = useState(currentUser?.avatar || '');
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
+  const [avatar, setAvatar] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      setName(currentUser.name || '');
+      setUsername(currentUser.username || '');
+      setPhone(currentUser.phone || '');
+      setAvatar(currentUser.avatar || '');
+      setNewPassword('');
+    }
+  }, [isOpen, currentUser]);
 
   if (!isOpen) return null;
 
@@ -61,7 +72,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onSuccess }
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post('/auth/profile', { name, username, phone, avatar }); // using post fallback matching controller
+      const payload: any = { name, username, phone, avatar };
+      if (newPassword) payload.password = newPassword;
+      const res = await api.post('/auth/profile', payload); // using post fallback matching controller
       toast.success('Profile updated successfully');
       onSuccess(res.data);
     } catch (err: any) {
@@ -146,6 +159,18 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onSuccess }
                 onChange={(e) => setPhone(e.target.value)}
                 className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors"
                 placeholder="Your phone number"
+              />
+            </div>
+            
+            <div className="pt-2 border-t border-white/5 mt-2">
+              <label className="block text-sm font-medium text-slate-300 mb-1">New Password (Optional)</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                placeholder="Leave blank to keep current password"
+                minLength={6}
               />
             </div>
           </div>

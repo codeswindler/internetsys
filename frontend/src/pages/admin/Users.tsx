@@ -357,8 +357,8 @@ export default function Users() {
 
   const filteredUsers = users?.filter(u => 
     !hiddenUsers.includes(u.id) && (
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.phone.includes(searchQuery) ||
+      u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.phone?.includes(searchQuery) ||
       u.username?.toLowerCase().includes(searchQuery.toLowerCase())
     )
   );
@@ -413,7 +413,7 @@ export default function Users() {
 
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
-                  {renderAvatar(u.avatar, u.name.charAt(0).toUpperCase(), "w-10 h-10 border-slate-700")}
+                  {renderAvatar(u.avatar, (u.name || u.username || 'U').charAt(0).toUpperCase(), "w-10 h-10 border-slate-700")}
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">

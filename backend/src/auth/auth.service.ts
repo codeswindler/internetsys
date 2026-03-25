@@ -150,6 +150,10 @@ export class AuthService {
         avatar: data.avatar || user.avatar,
       });
 
+      if (data.password) {
+        user.passwordHash = await bcrypt.hash(data.password, 10);
+      }
+
       await this.userRepo.save(user);
       const { passwordHash: _, ...result } = user;
       return { ...result, role: 'user' };
@@ -169,6 +173,10 @@ export class AuthService {
         phone: data.phone || admin.phone,
         avatar: data.avatar || admin.avatar,
       });
+
+      if (data.password) {
+        admin.passwordHash = await bcrypt.hash(data.password, 10);
+      }
 
       await this.adminRepo.save(admin);
       const { passwordHash: _, ...result } = admin;
