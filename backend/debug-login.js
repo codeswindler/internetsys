@@ -34,6 +34,7 @@ async function debug() {
     } else {
       console.error('❌ FAILURE: The password does not match the hash in the database.');
       console.log('Database Hash:', admin.passwordHash);
+      console.log('Expected Hash example:', await bcrypt.hash(testPass, 10));
     }
     
     process.exit();
