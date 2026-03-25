@@ -28,8 +28,8 @@ export default function Dashboard() {
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-cyan-400 rounded-full opacity-10 blur-2xl"></div>
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-400 text-sm font-medium">Active Users</p>
-              <h3 className="text-3xl font-bold text-white mt-1">{activeSubs.length}</h3>
+              <p className="text-muted text-sm font-medium">Active Users</p>
+              <h3 className="text-3xl font-bold text-main mt-1">{activeSubs.length}</h3>
             </div>
             <div className="p-3 bg-[rgba(14,165,233,0.1)] text-cyan-400 rounded-lg"><Users size={24}/></div>
           </div>
@@ -39,8 +39,8 @@ export default function Dashboard() {
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-green-400 rounded-full opacity-10 blur-2xl"></div>
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-400 text-sm font-medium">Online Routers</p>
-              <h3 className="text-3xl font-bold text-white mt-1">{onlineRouters.length} <span className="text-sm font-normal text-slate-400">/ {routers?.length || 0}</span></h3>
+              <p className="text-muted text-sm font-medium">Online Routers</p>
+              <h3 className="text-3xl font-bold text-main mt-1">{onlineRouters.length} <span className="text-sm font-normal text-muted">/ {routers?.length || 0}</span></h3>
             </div>
             <div className="p-3 bg-[rgba(16,185,129,0.1)] text-green-400 rounded-lg"><RouterIcon size={24}/></div>
           </div>
@@ -50,8 +50,8 @@ export default function Dashboard() {
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-purple-400 rounded-full opacity-10 blur-2xl"></div>
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-400 text-sm font-medium">Total Sessions</p>
-              <h3 className="text-3xl font-bold text-white mt-1">{subs?.length || 0}</h3>
+              <p className="text-muted text-sm font-medium">Total Sessions</p>
+              <h3 className="text-3xl font-bold text-main mt-1">{subs?.length || 0}</h3>
             </div>
             <div className="p-3 bg-[rgba(168,85,247,0.1)] text-purple-400 rounded-lg"><Wifi size={24}/></div>
           </div>
@@ -61,8 +61,8 @@ export default function Dashboard() {
           <div className="absolute -right-4 -top-4 w-24 h-24 bg-amber-400 rounded-full opacity-10 blur-2xl"></div>
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-slate-400 text-sm font-medium">Total Revenue</p>
-              <h3 className="text-3xl font-bold text-white mt-1">KES {totalRevenue.toFixed(0)}</h3>
+              <p className="text-muted text-sm font-medium">Total Revenue</p>
+              <h3 className="text-3xl font-bold text-main mt-1">KES {totalRevenue.toFixed(0)}</h3>
             </div>
             <div className="p-3 bg-[rgba(245,158,11,0.1)] text-amber-400 rounded-lg"><DollarSign size={24}/></div>
           </div>
@@ -74,7 +74,7 @@ export default function Dashboard() {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-[rgba(255,255,255,0.05)] text-slate-400 text-sm">
+              <tr className="border-b border-[var(--border-color)] text-muted text-sm">
                 <th className="p-3 font-medium">User</th>
                 <th className="p-3 font-medium">Package</th>
                 <th className="p-3 font-medium">Router</th>
@@ -95,12 +95,12 @@ export default function Dashboard() {
                     </span>
                   </td>
                   <td className="p-3">{s.paymentMethod}</td>
-                  <td className="p-3 text-slate-400 text-sm">{new Date(s.createdAt).toLocaleDateString()}</td>
+                  <td className="p-3 text-muted text-sm">{new Date(s.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
               {subs?.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-slate-500">No subscriptions found</td>
+                  <td colSpan={6} className="p-4 text-center text-muted">No subscriptions found</td>
                 </tr>
               )}
             </tbody>

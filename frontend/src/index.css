@@ -159,6 +159,9 @@ button {
   padding: 0 1.5rem;
 }
 
+.text-main { color: var(--text-main); }
+.text-muted { color: var(--text-muted); }
+
 .flex { display: flex; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
