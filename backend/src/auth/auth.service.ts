@@ -14,8 +14,14 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async adminLogin(email: string, pass: string) {
-    const admin = await this.adminRepo.findOne({ where: { email } });
+  async adminLogin(identifier: string, pass: string) {
+    const admin = await this.adminRepo.findOne({
+      where: [
+        { email: identifier },
+        { username: identifier },
+        { phone: identifier }
+      ]
+    });
     if (!admin) {
       throw new UnauthorizedException('Invalid credentials');
     }

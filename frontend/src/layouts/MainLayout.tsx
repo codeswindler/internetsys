@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle } from 'lucide-react';
+import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { useTheme } from '../context/ThemeContext';
 import { BackToTop } from '../components/BackToTop';
 import SupportChat from '../components/SupportChat';
 
@@ -14,6 +15,7 @@ interface LayoutProps {
 export default function MainLayout({ role }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, toggleTheme } = useTheme();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role');
@@ -117,12 +119,21 @@ export default function MainLayout({ role }: LayoutProps) {
               PulseLynk
             </span>
           </div>
-          <button 
-            className="md:hidden text-slate-400 hover:text-white"
-            onClick={() => setIsMenuOpen(false)}
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={toggleTheme}
+              className="p-2 mr-1 rounded-lg bg-white/5 text-slate-400 hover:text-cyan-400 hover:bg-white/10 transition-all border border-white/5"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <button 
+              className="md:hidden text-slate-400 hover:text-white"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
         
         <nav className="flex-1 p-4 flex flex-col gap-2 overflow-y-auto">

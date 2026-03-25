@@ -19,8 +19,11 @@ export class Admin {
   @Column()
   name: string;
 
-  @Column({ unique: true })
-  email: string;
+  @Column({ unique: true, nullable: true })
+  username: string;
+
+  @Column({ unique: true, nullable: true })
+  phone: string;
 
   @Column()
   passwordHash: string;
