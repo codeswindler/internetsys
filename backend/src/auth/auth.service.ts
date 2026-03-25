@@ -110,4 +110,21 @@ export class AuthService {
     const { passwordHash: _, ...result } = user;
     return result;
   }
+
+  async getProfile(userId: string, role: string) {
+    if (role === 'user') {
+      const user = await this.userRepo.findOne({ where: { id: userId } });
+      if (user) {
+        const { passwordHash: _, ...result } = user;
+        return { ...result, role: 'user' };
+      }
+    } else {
+      const admin = await this.adminRepo.findOne({ where: { id: userId } });
+      if (admin) {
+        const { passwordHash: _, ...result } = admin;
+        return result; // admin already contains role
+      }
+    }
+    throw new NotFoundException('Profile not found');
+  }
 }
