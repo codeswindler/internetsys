@@ -17,17 +17,24 @@ export class MikrotikService {
     });
 
     try {
-      // Enforce a strict 5-second connection timeout, as Node's default TCP timeout is ~120 seconds
       await Promise.race([
         api.connect(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out: Router is unreachable or offline')), 5000))
       ]);
       return api;
     } catch (error: any) {
-      this.logger.error(`Failed to connect to router ${router.host}: ${error.message}`);
-      // Try to destroy the socket if the race timed out but it's still trying to connect
+      let friendlyMessage = error.message;
+      if (error.message?.includes('invalid user or password') || error.message?.includes('not logged in')) {
+        friendlyMessage = 'Authentication failed: Invalid API Username or Password';
+      } else if (error.code === 'ECONNREFUSED') {
+        friendlyMessage = 'Connection refused: Check the IP and ensure API service (port 8728) is enabled on the router';
+      } else if (error.code === 'ETIMEDOUT' || error.message?.includes('timed out')) {
+        friendlyMessage = 'Connection timed out: Router is unreachable or offline';
+      }
+
+      this.logger.error(`Failed to connect to router ${router.host}: ${friendlyMessage}`);
       try { api.close(); } catch (e) {}
-      throw error;
+      throw new Error(friendlyMessage);
     }
   }
 

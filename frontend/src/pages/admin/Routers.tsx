@@ -225,9 +225,12 @@ export default function Routers() {
               </div>
 
               {!r.isOnline && r.lastError && (
-                <div className="p-3 rounded-xl bg-red-500/8 border border-red-500/20 text-red-400 text-xs font-mono break-words flex gap-2">
-                  <AlertCircle size={13} className="shrink-0 mt-0.5" />
-                  <span>{r.lastError}</span>
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex flex-col gap-1.5">
+                  <div className="flex items-center gap-2 text-red-500 font-bold text-[10px] uppercase tracking-wider">
+                    <AlertCircle size={12} />
+                    Connection Failure Log
+                  </div>
+                  <span className="text-red-400 text-xs font-mono break-words leading-relaxed">{r.lastError}</span>
                 </div>
               )}
 
