@@ -72,21 +72,21 @@ export default function Login() {
 
       <form onSubmit={handleSubmit} className="auth-form">
         <div className="form-group">
-          <label>
-            {role === 'admin' ? 'Administrator Email' : 'Mobile Number'}
-          </label>
-          <div className="input-wrapper">
-            <div className="input-icon">
-              {role === 'admin' ? <Mail size={18} /> : <Phone size={18} />}
-            </div>
-            <input
-              type={role === 'admin' ? 'email' : 'text'}
-              className="auth-input"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder={role === 'admin' ? 'admin@netsync.com' : 'e.g. 0712345678'}
-              required
-            />
+            <label>
+              {role === 'admin' ? 'Admin ID' : 'Mobile Number'}
+            </label>
+            <div className="input-wrapper">
+              <div className="input-icon">
+                {role === 'admin' ? <UserIcon size={18} /> : <Phone size={18} />}
+              </div>
+              <input
+                type="text"
+                className="auth-input"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder={role === 'admin' ? 'Email, Username or Phone' : 'e.g. 0712345678'}
+                required
+              />
           </div>
         </div>
 
