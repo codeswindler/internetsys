@@ -127,4 +127,67 @@ export class AuthService {
     }
     throw new NotFoundException('Profile not found');
   }
+
+  async updateProfile(userId: string, role: string, data: any) {
+    if (role === 'user') {
+      const user = await this.userRepo.findOne({ where: { id: userId } });
+      if (!user) throw new NotFoundException('User not found');
+      
+      // check duplicates for username/phone if changing
+      if (data.username && data.username !== user.username) {
+        const exist = await this.userRepo.findOne({ where: { username: data.username } });
+        if (exist) throw new BadRequestException('Username already taken');
+      }
+      if (data.phone && data.phone !== user.phone) {
+        const exist = await this.userRepo.findOne({ where: { phone: data.phone } });
+        if (exist) throw new BadRequestException('Phone already used');
+      }
+
+      Object.assign(user, {
+        name: data.name || user.name,
+        username: data.username || user.username,
+        phone: data.phone || user.phone,
+        avatar: data.avatar || user.avatar,
+      });
+
+      await this.userRepo.save(user);
+      const { passwordHash: _, ...result } = user;
+      return { ...result, role: 'user' };
+
+    } else {
+      const admin = await this.adminRepo.findOne({ where: { id: userId } });
+      if (!admin) throw new NotFoundException('Admin not found');
+
+      if (data.username && data.username !== admin.username) {
+        const exist = await this.adminRepo.findOne({ where: { username: data.username } });
+        if (exist) throw new BadRequestException('Username already taken');
+      }
+
+      Object.assign(admin, {
+        name: data.name || admin.name,
+        username: data.username || admin.username,
+        phone: data.phone || admin.phone,
+        avatar: data.avatar || admin.avatar,
+      });
+
+      await this.adminRepo.save(admin);
+      const { passwordHash: _, ...result } = admin;
+      return result;
+    }
+  }
+
+  async adminResetUserPassword(userId: string, newPassword: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.userRepo.save(user);
+    return { success: true, message: 'Password reset successfully' };
+  }
+
+  async deleteUser(userId: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    await this.userRepo.remove(user);
+    return { success: true, message: 'User deleted successfully' };
+  }
 }

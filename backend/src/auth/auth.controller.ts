@@ -40,6 +40,21 @@ export class AuthController {
     return this.authService.getProfile(req.user.id, req.user.role || 'user');
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post('profile')
+  @HttpCode(HttpStatus.OK)
+  updateProfileLegacy(@Request() req: any, @Body() body: any) {
+    // Some clients use POST to update profile, alias to put
+    return this.authService.updateProfile(req.user.id, req.user.role || 'user', body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('profile/update') 
+  @HttpCode(HttpStatus.OK)
+  updateProfileAlias(@Request() req: any, @Body() body: any) {
+    return this.authService.updateProfile(req.user.id, req.user.role || 'user', body);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
   @Get('admin/users')
@@ -59,5 +74,26 @@ export class AuthController {
   @Post('admin/users/:id/toggle')
   toggleUserStatus(@Param('id') id: string) {
     return this.authService.toggleUserStatus(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Post('admin/users/:id/password')
+  adminResetUserPassword(@Param('id') id: string, @Body() body: any) {
+    return this.authService.adminResetUserPassword(id, body.password);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Post('admin/users/:id/delete')
+  deleteUserAlias(@Param('id') id: string) {
+    return this.authService.deleteUser(id);
+  }
+
+  // Adding actual HTTP verb decorators for the best REST compliance
+  @UseGuards(JwtAuthGuard)
+  @Post('profile')
+  updateProfilePost(@Request() req: any, @Body() body: any) {
+    return this.authService.updateProfile(req.user.id, req.user.role || 'user', body);
   }
 }

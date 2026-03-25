@@ -28,6 +28,9 @@ export class Admin {
   @Column({ unique: true, nullable: true })
   phone: string;
 
+  @Column({ nullable: true })
+  avatar: string;
+
   @Column()
   passwordHash: string;
 

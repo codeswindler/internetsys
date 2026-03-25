@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { useTheme } from '../context/ThemeContext';
 import { BackToTop } from '../components/BackToTop';
 import SupportChat from '../components/SupportChat';
+import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 
 interface LayoutProps {
   role: 'admin' | 'user';
@@ -22,6 +23,8 @@ export default function MainLayout({ role }: LayoutProps) {
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
   const [userInitials, setUserInitials] = useState(role[0].toUpperCase());
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Automatically heal or load user details on mount
   useEffect(() => {
@@ -32,6 +35,7 @@ export default function MainLayout({ role }: LayoutProps) {
         
         if (userStr) {
           const u = JSON.parse(userStr);
+          setCurrentUser(u);
           identifier = u.username || u.name || u.firstName || u.phone;
         }
 
@@ -44,6 +48,7 @@ export default function MainLayout({ role }: LayoutProps) {
           if (profileRes.data) {
             localStorage.setItem('user', JSON.stringify(profileRes.data));
             const u = profileRes.data;
+            setCurrentUser(u);
             identifier = u.username || u.name || u.firstName || u.phone;
           }
         }
@@ -216,7 +221,19 @@ export default function MainLayout({ role }: LayoutProps) {
           })}
         </nav>
 
-        <div className="p-4 border-t border-white/5">
+        <div className="p-4 border-t border-white/5 space-y-2">
+          {/* Desktop User Profile Button */}
+          <button 
+            onClick={() => setIsProfileModalOpen(true)}
+            className="hidden md:flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-all overflow-hidden"
+          >
+            {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8 flex-shrink-0")}
+            <div className="flex flex-col truncate">
+              <span className="font-bold text-sm truncate">{currentUser?.name || currentUser?.username || 'Profile'}</span>
+              <span className="text-[10px] text-cyan-400/80 uppercase tracking-wider font-bold">{role}</span>
+            </div>
+          </button>
+          
           <button 
             onClick={handleLogout}
             className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
@@ -242,9 +259,12 @@ export default function MainLayout({ role }: LayoutProps) {
              PulseLynk
           </span>
           
-          <div className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-xs font-bold text-cyan-400 uppercase shadow-inner">
-            {userInitials}
-          </div>
+          <button 
+            onClick={() => setIsProfileModalOpen(true)}
+            className="flex-shrink-0 focus:outline-none transition-transform active:scale-95"
+          >
+            {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
+          </button>
         </header>
 
         <div className="animate-fade-in max-w-7xl mx-auto">
@@ -252,6 +272,19 @@ export default function MainLayout({ role }: LayoutProps) {
         </div>
         <BackToTop />
         {role === 'user' && <SupportChat />}
+
+        <ProfileModal 
+          isOpen={isProfileModalOpen} 
+          onClose={() => setIsProfileModalOpen(false)} 
+          currentUser={currentUser}
+          onSuccess={(u) => {
+            setCurrentUser(u);
+            localStorage.setItem('user', JSON.stringify(u));
+            const identifier = u.username || u.name || u.firstName || u.phone;
+            if (identifier) setUserInitials(identifier.substring(0, 2).toUpperCase());
+            setIsProfileModalOpen(false);
+          }}
+        />
       </main>
     </div>
   );

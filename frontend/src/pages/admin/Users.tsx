@@ -5,11 +5,12 @@ import toast from 'react-hot-toast';
 import {
   Plus, User as UserIcon, ShieldBan, ShieldCheck, Phone,
   CalendarDays, PackagePlus, Wifi, WifiOff, Loader2,
-  X, Router as RouterIcon, XCircle, RefreshCw, Clock,
+  X, Router as RouterIcon, XCircle, RefreshCw, Clock, KeyRound, Trash2, Undo2
 } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import { ConfirmModal } from '../../components/ConfirmModal';
+import { renderAvatar } from '../../components/ProfileModal';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -27,7 +28,9 @@ interface Subscription {
 interface CustomerUser {
   id: string;
   name: string;
+  username: string;
   phone: string;
+  avatar: string;
   isActive: boolean;
   createdAt: string;
   subscriptions: Subscription[];
@@ -178,6 +181,12 @@ export default function Users() {
 
   const [plansPopupUserId, setPlansPopupUserId] = useState<string | null>(null);
 
+  const [resetTarget, setResetTarget] = useState<CustomerUser | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+
+  const [hiddenUsers, setHiddenUsers] = useState<string[]>([]);
+  const deleteTimeouts = React.useRef<{ [key: string]: NodeJS.Timeout }>({});
+
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
     title: string;
@@ -260,6 +269,26 @@ export default function Users() {
     onError: (err: any) => toast.error(err.response?.data?.message || 'Reactivation failed'),
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: (data: { id: string, password: string }) => 
+      api.post(`/auth/admin/users/${data.id}/password`, { password: data.password }),
+    onSuccess: () => {
+      toast.success('Password reset successfully');
+      setResetTarget(null);
+      setResetPassword('');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Password reset failed')
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/auth/admin/users/${id}/delete`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+    onError: (err: any, variables) => {
+      toast.error(err.response?.data?.message || 'Delete failed');
+      setHiddenUsers(prev => prev.filter(id => id !== variables));
+    }
+  });
+
   // Computed state for popup
   const popupUser = users?.find(u => u.id === plansPopupUserId) || null;
 
@@ -284,6 +313,40 @@ export default function Users() {
     });
   };
 
+  const handleDeleteUser = (user: CustomerUser) => {
+    setHiddenUsers(prev => [...prev, user.id]);
+    
+    const toastId = toast((t) => (
+      <div className="flex items-center gap-4 py-1">
+        <div className="flex flex-col flex-1 pl-1">
+          <span className="font-bold text-slate-200">Deleting {user.name}</span>
+          <span className="text-[10px] text-slate-400">Action completes in 10s</span>
+        </div>
+        <button 
+          onClick={() => {
+            clearTimeout(deleteTimeouts.current[user.id]);
+            delete deleteTimeouts.current[user.id];
+            setHiddenUsers(prev => prev.filter(id => id !== user.id));
+            toast.dismiss(t.id);
+            toast.success('Deletion cancelled', { icon: '↩️', duration: 2000 });
+          }}
+          className="ml-2 px-3 py-1.5 bg-slate-800 text-cyan-400 border border-slate-700/50 rounded-lg hover:bg-slate-700 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1 active:scale-95 transition-all"
+        >
+          <Undo2 size={12} /> Undo
+        </button>
+      </div>
+    ), { 
+      duration: 10000, 
+      className: 'glass-panel !p-2 !pr-3',
+      style: { background: '#0f172a', border: '1px solid #1e293b', color: '#fff', borderRadius: '12px', minWidth: '320px' }
+    });
+
+    deleteTimeouts.current[user.id] = setTimeout(() => {
+      deleteMutation.mutate(user.id);
+      toast.dismiss(toastId);
+    }, 10000);
+  };
+
   // ── Render ──
   if (isLoading)
     return (
@@ -293,9 +356,11 @@ export default function Users() {
     );
 
   const filteredUsers = users?.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.phone.includes(searchQuery) ||
-    (u as any).username?.toLowerCase().includes(searchQuery.toLowerCase())
+    !hiddenUsers.includes(u.id) && (
+      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.phone.includes(searchQuery) ||
+      u.username?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
   );
 
   return (
@@ -336,24 +401,31 @@ export default function Users() {
           return (
             <div key={u.id} className="glass-panel flex flex-col overflow-hidden">
               {/* ── Card Header ── */}
-              <div className="p-5 border-b border-white/5">
+              <div className="p-5 border-b border-white/5 relative group">
+                {/* Delete button (shows on hover) */}
+                <button 
+                  onClick={() => handleDeleteUser(u)}
+                  className="absolute top-4 right-4 p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all border border-transparent hover:border-red-500/20"
+                  title="Delete User"
+                >
+                  <Trash2 size={16} />
+                </button>
+
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-cyan-400 font-bold text-base border border-slate-700 shrink-0">
-                    {u.name.charAt(0).toUpperCase()}
-                  </div>
+                  {renderAvatar(u.avatar, u.name.charAt(0).toUpperCase(), "w-10 h-10 border-slate-700")}
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2 pr-8">
                       <h3 className="text-sm font-bold text-white truncate leading-tight">{u.name}</h3>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0
                         ${u.isActive ? 'bg-green-500/10 border-green-500/30 text-green-400' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
                         {u.isActive ? 'Active' : 'Blocked'}
                       </span>
                     </div>
-                    {(u as any).username && (
-                      <p className="text-[10px] text-cyan-400/70 font-bold mb-1 tracking-widest uppercase truncate truncate-lines-1">@{ (u as any).username }</p>
+                    {u.username && (
+                      <p className="text-[10px] text-cyan-400/70 font-bold mb-1 tracking-widest uppercase truncate min-w-0">@{ u.username }</p>
                     )}
                     <p className="text-xs text-slate-400 font-mono flex items-center gap-1 mt-0.5">
                       <Phone size={10} /> {u.phone}
@@ -435,25 +507,35 @@ export default function Users() {
               </div>
 
               {/* ── Actions ── */}
-              <div className="px-5 py-3 border-t border-white/5 flex justify-between items-center bg-black/10">
+              <div className="px-5 py-3 border-t border-white/5 flex flex-wrap justify-between items-center bg-black/10 gap-2">
                 <button
-                  className="text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
+                  className="text-[11px] font-semibold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-purple-400 hover:bg-purple-400/10 transition-colors"
                   onClick={() => {
                     setAllocateTarget(u);
                     setAllocateForm({ packageId: '', routerId: '' });
                   }}
                 >
-                  <PackagePlus size={14} /> Allocate Package
+                  <PackagePlus size={14} /> Allocate
                 </button>
 
-                <button
-                  className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors
-                    ${u.isActive ? 'text-orange-400 hover:bg-orange-400/10' : 'text-green-400 hover:bg-green-400/10'}`}
-                  onClick={() => handleToggleBlockClick(u)}
-                  disabled={toggleMutation.isPending}
-                >
-                  {u.isActive ? <><ShieldBan size={14} /> Block</> : <><ShieldCheck size={14} /> Unblock</>}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    className="text-[11px] font-semibold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors border border-transparent hover:border-orange-500/30"
+                    onClick={() => setResetTarget(u)}
+                    title="Reset Password"
+                  >
+                    <KeyRound size={13} /> Rest Pass
+                  </button>
+
+                  <button
+                    className={`text-[11px] font-semibold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent
+                      ${u.isActive ? 'text-red-400 hover:bg-red-400/10 hover:border-red-500/30' : 'text-green-400 hover:bg-green-400/10 hover:border-green-500/30'}`}
+                    onClick={() => handleToggleBlockClick(u)}
+                    disabled={toggleMutation.isPending}
+                  >
+                    {u.isActive ? <><ShieldBan size={13} /> Block</> : <><ShieldCheck size={13} /> Unblock</>}
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -594,8 +676,48 @@ export default function Users() {
               </div>
             </form>
           </div>
+      {/* ── Reset Password Modal ── */}
+      {resetTarget && createPortal(
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setResetTarget(null); }}
+        >
+          <div className="glass-panel w-full max-w-sm animate-fade-in bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl overflow-hidden flex flex-col">
+            <div className="flex items-center gap-3 p-5 border-b border-white/10">
+               <div className="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400"><KeyRound size={18} /></div>
+               <div>
+                  <h3 className="text-lg font-bold text-white leading-tight">Reset Password</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">{resetTarget.username}</p>
+               </div>
+            </div>
+            <form
+               onSubmit={(e) => { e.preventDefault(); resetPasswordMutation.mutate({ id: resetTarget.id, password: resetPassword }); }}
+               className="p-5 flex flex-col gap-5"
+            >
+               <div>
+                 <label className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
+                 <input 
+                   className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-orange-500 transition-all font-medium" 
+                   type="password" 
+                   value={resetPassword} 
+                   onChange={e => setResetPassword(e.target.value)} 
+                   placeholder="Enter new password" 
+                   required 
+                   minLength={6} 
+                 />
+                 <p className="mt-2 text-[10px] text-slate-500 italic">User will be logged out of current sessions automatically.</p>
+               </div>
+               
+               <div className="flex justify-end gap-3 pt-2">
+                 <button type="button" className="px-5 py-2 rounded-lg font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm" onClick={() => setResetTarget(null)} disabled={resetPasswordMutation.isPending}>Cancel</button>
+                 <button type="submit" className="px-6 py-2 rounded-lg font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-400 hover:to-red-400 shadow-lg shadow-orange-900/20 transition-all active:scale-95 flex items-center gap-2 text-sm" disabled={resetPasswordMutation.isPending}>
+                   {resetPasswordMutation.isPending ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : 'Save Password'}
+                 </button>
+               </div>
+            </form>
+          </div>
         </div>,
-        document.body,
+        document.body
       )}
     </div>
   );
