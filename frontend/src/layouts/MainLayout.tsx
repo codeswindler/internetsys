@@ -21,17 +21,42 @@ export default function MainLayout({ role }: LayoutProps) {
   const userRole = localStorage.getItem('role');
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
-  let userInitials = role[0].toUpperCase();
-  try {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const u = JSON.parse(userStr);
-      const identifier = u.username || u.name || u.firstName || u.phone;
-      if (identifier) {
-        userInitials = identifier.substring(0, 2).toUpperCase();
+  const [userInitials, setUserInitials] = useState(role[0].toUpperCase());
+
+  // Automatically heal or load user details on mount
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        let identifier = null;
+        const userStr = localStorage.getItem('user');
+        
+        if (userStr) {
+          const u = JSON.parse(userStr);
+          identifier = u.username || u.name || u.firstName || u.phone;
+        }
+
+        // If local storage lacks the real name, fetch from backend to heal the cache
+        if (!identifier && token) {
+          const profileRes = await axios.get(`${API_URL}/auth/profile`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (profileRes.data) {
+            localStorage.setItem('user', JSON.stringify(profileRes.data));
+            const u = profileRes.data;
+            identifier = u.username || u.name || u.firstName || u.phone;
+          }
+        }
+        
+        if (identifier) {
+          setUserInitials(identifier.substring(0, 2).toUpperCase());
+        }
+      } catch (err) {
+        console.error('Failed to load full profile initials', err);
       }
-    }
-  } catch(e) {}
+    };
+    fetchProfile();
+  }, [token, API_URL]);
 
   const { data: unreadTotal = 0 } = useQuery({
     queryKey: ['admin-unread-total'],
