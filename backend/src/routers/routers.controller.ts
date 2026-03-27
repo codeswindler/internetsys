@@ -27,6 +27,11 @@ export class RoutersController {
     return this.routersService.getAllUniqueProfiles();
   }
 
+  @Get('vpn/suggest-ip')
+  suggestVpnIp() {
+    return this.routersService.suggestVpnIp();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.routersService.findOne(id);

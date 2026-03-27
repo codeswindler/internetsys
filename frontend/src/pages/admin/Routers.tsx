@@ -16,6 +16,8 @@ export default function Routers() {
 
   const [showModal, setShowModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showVpnPassword, setShowVpnPassword] = useState(false);
+  const [showCardPasswords, setShowCardPasswords] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedProfiles, setExpandedProfiles] = useState<Record<string, boolean>>({});
   
@@ -122,6 +124,7 @@ export default function Routers() {
     setShowModal(false);
     setEditingId(null);
     setShowPassword(false);
+    setShowVpnPassword(false);
     setFormData({ 
       name: '', 
       host: '', 
@@ -137,6 +140,7 @@ export default function Routers() {
   };
 
   const toggleProfiles = (id: string) => setExpandedProfiles(p => ({ ...p, [id]: !p[id] }));
+  const toggleCardPassword = (id: string) => setShowCardPasswords(p => ({ ...p, [id]: !p[id] }));
   const scrollToProfiles = () => profilesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -283,9 +287,19 @@ export default function Routers() {
                       <p className="text-[9px] text-slate-500 uppercase font-bold mb-0.5">User</p>
                       <p className="text-[10px] text-slate-300 font-mono truncate">{r.vpnUsername || '—'}</p>
                     </div>
-                    <div className="bg-black/20 p-1.5 rounded border border-white/5">
+                    <div className="bg-black/20 p-1.5 rounded border border-white/5 relative group">
                       <p className="text-[9px] text-slate-500 uppercase font-bold mb-0.5">Pass</p>
-                      <p className="text-[10px] text-slate-300 font-mono truncate">••••••••</p>
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-[10px] text-slate-300 font-mono truncate">
+                          {showCardPasswords[r.id] ? (r.vpnPasswordEncrypted || '••••••••') : '••••••••'}
+                        </p>
+                        <button 
+                          onClick={() => toggleCardPassword(r.id)}
+                          className="text-slate-500 hover:text-orange-400 transition-colors shrink-0"
+                        >
+                          {showCardPasswords[r.id] ? <EyeOff size={10} /> : <Eye size={10} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <button 
@@ -501,18 +515,43 @@ export default function Routers() {
                           </div>
                           <div>
                             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">VPN Password</label>
-                            <input 
-                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white" 
-                              type="password"
-                              value={formData.vpnPasswordEncrypted} 
-                              onChange={e => setFormData({ ...formData, vpnPasswordEncrypted: e.target.value })} 
-                              placeholder="••••••••" 
-                            />
+                            <div className="relative">
+                              <input 
+                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pr-8 text-xs text-white" 
+                                type={showVpnPassword ? 'text' : 'password'}
+                                value={formData.vpnPasswordEncrypted} 
+                                onChange={e => setFormData({ ...formData, vpnPasswordEncrypted: e.target.value })} 
+                                placeholder="••••••••" 
+                              />
+                              <button 
+                                type="button" 
+                                onClick={() => setShowVpnPassword(!showVpnPassword)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                              >
+                                {showVpnPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                              </button>
+                            </div>
                           </div>
                         </div>
 
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Static VPN IP (Assigned)</label>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase">Static VPN IP (Assigned)</label>
+                            <button 
+                              type="button" 
+                              onClick={async () => {
+                                try {
+                                  const res = await api.get('/routers/vpn/suggest-ip');
+                                  setFormData({ ...formData, vpnIp: res.data.ip });
+                                } catch (e) {
+                                  toast.error('Failed to suggest IP');
+                                }
+                              }}
+                              className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 transition-colors"
+                            >
+                              Suggest IP
+                            </button>
+                          </div>
                           <input 
                             className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono" 
                             value={formData.vpnIp} 

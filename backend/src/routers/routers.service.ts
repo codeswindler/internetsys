@@ -162,4 +162,19 @@ export class RoutersService {
 
     return { success, total: targetRouterIds.length, errors };
   }
+
+  async suggestVpnIp(): Promise<{ ip: string }> {
+    const routers = await this.routerRepo.find();
+    const usedIps = routers.map(r => r.vpnIp).filter(Boolean);
+    
+    // Default range starts at 10.8.0.2
+    for (let i = 2; i <= 254; i++) {
+      const candidate = `10.8.0.${i}`;
+      if (!usedIps.includes(candidate)) {
+        return { ip: candidate };
+      }
+    }
+    
+    return { ip: '' };
+  }
 }
