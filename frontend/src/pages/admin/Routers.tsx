@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import {
   Router as RouterIcon, Wifi, WifiOff,
   RefreshCw, Plus, Edit, Trash2, Eye, EyeOff, ShieldCheck,
-  AlertCircle, Signal, ChevronDown, ChevronUp, Zap, ArrowUp, UserPlus, CheckSquare, Square
+  AlertCircle, Signal, ChevronDown, ChevronUp, Zap, ArrowUp, UserPlus, CheckSquare, Square,
+  Terminal, Copy
 } from 'lucide-react';
 import api from '../../services/api';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -308,18 +309,31 @@ export default function Routers() {
                       </div>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => {
-                      const vpnHost = vpnSettings?.host || window.location.hostname;
-                      const script = `/interface sstp-client add name=pulselynk-vpn connect-to=${vpnHost} user=${r.vpnUsername} password=${r.vpnPasswordEncrypted} profile=default-encryption disabled=no;
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        const vpnHost = vpnSettings?.host || window.location.hostname;
+                        const script = `/interface sstp-client add name=pulselynk-vpn connect-to=${vpnHost} user=${r.vpnUsername} password=${r.vpnPasswordEncrypted} profile=default-encryption disabled=no;
 /ip dhcp-client add interface=pulselynk-vpn disabled=no;`;
-                      navigator.clipboard.writeText(script);
-                      toast.success('MikroTik CLI Script copied!');
-                    }}
-                    className="w-full py-1.5 rounded-lg border border-orange-500/20 text-[10px] font-bold text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <RefreshCw size={10} /> Copy MikroTik Script
-                  </button>
+                        navigator.clipboard.writeText(script);
+                        toast.success('MikroTik CLI Script copied!');
+                      }}
+                      className="flex-1 py-1.5 rounded-lg border border-orange-500/20 text-[10px] font-bold text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Terminal size={10} /> Copy Script
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const domain = vpnSettings?.host || window.location.hostname;
+                        const text = `MikroTik SSTP VPN Config:\nServer: ${domain}\nUser: ${r.vpnUsername}\nPass: ${r.vpnPasswordEncrypted}\nMode: SSTP Client`;
+                        navigator.clipboard.writeText(text);
+                        toast.success('Credentials copied!');
+                      }}
+                      className="flex-1 py-1.5 rounded-lg border border-orange-500/20 text-[10px] font-bold text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Copy size={10} /> Copy Credentials
+                    </button>
+                  </div>
                 </div>
               )}
 
