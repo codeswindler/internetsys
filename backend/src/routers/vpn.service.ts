@@ -69,10 +69,10 @@ export class VpnService {
 
       const userParams: any = {
         Name_str: router.vpnUsername,
-        AuthType_int: 1, // Password authentication
+        AuthType_u32: 1, // Password authentication (v4.38 uses _u32)
         Auth_Password_str: router.vpnPasswordEncrypted,
-        Realname_str: router.name,
-        Note_str: `Managed by PulseLynk (Router ID: ${router.id})`,
+        Realname_utf: router.name,
+        Note_utf: `Managed by PulseLynk (Router ID: ${router.id})`,
         // Enforce static IP via policy
         Policy: {
           IPAddress_ip: router.vpnIp || '0.0.0.0',
