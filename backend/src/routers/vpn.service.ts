@@ -65,22 +65,26 @@ export class VpnService {
         userExists = false;
       }
 
+      const userParams: any = {
+        Name_str: router.vpnUsername,
+        AuthType_int: 1, // Password authentication
+        Auth_Password_str: router.vpnPasswordEncrypted,
+        Realname_str: router.name,
+        Note_str: `Managed by PulseLynk (Router ID: ${router.id})`,
+      };
+
+      // Enforce static IP via policy if assigned
+      if (router.vpnIp) {
+        userParams.Policy = {
+          IPAddress_ip: router.vpnIp,
+          IPAddress_bool: true,
+        };
+      }
+
       if (userExists) {
-        await this.callApi('SetUser', {
-          Name_str: router.vpnUsername,
-          AuthType_int: 1, // Password authentication
-          Auth_Password_str: router.vpnPasswordEncrypted,
-          Realname_str: router.name,
-          Note_str: `Managed by PulseLynk (Router ID: ${router.id})`,
-        });
+        await this.callApi('SetUser', userParams);
       } else {
-        await this.callApi('CreateUser', {
-          Name_str: router.vpnUsername,
-          AuthType_int: 1, // Password authentication
-          Auth_Password_str: router.vpnPasswordEncrypted,
-          Realname_str: router.name,
-          Note_str: `Managed by PulseLynk (Router ID: ${router.id})`,
-        });
+        await this.callApi('CreateUser', userParams);
       }
 
       // If a vpnIp is assigned, set it as a static IP if needed (depends on Hub configuration)
