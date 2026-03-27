@@ -304,7 +304,8 @@ export default function Routers() {
                   </div>
                   <button 
                     onClick={() => {
-                      const text = `MikroTik SSTP VPN Config:\nServer: vpn.pulselynk.net\nUser: ${r.vpnUsername}\nPass: ${r.vpnPasswordEncrypted}\nMode: SSTP Client`;
+                      const domain = window.location.hostname;
+                      const text = `MikroTik SSTP VPN Config:\nServer: ${domain}\nUser: ${r.vpnUsername}\nPass: ${r.vpnPasswordEncrypted}\nMode: SSTP Client`;
                       navigator.clipboard.writeText(text);
                       toast.success('Config copied to clipboard!');
                     }}
