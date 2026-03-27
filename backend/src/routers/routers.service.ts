@@ -182,7 +182,7 @@ export class RoutersService {
 
   getVpnSettings(): { host: string } {
     return {
-      host: this.configService.get<string>('VPN_HOST', 'localhost'),
+      host: this.configService.get<string>('VPN_PUBLIC_HOST') || this.configService.get<string>('VPN_HOST', 'localhost'),
     };
   }
 }
