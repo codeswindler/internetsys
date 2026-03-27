@@ -41,6 +41,18 @@ export class Router {
   apiPasswordEncrypted: string;
 
   @Column({ default: false })
+  isNated: boolean;
+
+  @Column({ nullable: true })
+  vpnIp: string;
+
+  @Column({ nullable: true })
+  vpnUsername: string;
+
+  @Column({ type: 'text', nullable: true })
+  vpnPasswordEncrypted: string;
+
+  @Column({ default: false })
   isOnline: boolean;
 
   @Column({ type: 'text', nullable: true })

@@ -41,6 +41,9 @@ export class RoutersService {
     if (updateDto.apiPasswordEncrypted === '') {
       delete updateDto.apiPasswordEncrypted;
     }
+    if (updateDto.vpnPasswordEncrypted === '') {
+      delete updateDto.vpnPasswordEncrypted;
+    }
     Object.assign(router, updateDto);
     const result = await this.mikrotikService.testConnection(router);
     router.isOnline = result.success;

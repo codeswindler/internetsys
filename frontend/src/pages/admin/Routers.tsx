@@ -19,7 +19,18 @@ export default function Routers() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedProfiles, setExpandedProfiles] = useState<Record<string, boolean>>({});
   
-  const [formData, setFormData] = useState({ name: '', host: '', apiUsername: '', apiPasswordEncrypted: '', port: 8728, connectionMode: 'hotspot' });
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    host: '', 
+    apiUsername: '', 
+    apiPasswordEncrypted: '', 
+    port: 8728, 
+    connectionMode: 'hotspot',
+    isNated: false,
+    vpnIp: '',
+    vpnUsername: '',
+    vpnPasswordEncrypted: ''
+  });
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   
   // Profile Modal State
@@ -92,7 +103,18 @@ export default function Routers() {
 
   const openEditModal = (r: any) => {
     setEditingId(r.id);
-    setFormData({ name: r.name, host: r.host, apiUsername: r.apiUsername, apiPasswordEncrypted: r.apiPasswordEncrypted || '', port: r.port, connectionMode: r.connectionMode || 'hotspot' });
+    setFormData({ 
+      name: r.name, 
+      host: r.host, 
+      apiUsername: r.apiUsername, 
+      apiPasswordEncrypted: r.apiPasswordEncrypted || '', 
+      port: r.port, 
+      connectionMode: r.connectionMode || 'hotspot',
+      isNated: r.isNated || false,
+      vpnIp: r.vpnIp || '',
+      vpnUsername: r.vpnUsername || '',
+      vpnPasswordEncrypted: r.vpnPasswordEncrypted || ''
+    });
     setShowModal(true);
   };
 
@@ -100,7 +122,18 @@ export default function Routers() {
     setShowModal(false);
     setEditingId(null);
     setShowPassword(false);
-    setFormData({ name: '', host: '', apiUsername: '', apiPasswordEncrypted: '', port: 8728, connectionMode: 'hotspot' });
+    setFormData({ 
+      name: '', 
+      host: '', 
+      apiUsername: '', 
+      apiPasswordEncrypted: '', 
+      port: 8728, 
+      connectionMode: 'hotspot',
+      isNated: false,
+      vpnIp: '',
+      vpnUsername: '',
+      vpnPasswordEncrypted: ''
+    });
   };
 
   const toggleProfiles = (id: string) => setExpandedProfiles(p => ({ ...p, [id]: !p[id] }));
@@ -205,9 +238,14 @@ export default function Routers() {
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border ${r.isOnline ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-red-500/15 text-red-400 border-red-500/30'}`}>
                     {r.isOnline ? 'Online' : 'Offline'}
                   </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border ${r.connectionMode === 'pppoe' ? 'bg-purple-500/10 border-purple-500/40 text-purple-400' : 'bg-cyan-500/10 border-cyan-500/40 text-cyan-400'}`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border ${r.connectionMode === 'pppoe' ? 'bg-purple-500/10 border-purple-400 text-purple-400' : 'bg-cyan-500/10 border-cyan-400 text-cyan-400'}`}>
                     {r.connectionMode === 'pppoe' ? 'PPPoE' : 'Hotspot'}
                   </span>
+                  {r.isNated && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border bg-orange-500/15 text-orange-400 border-orange-500/30 flex items-center gap-1">
+                      <AlertCircle size={10} /> NAT
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -231,6 +269,35 @@ export default function Routers() {
                     Connection Failure Log
                   </div>
                   <span className="text-red-400 text-xs font-mono break-words leading-relaxed">{r.lastError}</span>
+                </div>
+              )}
+
+              {r.isNated && (
+                <div className="p-3 rounded-xl bg-orange-500/5 border border-orange-500/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-orange-400/70 uppercase tracking-widest">VPN Tunnel Info</span>
+                    <span className="text-[10px] font-mono text-slate-500">{r.vpnIp || 'No IP assigned'}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-black/20 p-1.5 rounded border border-white/5">
+                      <p className="text-[9px] text-slate-500 uppercase font-bold mb-0.5">User</p>
+                      <p className="text-[10px] text-slate-300 font-mono truncate">{r.vpnUsername || '—'}</p>
+                    </div>
+                    <div className="bg-black/20 p-1.5 rounded border border-white/5">
+                      <p className="text-[9px] text-slate-500 uppercase font-bold mb-0.5">Pass</p>
+                      <p className="text-[10px] text-slate-300 font-mono truncate">••••••••</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const text = `MikroTik SSTP VPN Config:\nServer: vpn.pulselynk.net\nUser: ${r.vpnUsername}\nPass: ${r.vpnPasswordEncrypted}\nMode: SSTP Client`;
+                      navigator.clipboard.writeText(text);
+                      toast.success('Config copied to clipboard!');
+                    }}
+                    className="w-full py-1.5 rounded-lg border border-orange-500/20 text-[10px] font-bold text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <RefreshCw size={10} /> Copy Setup for Client
+                  </button>
                 </div>
               )}
 
@@ -390,36 +457,105 @@ export default function Routers() {
                       </button>
                       <button type="button" onClick={() => setFormData({ ...formData, connectionMode: 'pppoe' })} className={`flex items-center justify-center gap-2 p-3.5 rounded-xl border transition-all ${formData.connectionMode === 'pppoe' ? 'bg-purple-500/10 border-purple-500 text-purple-400' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:border-slate-600'}`}>
                         <RouterIcon size={18} /> <span className="text-sm font-bold">Home Router</span>
-                      </button>
+                       </button>
                     </div>
+                  </div>
+
+                  {/* NAT Toggle */}
+                  <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                       <label className="text-sm font-bold text-orange-400 flex items-center gap-2">
+                         <AlertCircle size={16} /> Router is behind NAT?
+                       </label>
+                       <button
+                         type="button"
+                         onClick={() => setFormData({ ...formData, isNated: !formData.isNated })}
+                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${formData.isNated ? 'bg-orange-500' : 'bg-slate-700'}`}
+                       >
+                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${formData.isNated ? 'translate-x-6' : 'translate-x-1'}`} />
+                       </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Enable this if the router's IP is not publicly reachable. The router will connect to PulseLynk via VPN instead.
+                    </p>
                   </div>
                 </div>
+
                 <div className="flex flex-col gap-6">
-                  <div className="flex gap-4">
-                    <div className="flex-[3]">
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">IP / Host</label>
-                      <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono" value={formData.host} onChange={e => setFormData({ ...formData, host: e.target.value })} placeholder="192.168.88.1" required />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">Port</label>
-                      <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono" type="number" value={formData.port} onChange={e => setFormData({ ...formData, port: parseInt(e.target.value) })} required />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">API Username</label>
-                      <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono" value={formData.apiUsername} onChange={e => setFormData({ ...formData, apiUsername: e.target.value })} placeholder="admin" required />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">API Password</label>
-                      <div className="relative">
-                        <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 pr-12 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium" type={showPassword ? 'text' : 'password'} value={formData.apiPasswordEncrypted} onChange={e => setFormData({ ...formData, apiPasswordEncrypted: e.target.value })} placeholder={editingId ? 'Leave blank to keep' : '••••••••'} required={!editingId} />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-white transition-colors">
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
+                  {formData.isNated ? (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                      <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 space-y-4">
+                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                          <ShieldCheck size={14} className="text-cyan-400" /> VPN Configuration
+                        </h4>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">VPN Username</label>
+                            <input 
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono" 
+                              value={formData.vpnUsername} 
+                              onChange={e => setFormData({ ...formData, vpnUsername: e.target.value })} 
+                              placeholder="router-01" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">VPN Password</label>
+                            <input 
+                              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white" 
+                              type="password"
+                              value={formData.vpnPasswordEncrypted} 
+                              onChange={e => setFormData({ ...formData, vpnPasswordEncrypted: e.target.value })} 
+                              placeholder="••••••••" 
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Static VPN IP (Assigned)</label>
+                          <input 
+                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono" 
+                            value={formData.vpnIp} 
+                            onChange={e => setFormData({ ...formData, vpnIp: e.target.value })} 
+                            placeholder="10.8.0.50" 
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1 italic">PulseLynk will use this IP to reach the router once it's tunneled.</p>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/20 text-[11px] text-cyan-400/80 italic">
+                        <strong>Client Setup:</strong> Provide the VPN server address, username, and password to your client to configure their MikroTik SSTP client.
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-4">
+                        <div className="flex-[3]">
+                          <label className="block text-sm font-medium text-slate-300 mb-1.5">IP / Host (Public)</label>
+                          <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono" value={formData.host} onChange={e => setFormData({ ...formData, host: e.target.value })} placeholder="1.2.3.4" required={!formData.isNated} />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-slate-300 mb-1.5">Port</label>
+                          <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono" type="number" value={formData.port} onChange={e => setFormData({ ...formData, port: parseInt(e.target.value) })} required />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1.5">API Username</label>
+                          <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono" value={formData.apiUsername} onChange={e => setFormData({ ...formData, apiUsername: e.target.value })} placeholder="admin" required />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1.5">API Password</label>
+                          <div className="relative">
+                            <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 pr-12 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium" type={showPassword ? 'text' : 'password'} value={formData.apiPasswordEncrypted} onChange={e => setFormData({ ...formData, apiPasswordEncrypted: e.target.value })} placeholder={editingId ? 'Leave blank to keep' : '••••••••'} required={!editingId} />
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-white transition-colors">
+                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-white/5">

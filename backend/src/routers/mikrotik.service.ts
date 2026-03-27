@@ -8,8 +8,9 @@ export class MikrotikService {
 
   // Helper method to establish a connection
   private async connect(router: Router): Promise<RouterOSAPI> {
+    const host = router.isNated && router.vpnIp ? router.vpnIp : router.host;
     const api = new RouterOSAPI({
-      host: router.host,
+      host: host,
       user: router.apiUsername,
       password: router.apiPasswordEncrypted,
       port: router.port,
