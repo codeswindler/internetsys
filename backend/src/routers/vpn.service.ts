@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import * as https from 'https';
 import { Router } from '../entities/router.entity';
 
 @Injectable()
@@ -13,7 +14,7 @@ export class VpnService {
   constructor(private configService: ConfigService) {
     const host = this.configService.get<string>('VPN_HOST', 'localhost');
     const port = this.configService.get<string>('VPN_PORT', '5555');
-    this.apiUrl = `http://${host}:${port}/api`;
+    this.apiUrl = `https://${host}:${port}/api`;
     this.adminPassword = this.configService.get<string>('VPN_ADMIN_PASSWORD', '');
   }
 
@@ -36,6 +37,7 @@ export class VpnService {
         headers: {
           'X-VPNADMIN-PASSWORD': this.adminPassword,
         },
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       });
 
       if (response.data.error) {
