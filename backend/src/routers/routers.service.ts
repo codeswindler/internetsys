@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Router } from '../entities/router.entity';
@@ -12,6 +13,7 @@ export class RoutersService {
     private routerRepo: Repository<Router>,
     private mikrotikService: MikrotikService,
     private vpnService: VpnService,
+    private configService: ConfigService,
   ) {}
 
   async create(createDto: Partial<Router>): Promise<Router> {
@@ -176,5 +178,11 @@ export class RoutersService {
     }
     
     return { ip: '' };
+  }
+
+  getVpnSettings(): { host: string } {
+    return {
+      host: this.configService.get<string>('VPN_HOST', 'localhost'),
+    };
   }
 }

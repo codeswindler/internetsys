@@ -32,6 +32,11 @@ export class RoutersController {
     return this.routersService.suggestVpnIp();
   }
 
+  @Get('vpn/settings')
+  getVpnSettings() {
+    return this.routersService.getVpnSettings();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.routersService.findOne(id);

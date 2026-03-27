@@ -57,6 +57,12 @@ export default function Routers() {
     refetchInterval: 60000,
   });
 
+  const { data: vpnSettings } = useQuery({
+    queryKey: ['vpn-settings'],
+    queryFn: () => api.get('/routers/vpn/settings').then(res => res.data),
+    staleTime: Infinity,
+  });
+
   const syncProfileMutation = useMutation({
     mutationFn: (data: any) => api.post('/routers/profiles/sync', data),
     onSuccess: (res: any) => {
@@ -304,14 +310,15 @@ export default function Routers() {
                   </div>
                   <button 
                     onClick={() => {
-                      const domain = window.location.hostname;
-                      const text = `MikroTik SSTP VPN Config:\nServer: ${domain}\nUser: ${r.vpnUsername}\nPass: ${r.vpnPasswordEncrypted}\nMode: SSTP Client`;
-                      navigator.clipboard.writeText(text);
-                      toast.success('Config copied to clipboard!');
+                      const vpnHost = vpnSettings?.host || window.location.hostname;
+                      const script = `/interface sstp-client add name=pulselynk-vpn connect-to=${vpnHost} user=${r.vpnUsername} password=${r.vpnPasswordEncrypted} profile=default-encryption disabled=no;
+/ip dhcp-client add interface=pulselynk-vpn disabled=no;`;
+                      navigator.clipboard.writeText(script);
+                      toast.success('MikroTik CLI Script copied!');
                     }}
                     className="w-full py-1.5 rounded-lg border border-orange-500/20 text-[10px] font-bold text-orange-400 hover:bg-orange-500/10 transition-colors flex items-center justify-center gap-1.5"
                   >
-                    <RefreshCw size={10} /> Copy Setup for Client
+                    <RefreshCw size={10} /> Copy MikroTik Script
                   </button>
                 </div>
               )}
