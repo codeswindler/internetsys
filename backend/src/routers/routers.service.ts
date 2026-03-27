@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Router } from '../entities/router.entity';
 import { MikrotikService } from './mikrotik.service';
+import { VpnService } from './vpn.service';
 
 @Injectable()
 export class RoutersService {
@@ -10,6 +11,7 @@ export class RoutersService {
     @InjectRepository(Router)
     private routerRepo: Repository<Router>,
     private mikrotikService: MikrotikService,
+    private vpnService: VpnService,
   ) {}
 
   async create(createDto: Partial<Router>): Promise<Router> {
@@ -19,6 +21,11 @@ export class RoutersService {
     
     // Save immediately so the user isn't blocked by a hanging timeout
     const savedRouter = await this.routerRepo.save(router);
+
+    // Sync VPN user if NATed
+    if (savedRouter.isNated) {
+      this.vpnService.syncUser(savedRouter).catch(() => {});
+    }
 
     // Run connection test in the background
     this.testConnection(savedRouter.id).catch(() => {});
@@ -48,11 +55,22 @@ export class RoutersService {
     const result = await this.mikrotikService.testConnection(router);
     router.isOnline = result.success;
     router.lastCheckedAt = new Date();
-    return this.routerRepo.save(router);
+    
+    const updatedRouter = await this.routerRepo.save(router);
+    
+    // Sync VPN user if NATed
+    if (updatedRouter.isNated) {
+      this.vpnService.syncUser(updatedRouter).catch(() => {});
+    }
+    
+    return updatedRouter;
   }
 
   async remove(id: string): Promise<void> {
     const router = await this.findOne(id);
+    if (router.isNated) {
+      this.vpnService.deleteUser(router).catch(() => {});
+    }
     await this.routerRepo.remove(router);
   }
 

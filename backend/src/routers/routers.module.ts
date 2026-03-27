@@ -4,9 +4,10 @@ import { RoutersController } from './routers.controller';
 import { RoutersService } from './routers.service';
 import { MikrotikService } from './mikrotik.service';
 import { Router } from '../entities/router.entity';
+import { VpnModule } from './vpn.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Router])],
+  imports: [TypeOrmModule.forFeature([Router]), VpnModule],
   controllers: [RoutersController],
   providers: [RoutersService, MikrotikService],
   exports: [MikrotikService], // Expose MikrotikService to SubscriptionsModule
