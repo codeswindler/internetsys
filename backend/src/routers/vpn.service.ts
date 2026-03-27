@@ -73,15 +73,12 @@ export class VpnService {
         Auth_Password_str: router.vpnPasswordEncrypted,
         Realname_str: router.name,
         Note_str: `Managed by PulseLynk (Router ID: ${router.id})`,
+        // Enforce static IP via policy
+        Policy: {
+          IPAddress_ip: router.vpnIp || '0.0.0.0',
+          IPAddress_bool: !!router.vpnIp,
+        }
       };
-
-      // Enforce static IP via policy if assigned
-      if (router.vpnIp) {
-        userParams.Policy = {
-          IPAddress_ip: router.vpnIp,
-          IPAddress_bool: true,
-        };
-      }
 
       if (userExists) {
         await this.callApi('SetUser', userParams);
