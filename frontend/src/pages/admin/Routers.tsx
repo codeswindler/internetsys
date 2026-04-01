@@ -520,6 +520,23 @@ export default function Routers() {
                 <div className="flex flex-col gap-6">
                   {formData.isNated ? (
                     <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                      {/* API Credentials — always needed even for NATed routers */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1.5">API Username</label>
+                          <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono" value={formData.apiUsername} onChange={e => setFormData({ ...formData, apiUsername: e.target.value })} placeholder="Pulselynk" required />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-300 mb-1.5">API Password</label>
+                          <div className="relative">
+                            <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 pr-12 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium" type={showPassword ? 'text' : 'password'} value={formData.apiPasswordEncrypted} onChange={e => setFormData({ ...formData, apiPasswordEncrypted: e.target.value })} placeholder={editingId ? 'Leave blank to keep' : '••••••••'} required={!editingId} />
+                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-white transition-colors">
+                              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700 space-y-4">
                         <h4 className="text-xs font-bold text-slate-300 uppercase tracking-widest flex items-center gap-2">
                           <ShieldCheck size={14} className="text-cyan-400" /> VPN Configuration
