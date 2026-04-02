@@ -10,9 +10,18 @@ export default function Packages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
-  const [routerId, setRouterId] = useState('');
   const [paymentType, setPaymentType] = useState<'voucher' | 'manual' | 'mpesa'>('voucher');
   const [voucherCode, setVoucherCode] = useState('');
+
+  // Auto-select router if we caught it in the URL
+  useEffect(() => {
+    const savedRouterId = localStorage.getItem('hotspot_router_id');
+    if (savedRouterId && routers) {
+      // Find the router in our list that matches the ID or name
+      const match = routers.find((r: any) => r.id === savedRouterId || r.name === savedRouterId);
+      if (match) setRouterId(match.id);
+    }
+  }, [routers]);
 
   const { data: packages, isLoading: pkgsLoading } = useQuery({
     queryKey: ['packages', 'active'],
@@ -123,9 +132,9 @@ export default function Packages() {
               <div className="flex flex-col gap-1">
                 <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
                 <div className="flex items-center gap-1.5">
-                  <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
+                  <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                    Device ID: {activeSub.user.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
+                    Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
                   </span>
                 </div>
               </div>
