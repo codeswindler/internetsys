@@ -301,24 +301,41 @@ export class MikrotikService {
         this.logger.log(`[PROVISIONING SUCCESS] User ${username} created with profile ${profile || 'default'}`);
       }
 
-      // Stage 2: Perform Fresh Login (inject to active)
-      const args = [
-        `=user=${username}`,
-        `=password=${pass}`
-      ];
-      // On some hotspot setups, providing BOTH address AND mac-address is required.
-      // On others, just one is enough. We provide whatever we found.
-      if (ip) args.push(`=address=${ip}`);
-      if (mac) args.push(`=mac-address=${mac}`);
+      // Stage 2: Perform Fresh Login (Using IP-Binding BYPASS for 100% reliability)
+      // This forces the "Gate" open regardless of local portal settings.
+      if (mac) {
+        // First, check if a binding already exists to avoid duplicates
+        const existing = await api.write('/ip/hotspot/ip-binding/print', [`?mac-address=${mac}`]);
+        for (const b of existing) {
+          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
+        }
+
+        const bindingArgs = [
+          `=mac-address=${mac}`,
+          '=type=bypassed',
+          `=comment=Pulselynk: ${username}`
+        ];
+        if (ip) bindingArgs.push(`=address=${ip}`);
+        
+        await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
+        this.logger.log(`[STAGE 2 SUCCESS] IP-Binding BYPASS created for ${mac}. Internet should flow instantly.`);
+      }
+
+      // Stage 3: Attempt API login as fallback (helps with accounting)
+      const loginArgs = [`=user=${username}`, `=password=${pass}`];
+      if (ip) loginArgs.push(`=address=${ip}`);
+      if (mac) loginArgs.push(`=mac-address=${mac}`);
       
-      this.logger.log(`[STAGE 2] Attempting API login for ${username} on ${router.name} (IP: ${ip}, MAC: ${mac})`);
-      
-      const result = await api.write('/ip/hotspot/active/add', args);
-      this.logger.log(`[STAGE 2 SUCCESS] Router accepted session for ${username}`);
-      return result;
+      try {
+        await api.write('/ip/hotspot/active/add', loginArgs);
+        this.logger.log(`[STAGE 3] Active session injected for ${username}`);
+      } catch (e) {
+        this.logger.warn(`Stage 3 fallback failed (non-critical): ${e.message}`);
+      }
+
+      return true;
     } catch (e: any) {
-      this.logger.warn(`MikroTik manual login failed for ${username}: ${e.message}`);
-      // Don't throw here, as the user can still manual login if this fails
+      this.logger.warn(`MikroTik bypass failed for ${username}: ${e.message}`);
       return null;
     } finally {
       api.close();
@@ -381,7 +398,7 @@ export class MikrotikService {
   async getUserTraffic(router: Router, username: string, ip?: string): Promise<{ bytesIn: number, bytesOut: number } | null> {
     const api = await this.connect(router);
     try {
-      // Search by USERNAME or IP for maximum reliability
+      // 1. Try ACTIVE list first (Standard Login)
       const query = ip ? `?address=${ip}` : `?user=${username}`;
       const results = await api.write('/ip/hotspot/active/print', [
         query,
@@ -389,14 +406,26 @@ export class MikrotikService {
       ]);
       
       if (results && results.length > 0) {
-        // MICROTIK LOGIC:
-        // bytes-in = DATA TO ROUTER (User Upload)
-        // bytes-out = DATA FROM ROUTER (User Download)
         return {
           bytesIn: parseInt(results[0]['bytes-in'] || '0'),
           bytesOut: parseInt(results[0]['bytes-out'] || '0')
         };
       }
+
+      // 2. FALLBACK: Try HOST list (For BYPASSED users)
+      const hostQuery = ip ? `?address=${ip}` : `?comment=~${username}`;
+      const hosts = await api.write('/ip/hotspot/host/print', [
+        hostQuery,
+        '.proplist=bytes-in,bytes-out'
+      ]);
+
+      if (hosts && hosts.length > 0) {
+        return {
+          bytesIn: parseInt(hosts[0]['bytes-in'] || '0'),
+          bytesOut: parseInt(hosts[0]['bytes-out'] || '0')
+        };
+      }
+
       return null;
     } catch (e: any) {
       this.logger.error(`Failed to fetch traffic for ${username}/${ip} on ${router.name}: ${e.message}`);
