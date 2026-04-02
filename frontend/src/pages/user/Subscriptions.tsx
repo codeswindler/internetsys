@@ -93,7 +93,7 @@ export default function Subscriptions() {
                       <form 
                         id="hotspot-login-form"
                         action={`http://10.10.1.1/login`} 
-                        method="post" 
+                        method="get" 
                         target="_self"
                         className="hidden"
                       >
