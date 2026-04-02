@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -10,18 +10,10 @@ export default function Packages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
+  const [routerId, setRouterId] = useState('');
   const [paymentType, setPaymentType] = useState<'voucher' | 'manual' | 'mpesa'>('voucher');
   const [voucherCode, setVoucherCode] = useState('');
 
-  // Auto-select router if we caught it in the URL
-  useEffect(() => {
-    const savedRouterId = localStorage.getItem('hotspot_router_id');
-    if (savedRouterId && routers) {
-      // Find the router in our list that matches the ID or name
-      const match = routers.find((r: any) => r.id === savedRouterId || r.name === savedRouterId);
-      if (match) setRouterId(match.id);
-    }
-  }, [routers]);
 
   const { data: packages, isLoading: pkgsLoading } = useQuery({
     queryKey: ['packages', 'active'],
@@ -39,6 +31,16 @@ export default function Packages() {
     queryFn: () => api.get('/subscriptions/my').then(res => res.data),
     refetchInterval: 10000,
   });
+
+  // Auto-select router if we caught it in the URL
+  useEffect(() => {
+    const savedRouterId = localStorage.getItem('hotspot_router_id');
+    if (savedRouterId && routers) {
+      // Find the router in our list that matches the ID or name
+      const match = routers.find((r: any) => r.id === savedRouterId || r.name === savedRouterId);
+      if (match) setRouterId(match.id);
+    }
+  }, [routers]);
 
   const activeSub = subs?.find((s: any) => s.status === 'active');
 
