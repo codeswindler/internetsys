@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon } from 'lucide-react';
+import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -309,11 +309,12 @@ export default function MainLayout({ role }: LayoutProps) {
 
       {/* Main Content */}
       <main 
+        id="page-top"
         ref={mainRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth w-full"
+        className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth w-full main-content-scroll"
       >
         {/* Pull to Refresh Indicator */}
         {pullDistance > 10 && (

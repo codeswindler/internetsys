@@ -9,11 +9,10 @@ export function BackToTop() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const el = document.querySelector('.main-content-scroll') ?? window;
+    const el = document.querySelector('.main-content-scroll') || window;
     const onScroll = () => {
-      const y =
-        el === window ? window.scrollY : (el as HTMLElement).scrollTop;
-      setVisible(y > 320);
+      const y = el instanceof Window ? window.scrollY : el.scrollTop;
+      setVisible(y > 200);
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
@@ -22,7 +21,7 @@ export function BackToTop() {
   const scrollTop = () => {
     const el = document.querySelector('.main-content-scroll');
     if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
-    else window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (!visible) return null;
