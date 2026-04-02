@@ -16,6 +16,13 @@ export default function Packages() {
   const [voucherCode, setVoucherCode] = useState('');
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
+  const [showScroll, setShowScroll] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setShowScroll(window.scrollY > 300);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
 
   const { data: packages, isLoading: pkgsLoading } = useQuery({
@@ -96,7 +103,11 @@ export default function Packages() {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       toast.success('Internet Activated!');
     },
-    onError: () => toast.error('Failed to connect'),
+    onError: (err: any) => {
+      const msg = err.response?.data?.message || 'Connection failed. Try "Verify Device" again.';
+      toast.error(msg);
+      console.error('Start session error:', err);
+    },
   });
 
   const purchaseMutation = useMutation({
@@ -378,6 +389,14 @@ export default function Packages() {
             </form>
           </div>
         </div>
+      )}
+      {showScroll && (
+        <button 
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-8 right-8 p-4 bg-cyan-600/80 hover:bg-cyan-500 text-white rounded-full shadow-lg shadow-cyan-900/40 backdrop-blur-md z-[100] transition-all hover:scale-110 active:scale-95 animate-fade-in"
+        >
+          <ArrowRight className="-rotate-90" size={24} />
+        </button>
       )}
     </div>
   );

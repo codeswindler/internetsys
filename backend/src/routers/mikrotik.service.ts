@@ -248,6 +248,7 @@ export class MikrotikService {
     const api = await this.connect(router);
     try {
       if (mac) {
+        this.logger.log(`[FORCE LOGOUT] Clearing MAC ${mac} on router ${router.name}...`);
         // Remove from Active sessions
         const actives = await api.write('/ip/hotspot/active/print', [`?mac-address=${mac}`]);
         for (const act of actives) {
@@ -260,6 +261,7 @@ export class MikrotikService {
         }
       }
       if (ip) {
+        this.logger.log(`[FORCE LOGOUT] Clearing IP ${ip} on router ${router.name}...`);
         const actives = await api.write('/ip/hotspot/active/print', [`?address=${ip}`]);
         for (const act of actives) {
           await api.write('/ip/hotspot/active/remove', [`=.id=${act['.id']}`]);
@@ -288,9 +290,10 @@ export class MikrotikService {
       if (ip) args.push(`=address=${ip}`);
       if (mac) args.push(`=mac-address=${mac}`);
       
-      this.logger.log(`Attempting API login for ${username} on ${router.name} (IP: ${ip}, MAC: ${mac})`);
+      this.logger.log(`[STAGE 2] Attempting API login for ${username} on ${router.name} (IP: ${ip}, MAC: ${mac})`);
       
       const result = await api.write('/ip/hotspot/active/add', args);
+      this.logger.log(`[STAGE 2 SUCCESS] Router accepted session for ${username}`);
       return result;
     } catch (e: any) {
       this.logger.warn(`MikroTik manual login failed for ${username}: ${e.message}`);

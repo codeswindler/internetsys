@@ -9,6 +9,7 @@ import { PaymentMethod } from '../entities/subscription.entity';
 @Controller('subscriptions')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SubscriptionsController {
+  private readonly logger = new Logger(SubscriptionsController.name);
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
   @Post('purchase')
@@ -29,6 +30,7 @@ export class SubscriptionsController {
 
   @Post(':id/start')
   start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }, @Ip() clientIp: string) {
+    this.logger.log(`[DIAGNOSTIC] START REQUEST RECEIVED for sub ${id}. MAC: ${body.mac}, IP: ${body.ip}, ClientIP: ${clientIp}`);
     const finalIp = body.ip || clientIp;
     return this.subscriptionsService.startSession(id, body.mac, finalIp);
   }
