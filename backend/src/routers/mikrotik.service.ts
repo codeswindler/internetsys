@@ -281,9 +281,18 @@ export class MikrotikService {
     }
   }
 
+  private normalizeMac(mac?: string): string | undefined {
+    if (!mac) return undefined;
+    // Remove all non-hex chars and format as XX:XX:XX:XX:XX:XX
+    const clean = mac.replace(/[^a-fA-F0-9]/g, '');
+    if (clean.length !== 12) return mac; // Can't normalize if it's not 12 chars
+    return clean.match(/.{1,2}/g)?.join(':').toUpperCase();
+  }
+
   async loginUser(router: Router, username: string, pass: string, ip?: string, mac?: string, profile?: string): Promise<any> {
+    const finalMac = this.normalizeMac(mac);
     // Stage 1: Clear any "stuck" sessions and OLD users with same name
-    await this.forceLogoutHotspot(router, ip, mac, username);
+    await this.forceLogoutHotspot(router, ip, finalMac, username);
     
     const api = await this.connect(router);
     try {
