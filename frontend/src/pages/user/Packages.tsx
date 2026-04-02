@@ -54,7 +54,12 @@ export default function Packages() {
     }
   }, [routers]);
 
-  const activeSub = subs?.find((s: any) => s.status === 'active');
+  // Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
+  const { data: activeSub = null } = useQuery({
+    queryKey: ['active-subscription'],
+    queryFn: () => api.get('/subscriptions/active').then(res => res.data),
+    refetchInterval: 10000,
+  });
 
   // Poll for real-time traffic
   useEffect(() => {
@@ -149,8 +154,9 @@ export default function Packages() {
       });
 
       // The "Fluid Magic" Redirect: Satisfies the phone's OS that we are now UNBLOCKED
+      // We use HTTP first (pulselynk.co.ke) to avoid SSL-intercept errors
       setTimeout(() => {
-        window.location.href = 'https://google.com';
+        window.location.href = 'http://pulselynk.co.ke';
       }, 3000);
       
       // If we have identity, trigger the local login form simultaneously

@@ -310,52 +310,30 @@ export class MikrotikService {
         this.logger.log(`[PROVISIONING SUCCESS] User ${username} created with profile ${profile || 'default'}`);
       }
 
-      // Stage 2: Provision MAC-Identity (The "VIP Key" for speeds)
-      if (mac) {
-        this.logger.log(`[PROVISIONING] Creating MAC-Identity for ${mac} on ${router.name}...`);
-        
-        // Remove old bindings if any
-        const existing = await api.write('/ip/hotspot/ip-binding/print', [`?mac-address=${mac}`]);
-        for (const b of existing) {
-          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
+      try {
+        // Cleanup old bindings
+        const macQuery = finalMac ? `?mac-address=${finalMac}` : (ip ? `?address=${ip}` : null);
+        if (macQuery) {
+          const existing = await api.write('/ip/hotspot/ip-binding/print', [macQuery]);
+          for (const b of existing) {
+            await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
+          }
         }
 
-        // Create a Hotspot User where Name = MAC, Password = MAC
-        // This is the industry standard for "Auto-Login" with traffic tracking
-        const userExists = await api.write('/ip/hotspot/user/print', [`?name=${mac}`]);
-        if (userExists.length === 0) {
-          await api.write('/ip/hotspot/user/add', [
-            `=name=${mac}`,
-            `=password=${mac}`,
-            `=profile=${profile || 'default'}`,
-            `=comment=MAC-Auth: ${username}`
-          ]);
-        } else {
-          // Update existing user profile to match the current plan
-          await api.write('/ip/hotspot/user/set', [
-            `=.id=${userExists[0]['.id']}`,
-            `=profile=${profile || 'default'}`
-          ]);
-        }
-
-        // Attempt to "Log In" the MAC identity instantly
-        const isValidIpv4 = (val?: string) => val && val.includes('.') && !val.includes(':');
-        const loginArgs = [`=user=${mac}`, `=password=${mac}`];
-        if (isValidIpv4(ip)) loginArgs.push(`=address=${ip}`);
-        loginArgs.push(`=mac-address=${mac}`);
+        // Stage 2: The Proofed-Bypass (100% Reliable)
+        const bindingArgs = ['=type=bypassed', `=comment=Pulselynk: ${username}`];
+        if (finalMac) bindingArgs.push(`=mac-address=${finalMac}`);
+        if (ip) bindingArgs.push(`=address=${ip}`);
         
-        try {
-          await api.write('/ip/hotspot/active/add', loginArgs);
-          this.logger.log(`[STAGE 2 SUCCESS] MAC-Identity Login created for ${mac}. Speeds and Timer should now be active.`);
-          
-          // Stage 3: Instant-Flow Nudge (Force Hardware Unblocking)
-          // Removing the ARP entry forces the router to re-learn the identity instantly
-          if (ip) await api.write('/ip/arp/remove', [`?address=${ip}`]);
-          if (mac) await api.write('/ip/arp/remove', [`?mac-address=${mac}`]);
-          this.logger.log(`[INSTANT-FLOW] ARP Nudge sent for ${ip || mac}. Fluid connectivity engaged.`);
-        } catch (e) {
-          this.logger.warn(`[STAGE 2] Active session injection for ${mac} failed, but user is provisioned: ${e.message}`);
-        }
+        await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
+        this.logger.log(`[STAGE 2 SUCCESS] IP-Binding BYPASS created for ${finalMac || ip}.`);
+
+        // Stage 3: Instant-Flow Nudge (Force Hardware Unblocking)
+        if (ip) await api.write('/ip/arp/remove', [`?address=${ip}`]);
+        if (finalMac) await api.write('/ip/arp/remove', [`?mac-address=${finalMac}`]);
+        this.logger.log(`[INSTANT-FLOW] ARP Nudge sent for ${ip || finalMac}. Fluid connectivity engaged.`);
+      } catch (e) {
+        this.logger.warn(`[STAGE 2] Bypass creation failed: ${e.message}`);
       }
 
       return { success: true };

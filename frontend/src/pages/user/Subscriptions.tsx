@@ -36,12 +36,23 @@ export default function Subscriptions() {
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
 
-  const { data: subscriptions, isLoading } = useQuery({
+  // 1. Fetch ALL subscriptions for the list
+  const { data: subscriptions = [], isLoading } = useQuery({
     queryKey: ['my_subscriptions'],
     queryFn: async () => {
       const res = await api.get('/subscriptions/my');
       return res.data;
     }
+  });
+
+  // 2. Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
+  const { data: activeSub = null } = useQuery({
+    queryKey: ['active-subscription'],
+    queryFn: async () => {
+      const res = await api.get('/subscriptions/active');
+      return res.data;
+    },
+    refetchInterval: 10000,
   });
 
   const startMutation = useMutation({
@@ -61,8 +72,9 @@ export default function Subscriptions() {
       });
 
       // The "Fluid Magic" Redirect: Satisfies the phone's OS that we are now UNBLOCKED
+      // We use HTTP first (pulselynk.co.ke) to avoid SSL-intercept errors
       setTimeout(() => {
-        window.location.href = 'https://google.com';
+        window.location.href = 'http://pulselynk.co.ke';
       }, 3000);
     },
     onError: (err: any) => {
@@ -71,8 +83,9 @@ export default function Subscriptions() {
     }
   });
 
-  const activeSub = subscriptions?.active || subscriptions?.find((s: any) => s.status === 'active' || s.status === 'pending');
-  const pastSubs = subscriptions?.past || subscriptions?.filter((s: any) => s.status !== 'active' && s.status !== 'pending') || [];
+  const pastSubs = Array.isArray(subscriptions) 
+    ? subscriptions.filter((s: any) => s.id !== activeSub?.id)
+    : [];
 
   // Poll traffic for active session
   useEffect(() => {
