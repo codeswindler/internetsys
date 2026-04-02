@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin } from 'lucide-react';
+import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink } from 'lucide-react';
 import api from '../../services/api';
+import { CountdownBadge } from '../../components/CountdownBadge';
 
 export default function Packages() {
   const navigate = useNavigate();
@@ -23,6 +24,14 @@ export default function Packages() {
     queryKey: ['routers'], 
     queryFn: () => api.get('/routers').then(res => res.data.filter((r: any) => r.isOnline)),
   });
+
+  const { data: subs, isLoading: subsLoading } = useQuery({
+    queryKey: ['my_subscriptions'],
+    queryFn: () => api.get('/subscriptions/my').then(res => res.data),
+    refetchInterval: 10000,
+  });
+
+  const activeSub = subs?.find((s: any) => s.status === 'active');
 
   const purchaseMutation = useMutation({
     mutationFn: (data: { packageId: string; routerId: string }) => api.post('/subscriptions/purchase', data),
@@ -74,7 +83,7 @@ export default function Packages() {
     }
   };
 
-  if (pkgsLoading || routersLoading) return <div className="p-8 text-center text-slate-400">Loading availability...</div>;
+  if (pkgsLoading || routersLoading || subsLoading) return <div className="p-8 text-center text-slate-400">Loading availability...</div>;
 
   return (
     <div>
@@ -82,6 +91,44 @@ export default function Packages() {
         <h2 className="text-3xl font-bold text-white mb-2">Available Hotspot Plans</h2>
         <p className="text-slate-400">Select a plan to start browsing the internet instantly.</p>
       </div>
+
+      {activeSub && (
+        <div 
+          onClick={() => navigate('/user/subscriptions')}
+          className="mb-10 glass-panel p-6 border-cyan-500/30 bg-gradient-to-r from-[rgba(14,165,233,0.1)] to-transparent flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:border-cyan-400/50 transition-all group animate-fade-in"
+        >
+          <div className="flex items-center gap-5">
+            <div className="p-4 bg-cyan-500/20 text-cyan-400 rounded-2xl group-hover:scale-110 transition-transform">
+              <Activity className="animate-pulse" size={32} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">Active Session</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+              </div>
+              <h3 className="text-2xl font-black text-white">{activeSub.package.name}</h3>
+              <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
+            {activeSub.startedAt ? (
+              <div className="flex flex-col items-center md:items-end gap-2">
+                <CountdownBadge expiresAt={activeSub.expiresAt} variant="block" />
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Time Remaining</p>
+              </div>
+            ) : (
+              <div className="bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl flex items-center gap-2 text-amber-400 text-sm font-bold">
+                <Clock size={16} /> Ready to Connect
+              </div>
+            )}
+            
+            <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold group-hover:gap-3 transition-all">
+              Manage Connection <ArrowRight size={14} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {packages?.map((pkg: any) => (

@@ -99,7 +99,7 @@ export default function Subscriptions() {
                       >
                         <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
                         <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
-                        <input type="hidden" name="dst" value={window.location.origin} />
+                        <input type="hidden" name="dst" value="http://www.google.com" />
                       </form>
 
                       {/* Expandable Manual Details */}
