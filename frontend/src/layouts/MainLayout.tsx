@@ -63,20 +63,26 @@ export default function MainLayout({ role }: LayoutProps) {
     fetchProfile();
   }, [token, API_URL]);
 
-  // Capture Hotspot Metadata (MAC, IP, etc) from URL
+  // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mac = params.get('mac');
     const ip = params.get('ip');
     const linkLogin = params.get('link-login') || params.get('link-login-only') || params.get('link-login-esc');
     
-    if (mac) {
-      localStorage.setItem('hotspot_mac', mac);
-      // toast.success(`Hotspot detected: ${mac}`, { id: 'hotspot-detect' });
+    if (mac || ip) {
+      if (mac) localStorage.setItem('hotspot_mac', mac);
+      if (ip) localStorage.setItem('hotspot_ip', ip);
+      if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
+
+      // Save to server if logged in
+      if (token) {
+        axios.post(`${API_URL}/auth/heartbeat`, { mac, ip }, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {}); // Silently ignore heartbeat errors
+      }
     }
-    if (ip) localStorage.setItem('hotspot_ip', ip);
-    if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
-  }, [location.search]);
+  }, [location.search, token, API_URL]);
 
   const { data: unreadTotal = 0 } = useQuery({
     queryKey: ['admin-unread-total'],

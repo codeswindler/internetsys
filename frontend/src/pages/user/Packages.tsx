@@ -120,7 +120,15 @@ export default function Packages() {
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
               </div>
               <h3 className="text-2xl font-black text-white">{activeSub.package.name}</h3>
-              <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                    Device ID: {activeSub.user.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 

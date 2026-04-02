@@ -198,4 +198,24 @@ export class AuthService {
     await this.userRepo.remove(user);
     return { success: true, message: 'User deleted successfully' };
   }
+
+  async heartbeat(userId: string, mac?: string, ip?: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) return null;
+
+    let changed = false;
+    if (mac && user.lastMac !== mac) {
+      user.lastMac = mac;
+      changed = true;
+    }
+    if (ip && user.lastIp !== ip) {
+      user.lastIp = ip;
+      changed = true;
+    }
+
+    if (changed) {
+      await this.userRepo.save(user);
+    }
+    return { success: true };
+  }
 }

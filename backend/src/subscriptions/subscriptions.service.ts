@@ -230,7 +230,7 @@ export class SubscriptionsService {
   async startSession(subId: string, mac?: string, ip?: string): Promise<Subscription> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
-      relations: ['package', 'router'],
+      relations: ['package', 'router', 'user'],
     });
 
     if (!sub) throw new NotFoundException('Subscription not found');
@@ -238,15 +238,19 @@ export class SubscriptionsService {
       throw new BadRequestException(`Subscription is in ${sub.status} state, cannot start`);
     }
 
-    // Attempt direct login if mac/ip are provided
-    if (mac || ip) {
+    // Fallback to saved user metadata if not provided
+    const finalMac = mac || sub.user.lastMac;
+    const finalIp = ip || sub.user.lastIp;
+
+    // Attempt direct login if mac/ip are available
+    if (finalMac || finalIp) {
       try {
         await this.mikrotikService.loginUser(
           sub.router,
           sub.mikrotikUsername,
           sub.mikrotikPassword,
-          ip,
-          mac
+          finalIp,
+          finalMac
         );
       } catch (e) {
         this.logger.warn(`Failed to inject active session for ${sub.id}: ${e.message}`);

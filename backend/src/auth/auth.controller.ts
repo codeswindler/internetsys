@@ -96,4 +96,12 @@ export class AuthController {
   updateProfilePost(@Request() req: any, @Body() body: any) {
     return this.authService.updateProfile(req.user.id, req.user.role || 'user', body);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('heartbeat')
+  @HttpCode(HttpStatus.OK)
+  heartbeat(@Request() req: any, @Body() body: { mac?: string, ip?: string }) {
+    if (req.user.role && req.user.role !== 'user') return { success: true };
+    return this.authService.heartbeat(req.user.id, body.mac, body.ip);
+  }
 }

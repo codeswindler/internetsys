@@ -56,8 +56,16 @@ export default function Subscriptions() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
               <div>
                 <h4 className="text-3xl font-black text-white mb-2">{activeSub.package.name}</h4>
-                <div className="flex items-center gap-2 text-slate-300">
-                  <RouterIcon size={16} /> Connected to <span className="font-medium text-white">{activeSub.router.name}</span>
+                <div className="flex flex-col gap-1 text-slate-300">
+                  <div className="flex items-center gap-2">
+                    <RouterIcon size={16} /> Connected to <span className="font-medium text-white">{activeSub.router.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                      Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
+                    </span>
+                  </div>
                 </div>
               </div>
 

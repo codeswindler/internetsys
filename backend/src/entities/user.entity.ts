@@ -35,6 +35,12 @@ export class User {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ nullable: true })
+  lastMac: string;
+
+  @Column({ nullable: true })
+  lastIp: string;
+
   @OneToMany(() => Subscription, (subscription) => subscription.user)
   subscriptions: Subscription[];
 
