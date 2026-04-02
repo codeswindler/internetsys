@@ -244,7 +244,39 @@ export class MikrotikService {
     }
   }
 
+  async forceLogoutHotspot(router: Router, ip?: string, mac?: string): Promise<void> {
+    const api = await this.connect(router);
+    try {
+      if (mac) {
+        // Remove from Active sessions
+        const actives = await api.write('/ip/hotspot/active/print', [`?mac-address=${mac}`]);
+        for (const act of actives) {
+          await api.write('/ip/hotspot/active/remove', [`=.id=${act['.id']}`]);
+        }
+        // Remove from Hosts list (crucial for resetting "waiting" state)
+        const hosts = await api.write('/ip/hotspot/host/print', [`?mac-address=${mac}`]);
+        for (const host of hosts) {
+          await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+        }
+      }
+      if (ip) {
+        const actives = await api.write('/ip/hotspot/active/print', [`?address=${ip}`]);
+        for (const act of actives) {
+          await api.write('/ip/hotspot/active/remove', [`=.id=${act['.id']}`]);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to force logout ${mac || ip} on ${router.name}: ${e.message}`);
+    } finally {
+      api.close();
+    }
+  }
+
   async loginUser(router: Router, username: string, pass: string, ip?: string, mac?: string): Promise<any> {
+    // Stage 1: Clear any "stuck" sessions first
+    await this.forceLogoutHotspot(router, ip, mac);
+
+    // Stage 2: Perform Fresh Login
     const api = await this.connect(router);
     try {
       const args = [

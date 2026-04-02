@@ -288,26 +288,39 @@ export class SubscriptionsService {
     }
 
     // Only start if it hasn't started yet
-    if (sub.startedAt) {
-      return sub;
+    if (!sub.startedAt) {
+      // Certification Check: Wait briefly to see if traffic flows
+      // If we see bytes flowing, we mark it as officially started.
+      this.logger.log(`Certifying connection for ${sub.id}...`);
+      
+      // Wait 3 seconds then check traffic
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      try {
+        const stats = await this.mikrotikService.getUserTraffic(sub.router, sub.mikrotikUsername);
+        if (stats && stats.bytesOut > 0) {
+          sub.startedAt = new Date();
+          const duration = sub.package.durationValue;
+          const type = sub.package.durationType; // 'minutes', 'hours', 'days'
+          
+          let expiresAt = new Date(sub.startedAt);
+          if (type === 'minutes') expiresAt.setMinutes(expiresAt.getMinutes() + duration);
+          else if (type === 'hours') expiresAt.setHours(expiresAt.getHours() + duration);
+          else if (type === 'days') expiresAt.setDate(expiresAt.getDate() + duration);
+          
+          sub.expiresAt = expiresAt;
+          sub.status = SubscriptionStatus.ACTIVE;
+          await this.subRepo.save(sub);
+          this.logger.log(`Session certified and started for sub ${sub.id}. Traffic detected: ${stats.bytesOut} bytes out.`);
+        } else {
+          this.logger.warn(`Session injected but no traffic detected for sub ${sub.id}. Countdown remains paused.`);
+        }
+      } catch (e) {
+        this.logger.error(`Certification failed for sub ${sub.id}: ${e.message}`);
+      }
     }
 
-    const now = new Date();
-    const expiresAt = new Date(now);
-    const durationCount = sub.package.durationValue;
-    
-    switch (sub.package.durationType) {
-      case DurationType.MINUTES: expiresAt.setMinutes(expiresAt.getMinutes() + durationCount); break;
-      case DurationType.HOURS: expiresAt.setHours(expiresAt.getHours() + durationCount); break;
-      case DurationType.DAYS: expiresAt.setDate(expiresAt.getDate() + durationCount); break;
-      case DurationType.WEEKS: expiresAt.setDate(expiresAt.getDate() + (durationCount * 7)); break;
-      case DurationType.MONTHS: expiresAt.setMonth(expiresAt.getMonth() + durationCount); break;
-    }
-
-    sub.startedAt = now;
-    sub.expiresAt = expiresAt;
-    
-    return this.subRepo.save(sub);
+    return sub;
   }
 
   async getTrafficStats(userId: string): Promise<any> {

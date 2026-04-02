@@ -230,8 +230,8 @@ export default function Packages() {
                     disabled={startMutation.isPending}
                     className="w-full md:w-auto bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-6 py-3 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
                   >
-                    {startMutation.isPending ? <Clock className="animate-spin" size={18} /> : <Zap size={18} fill="currentColor" />}
-                    1-Click Connect
+                    {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} fill="currentColor" />}
+                    {startMutation.isPending ? 'Certifying...' : '1-Click Connect'}
                   </button>
                 )}
               </div>

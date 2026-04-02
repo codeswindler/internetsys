@@ -162,13 +162,11 @@ export default function Subscriptions() {
                           className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-[0.1em] py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 border border-cyan-400/30 transition-all active:scale-[0.98]"
                         >
                           {startMutation.isPending ? (
-                            <Clock size={20} className="animate-spin" />
+                            <RefreshCw size={20} className="animate-spin" />
                           ) : (
-                            <>
-                              <Zap size={20} fill="currentColor" />
-                              {activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet'}
-                            </>
+                            <Zap size={20} fill="currentColor" />
                           )}
+                          {startMutation.isPending ? 'Certifying Connection...' : (activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet')}
                         </button>
                       )}
 
