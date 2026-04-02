@@ -22,6 +22,11 @@ export class SubscriptionsController {
     return this.subscriptionsService.findMy(req.user.id);
   }
 
+  @Post(':id/start')
+  start(@Param('id') id: string) {
+    return this.subscriptionsService.startSession(id);
+  }
+
   // Admins can activate pending manual subscriptions
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
   @Post(':id/activate')

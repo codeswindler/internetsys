@@ -1,13 +1,27 @@
-import { useQuery } from '@tanstack/react-query';
-import { Wifi, Clock, Activity, Lock, Router as RouterIcon, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Wifi, Clock, Activity, Lock, Router as RouterIcon, ExternalLink, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
 export default function Subscriptions() {
+  const queryClient = useQueryClient();
+  const [showManual, setShowManual] = useState(false);
+
   const { data: subs, isLoading } = useQuery({
     queryKey: ['my_subscriptions'],
     queryFn: () => api.get('/subscriptions/my').then(res => res.data),
     refetchInterval: 10000,
+  });
+
+  const startMutation = useMutation({
+    mutationFn: (subId: string) => api.post(`/subscriptions/${subId}/start`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      toast.success('Session started! Connecting...');
+    },
+    onError: () => toast.error('Failed to start session timer'),
   });
 
   const activeSub = subs?.find((s: any) => s.status === 'active');
@@ -43,50 +57,121 @@ export default function Subscriptions() {
                 </div>
               </div>
 
-              <div className="bg-black/40 backdrop-blur-md p-5 rounded-2xl border border-white/10 w-full md:w-auto">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <Lock size={14}/> {activeSub.router.connectionMode === 'pppoe' ? 'Home Router Credentials (PPPoE)' : 'Hotspot Credentials'}
-                </p>
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center gap-6 text-sm">
-                    <span className="text-slate-400">Username:</span>
-                    <span className="font-mono font-bold text-cyan-400 text-lg tracking-wider bg-cyan-950/50 px-3 py-1 rounded inline-block">
-                      {activeSub.mikrotikUsername}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center gap-6 text-sm">
-                    <span className="text-slate-400">Password:</span>
-                    <span className="font-mono font-bold text-cyan-400 text-lg tracking-wider bg-cyan-950/50 px-3 py-1 rounded inline-block">
-                      {activeSub.mikrotikPassword}
-                    </span>
-                  </div>
+              <div className="bg-black/40 backdrop-blur-md p-5 rounded-2xl border border-white/10 w-full md:w-auto min-w-[280px]">
+                <div className="flex flex-col gap-4">
+                  {activeSub.router.connectionMode === 'hotspot' && (
+                    <div className="space-y-4">
+                      {/* 1-Click Connect Button */}
+                      <button 
+                        onClick={() => {
+                          if (!activeSub.startedAt) {
+                            startMutation.mutate(activeSub.id, {
+                              onSuccess: () => {
+                                // After starting session, submit the form to the router
+                                document.getElementById('hotspot-login-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                              }
+                            });
+                          } else {
+                            // If already started, just submit
+                            (document.getElementById('hotspot-login-form') as HTMLFormElement)?.submit();
+                          }
+                        }}
+                        disabled={startMutation.isPending}
+                        className="w-full py-4 rounded-xl font-black uppercase tracking-widest bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all flex items-center justify-center gap-3 active:scale-95"
+                      >
+                        {startMutation.isPending ? (
+                          <Clock className="animate-spin" size={20} />
+                        ) : (
+                          <>
+                            <Zap size={20} fill="currentColor" />
+                            {activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet'}
+                          </>
+                        )}
+                      </button>
+
+                      {/* Hidden Router Form */}
+                      <form 
+                        id="hotspot-login-form"
+                        action={`http://10.10.1.1/login`} 
+                        method="post" 
+                        target="_self"
+                        className="hidden"
+                      >
+                        <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
+                        <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
+                        <input type="hidden" name="dst" value={window.location.origin} />
+                      </form>
+
+                      {/* Expandable Manual Details */}
+                      <div className="border-t border-white/5 pt-3">
+                        <button 
+                          onClick={() => setShowManual(!showManual)}
+                          className="text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-1.5 transition-colors mx-auto"
+                        >
+                          {showManual ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                          {showManual ? 'Hide Manual Details' : 'Show Manual Login Details'}
+                        </button>
+
+                        {showManual && (
+                          <div className="mt-4 p-4 rounded-xl bg-black/30 border border-white/5 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                              <Lock size={12}/> Hotspot Credentials
+                            </p>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center gap-6 text-sm">
+                                <span className="text-slate-400">Username:</span>
+                                <span className="font-mono font-bold text-cyan-400 bg-cyan-950/50 px-2 py-0.5 rounded">{activeSub.mikrotikUsername}</span>
+                              </div>
+                              <div className="flex justify-between items-center gap-6 text-sm">
+                                <span className="text-slate-400">Password:</span>
+                                <span className="font-mono font-bold text-cyan-400 bg-cyan-950/50 px-2 py-0.5 rounded">{activeSub.mikrotikPassword}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeSub.router.connectionMode === 'pppoe' && (
+                    <div className="space-y-4">
+                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Lock size={14}/> PPPoE WAN Credentials
+                      </p>
+                      <div className="bg-black/30 p-4 rounded-xl border border-white/5 space-y-3">
+                        <div className="flex justify-between items-center gap-6 text-sm">
+                          <span className="text-slate-400">Username:</span>
+                          <span className="font-mono font-bold text-purple-400 bg-purple-950/50 px-2 py-0.5 rounded">{activeSub.mikrotikUsername}</span>
+                        </div>
+                        <div className="flex justify-between items-center gap-6 text-sm">
+                          <span className="text-slate-400">Password:</span>
+                          <span className="font-mono font-bold text-purple-400 bg-purple-950/50 px-2 py-0.5 rounded">{activeSub.mikrotikPassword}</span>
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-white/5 text-[10px] text-slate-400 leading-relaxed italic">
+                        <strong>Setup:</strong> Enter these details into your home router's WAN settings. Timer starts on first connection.
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                {activeSub.router.connectionMode === 'pppoe' ? (
-                  <div className="mt-4 p-3 rounded-lg bg-purple-500/5 border border-purple-500/20 text-[10px] text-purple-300 leading-relaxed max-w-[240px]">
-                    <strong>Instructions:</strong> Enter these details into your home router's WAN settings (Select <strong>PPPoE</strong> model). Contact support if you need help with setup.
-                  </div>
-                ) : (
-                  <form action={`http://${activeSub.router.host}/login`} method="post" className="mt-4">
-                    <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
-                    <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
-                    <input type="hidden" name="dst" value={window.location.origin} />
-                    <button type="submit" className="w-full btn-primary flex items-center justify-center gap-2 py-2.5 shadow-lg shadow-cyan-500/20">
-                      <ExternalLink size={16} /> 1-Click Connect
-                    </button>
-                    <p className="text-[10px] text-slate-500 mt-3 text-center">Connected locally? Click above to log in automatically.</p>
-                  </form>
-                )}
               </div>
             </div>
 
             {/* Countdown section */}
             <div className="mt-8 pt-6 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-6 relative z-10">
-              <CountdownBadge expiresAt={activeSub.expiresAt} variant="block" />
-              
-              <div className="text-xs text-slate-500 bg-slate-800/50 px-3 py-2 rounded-lg border border-white/5">
-                Expires on {new Date(activeSub.expiresAt).toLocaleString()}
-              </div>
+              {activeSub.startedAt ? (
+                <>
+                  <CountdownBadge expiresAt={activeSub.expiresAt} variant="block" />
+                  <div className="text-xs text-slate-500 bg-slate-800/50 px-3 py-2 rounded-lg border border-white/5">
+                    Expires on {new Date(activeSub.expiresAt).toLocaleString()}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3 text-cyan-400/80 font-bold text-sm bg-cyan-500/5 px-4 py-3 rounded-xl border border-cyan-500/20 w-full animate-pulse">
+                  <Clock size={18} />
+                  Session not started yet. Clock starts when you click connect.
+                </div>
+              )}
             </div>
           </div>
         </div>

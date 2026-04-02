@@ -70,25 +70,13 @@ export class SubscriptionsService {
       throw new BadRequestException(`MikroTik Error: ${error.message || JSON.stringify(error)}`);
     }
 
-    // Calculate expiry
-    const now = new Date();
-    const expiresAt = new Date(now);
-    const durationCount = sub.package.durationValue;
-    switch (sub.package.durationType) {
-      case DurationType.MINUTES: expiresAt.setMinutes(expiresAt.getMinutes() + durationCount); break;
-      case DurationType.HOURS: expiresAt.setHours(expiresAt.getHours() + durationCount); break;
-      case DurationType.DAYS: expiresAt.setDate(expiresAt.getDate() + durationCount); break;
-      case DurationType.WEEKS: expiresAt.setDate(expiresAt.getDate() + (durationCount * 7)); break;
-      case DurationType.MONTHS: expiresAt.setMonth(expiresAt.getMonth() + durationCount); break;
-    }
-
     sub.status = SubscriptionStatus.ACTIVE;
     sub.paymentMethod = paymentMethod;
     sub.paymentRef = paymentRef || '';
     sub.mikrotikUsername = username;
     sub.mikrotikPassword = password;
-    sub.startedAt = now;
-    sub.expiresAt = expiresAt;
+    sub.startedAt = null;
+    sub.expiresAt = null;
 
     const savedSub = await this.subRepo.save(sub);
 
@@ -233,6 +221,40 @@ export class SubscriptionsService {
     }
 
     sub.status = SubscriptionStatus.ACTIVE;
+    sub.startedAt = now;
+    sub.expiresAt = expiresAt;
+    
+    return this.subRepo.save(sub);
+  }
+
+  async startSession(subId: string): Promise<Subscription> {
+    const sub = await this.subRepo.findOne({
+      where: { id: subId },
+      relations: ['package', 'router'],
+    });
+
+    if (!sub) throw new NotFoundException('Subscription not found');
+    if (sub.status !== SubscriptionStatus.ACTIVE) {
+      throw new BadRequestException(`Subscription is in ${sub.status} state, cannot start`);
+    }
+
+    // Only start if it hasn't started yet
+    if (sub.startedAt) {
+      return sub;
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(now);
+    const durationCount = sub.package.durationValue;
+    
+    switch (sub.package.durationType) {
+      case DurationType.MINUTES: expiresAt.setMinutes(expiresAt.getMinutes() + durationCount); break;
+      case DurationType.HOURS: expiresAt.setHours(expiresAt.getHours() + durationCount); break;
+      case DurationType.DAYS: expiresAt.setDate(expiresAt.getDate() + durationCount); break;
+      case DurationType.WEEKS: expiresAt.setDate(expiresAt.getDate() + (durationCount * 7)); break;
+      case DurationType.MONTHS: expiresAt.setMonth(expiresAt.getMonth() + durationCount); break;
+    }
+
     sub.startedAt = now;
     sub.expiresAt = expiresAt;
     
