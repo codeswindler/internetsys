@@ -297,8 +297,18 @@ export class SubscriptionsService {
     if (!sub.startedAt && (finalMac || finalIp)) {
       sub.startedAt = new Date();
       sub.status = SubscriptionStatus.ACTIVE;
+      
+      // Calculate Expiration Date
+      const duration = sub.package.durationValue;
+      const type = sub.package.durationType; // 'minutes', 'hours', 'days'
+      let expiresAt = new Date(sub.startedAt);
+      if (type === 'minutes') expiresAt.setMinutes(expiresAt.getMinutes() + duration);
+      else if (type === 'hours') expiresAt.setHours(expiresAt.getHours() + duration);
+      else if (type === 'days') expiresAt.setDate(expiresAt.getDate() + duration);
+      sub.expiresAt = expiresAt;
+      
       await this.subRepo.save(sub);
-      this.logger.log(`[CERTIFICATION] Session ${sub.id} started immediately on router ${sub.router.name}`);
+      this.logger.log(`[CERTIFICATION] Session ${sub.id} started. Expires at: ${sub.expiresAt}`);
       
       // Optional background check
       setTimeout(async () => {
