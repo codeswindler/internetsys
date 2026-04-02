@@ -251,10 +251,13 @@ export class MikrotikService {
         `=user=${username}`,
         `=password=${pass}`
       ];
+      // On some hotspot setups, providing BOTH address AND mac-address is required.
+      // On others, just one is enough. We provide whatever we found.
       if (ip) args.push(`=address=${ip}`);
       if (mac) args.push(`=mac-address=${mac}`);
       
-      // Inject into active sessions
+      this.logger.log(`Attempting API login for ${username} on ${router.name} (IP: ${ip}, MAC: ${mac})`);
+      
       const result = await api.write('/ip/hotspot/active/add', args);
       return result;
     } catch (e: any) {

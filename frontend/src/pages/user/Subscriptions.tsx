@@ -104,12 +104,22 @@ export default function Subscriptions() {
                   </div>
                    <div className="flex items-center gap-1.5 mt-1">
                     <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-1.5">
-                    Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
-                    {!activeSub.user?.lastMac && (
-                      <RefreshCw size={10} className="animate-spin text-cyan-500 cursor-help" />
-                    )}
-                  </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-1.5">
+                      Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
+                      {!activeSub.user?.lastMac && !localStorage.getItem('hotspot_mac') && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Attempt to redirect to local router to capture IP/MAC
+                            window.location.href = `http://${activeSub.router.host || '10.5.50.1'}/login?dst=${encodeURIComponent(window.location.href)}`;
+                          }}
+                          className="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 transition-all"
+                        >
+                          <RefreshCw size={10} />
+                          Fix Connection
+                        </button>
+                      )}
+                    </span>
                   </div>
                 </div>
               </div>

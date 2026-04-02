@@ -269,7 +269,7 @@ export class SubscriptionsService {
       }
     }
 
-    // Attempt direct login if mac/ip are available
+    // Attempt direct login if mac OR ip is available
     if (finalMac || finalIp) {
       try {
         await this.mikrotikService.loginUser(
@@ -279,9 +279,12 @@ export class SubscriptionsService {
           finalIp,
           finalMac
         );
+        this.logger.log(`Session authorized for sub ${sub.id} using ${finalMac ? 'MAC: ' + finalMac : 'IP: ' + finalIp}`);
       } catch (e) {
         this.logger.warn(`Failed to inject active session for ${sub.id}: ${e.message}`);
       }
+    } else {
+      this.logger.error(`Cannot start session for sub ${sub.id}: No MAC or IP detected yet.`);
     }
 
     // Only start if it hasn't started yet
