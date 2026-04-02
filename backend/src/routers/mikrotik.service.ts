@@ -278,12 +278,41 @@ export class MikrotikService {
         return results[0]['mac-address'];
       }
       
-      // 2. Fallback to DHCP leases
-      results = await api.write('/ip/dhcp-server/lease/print', [`?address=${ip}`]);
-      if (results && results.length > 0 && results[0]['mac-address']) {
-        return results[0]['mac-address'];
+      // FALLBACK 1: Scan Hotspot Hosts (The most accurate for hotspot devices)
+      this.logger.log(`Scanning Hotspot Hosts for ${ip}...`);
+      const hosts = await api.write('/ip/hotspot/host/print', [
+        `?address=${ip}`
+      ]);
+      if (hosts && hosts[0]?.['mac-address']) {
+        this.logger.log(`Found MAC ${hosts[0]['mac-address']} in Hotspot Hosts`);
+        return hosts[0]['mac-address'];
       }
 
+      // FALLBACK 2: Scan DHCP Leases (Good for devices that just joined)
+      this.logger.log(`Scanning DHCP Leases for ${ip}...`);
+      const leases = await api.write('/ip/dhcp-server/lease/print', [
+        `?active-address=${ip}`
+      ]);
+      if (leases && leases[0]?.['active-mac-address']) {
+        this.logger.log(`Found MAC ${leases[0]['active-mac-address']} in DHCP Leases`);
+        return leases[0]['active-mac-address'];
+      }
+
+      // FALLBACK 3: Search for ANY recently active lease if IP mismatch persists
+      // This handles cases where the phone is NAT'd and the server sees the wrong IP
+      this.logger.log(`Performing 'Last-Seen' lease scan...`);
+      const recentLeases = await api.write('/ip/dhcp-server/lease/print', [
+        '?status=bound'
+      ]);
+      if (recentLeases && recentLeases.length > 0) {
+        // Find the lease that was updated most recently (last-seen)
+        // This is a "best guess" but works well for 1-click connect
+        const latest = recentLeases.sort((a, b) => (b['last-seen'] || '').localeCompare(a['last-seen'] || ''))[0];
+        this.logger.warn(`Public IP mismatch! Best guess MAC: ${latest['active-mac-address']}`);
+        // return latest['active-mac-address']; // disabled for safety, but showing the logic
+      }
+
+      this.logger.warn(`MAC discovery finally failed for IP ${ip}`);
       return null;
     } catch (e: any) {
       this.logger.warn(`Failed to lookup MAC for IP ${ip} on router ${router.name}: ${e.message}`);
