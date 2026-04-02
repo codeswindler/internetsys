@@ -44,6 +44,12 @@ export class Package {
   @Column({ type: 'int', default: 0, comment: 'Limit in MB. 0 = unlimited' })
   dataLimitMB: number;
 
+  @Column({ nullable: true })
+  downloadSpeed: string;
+
+  @Column({ nullable: true })
+  uploadSpeed: string;
+
   @Column({ default: true })
   isActive: boolean;
 

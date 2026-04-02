@@ -13,7 +13,8 @@ export default function Packages() {
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   
   const [formData, setFormData] = useState({ 
-    name: '', durationType: 'hours', durationValue: 1, price: 0, bandwidthProfile: 'default', dataLimitMB: 0, isActive: true 
+    name: '', durationType: 'hours', durationValue: 1, price: 0, bandwidthProfile: 'default', dataLimitMB: 0, isActive: true,
+    downloadSpeed: '', uploadSpeed: ''
   });
 
   const { data: packages, isLoading } = useQuery({
@@ -64,7 +65,9 @@ export default function Packages() {
       price: pkg.price,
       bandwidthProfile: pkg.bandwidthProfile,
       dataLimitMB: pkg.dataLimitMB,
-      isActive: pkg.isActive
+      isActive: pkg.isActive,
+      downloadSpeed: pkg.downloadSpeed || '',
+      uploadSpeed: pkg.uploadSpeed || ''
     });
     setShowModal(true);
   };
@@ -73,7 +76,8 @@ export default function Packages() {
     setShowModal(false);
     setEditingId(null);
     setFormData({ 
-      name: '', durationType: 'hours', durationValue: 1, price: 0, bandwidthProfile: 'default', dataLimitMB: 0, isActive: true 
+      name: '', durationType: 'hours', durationValue: 1, price: 0, bandwidthProfile: 'default', dataLimitMB: 0, isActive: true,
+      downloadSpeed: '', uploadSpeed: ''
     });
   };
 
@@ -121,6 +125,12 @@ export default function Packages() {
               <div className="flex justify-between items-center">
                 <span className="text-slate-500">Data Limit</span>
                 <span className="font-semibold text-white">{pkg.dataLimitMB === 0 ? 'Unlimited' : `${pkg.dataLimitMB} MB`}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-1.5">
+                <span className="text-slate-500">Speed</span>
+                <span className="font-bold text-cyan-400 text-[10px]">
+                  {pkg.downloadSpeed ? `${pkg.downloadSpeed} ↓` : 'N/A'} {pkg.uploadSpeed ? `/ ${pkg.uploadSpeed} ↑` : ''}
+                </span>
               </div>
             </div>
 
@@ -205,6 +215,20 @@ export default function Packages() {
                       <div className="flex-1">
                         <label className="block text-xs font-medium text-slate-400 mb-1.5">Value</label>
                         <input className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-cyan-500 transition-all text-sm" type="number" min="1" value={formData.durationValue} onChange={e => setFormData({...formData, durationValue: parseInt(e.target.value)})} required />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-cyan-500/5 border border-cyan-500/10 rounded-xl">
+                    <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-4">Marketing Speeds</h4>
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Download (e.g. 5 Mbps)</label>
+                        <input className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-cyan-500 transition-all text-sm" value={formData.downloadSpeed} onChange={e => setFormData({...formData, downloadSpeed: e.target.value})} placeholder="Download" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Upload (e.g. 2 Mbps)</label>
+                        <input className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-cyan-500 transition-all text-sm" value={formData.uploadSpeed} onChange={e => setFormData({...formData, uploadSpeed: e.target.value})} placeholder="Upload" />
                       </div>
                     </div>
                   </div>

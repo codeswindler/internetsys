@@ -202,8 +202,14 @@ export default function Packages() {
               </li>
               <li className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
-                High-speed connectivity
+                {pkg.downloadSpeed ? `${pkg.downloadSpeed} Download Speed` : 'High-speed connectivity'}
               </li>
+              {pkg.uploadSpeed && (
+                <li className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
+                  {pkg.uploadSpeed} Upload Speed
+                </li>
+              )}
             </ul>
 
             <button className="btn-primary w-full mt-auto relative z-10 shadow-lg shadow-cyan-500/20">
