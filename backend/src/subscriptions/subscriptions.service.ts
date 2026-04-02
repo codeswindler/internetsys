@@ -246,30 +246,18 @@ export class SubscriptionsService {
     if (!finalMac && finalIp) {
       try {
         // 1. Try primary router
-        let foundMac = await this.mikrotikService.findMacByIp(sub.router, finalIp);
-        
-        // 2. GLOBAL SCAN: If not on primary, check all other online routers
-        if (!foundMac) {
-          const onlineRouters = await this.routerRepo.find({ where: { isOnline: true } });
-          for (const r of onlineRouters) {
-            if (r.id === sub.router.id) continue;
-            foundMac = await this.mikrotikService.findMacByIp(r, finalIp);
-            if (foundMac) break;
-          }
-        }
-
+        const foundMac = await this.mikrotikService.findMacByIp(sub.router, finalIp);
         if (foundMac) {
           finalMac = foundMac;
-          // Store it for next time
           sub.user.lastMac = foundMac;
           await this.userRepo.save(sub.user);
         }
       } catch (e) {
-        this.logger.warn(`MAC lookup by IP failed: ${e.message}`);
+        this.logger.warn(`MAC lookup failed: ${e.message}`);
       }
     }
 
-    // Attempt direct login if mac OR ip is available
+    // 2. ALWAYS attempt login on MikroTik to ensure the user is active on the router
     if (finalMac || finalIp) {
       try {
         await this.mikrotikService.loginUser(
@@ -280,15 +268,13 @@ export class SubscriptionsService {
           finalMac,
           sub.package.bandwidthProfile
         );
-        this.logger.log(`Session authorized for sub ${sub.id} using ${finalMac ? 'MAC: ' + finalMac : 'IP: ' + finalIp}`);
+        this.logger.log(`[DIAGNOSTIC] Router Login triggered for sub ${sub.id}`);
       } catch (e) {
-        this.logger.warn(`Failed to inject active session for ${sub.id}: ${e.message}`);
+        this.logger.error(`Router Login Failed: ${e.message}`);
       }
-    } else {
-      this.logger.error(`Cannot start session for sub ${sub.id}: No MAC or IP detected yet.`);
     }
 
-    // Only start if it hasn't started yet
+    // 3. Only start the countdown timer if it hasn't started yet
     if (!sub.startedAt) {
       // Certification Check: Wait briefly to see if traffic flows
       // If we see bytes flowing, we mark it as officially started.
