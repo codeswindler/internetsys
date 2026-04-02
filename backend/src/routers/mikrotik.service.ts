@@ -244,9 +244,16 @@ export class MikrotikService {
     }
   }
 
-  async forceLogoutHotspot(router: Router, ip?: string, mac?: string): Promise<void> {
+  async forceLogoutHotspot(router: Router, ip?: string, mac?: string, username?: string): Promise<void> {
     const api = await this.connect(router);
     try {
+      if (username) {
+        this.logger.log(`[CLEANUP] Removing user ${username} from router ${router.name}...`);
+        const users = await api.write('/ip/hotspot/user/print', [`?name=${username}`]);
+        for (const u of users) {
+          await api.write('/ip/hotspot/user/remove', [`=.id=${u['.id']}`]);
+        }
+      }
       if (mac) {
         this.logger.log(`[FORCE LOGOUT] Clearing MAC ${mac} on router ${router.name}...`);
         // Remove from Active sessions
@@ -274,13 +281,27 @@ export class MikrotikService {
     }
   }
 
-  async loginUser(router: Router, username: string, pass: string, ip?: string, mac?: string): Promise<any> {
-    // Stage 1: Clear any "stuck" sessions first
-    await this.forceLogoutHotspot(router, ip, mac);
-
-    // Stage 2: Perform Fresh Login
+  async loginUser(router: Router, username: string, pass: string, ip?: string, mac?: string, profile?: string): Promise<any> {
+    // Stage 1: Clear any "stuck" sessions and OLD users with same name
+    await this.forceLogoutHotspot(router, ip, mac, username);
+    
     const api = await this.connect(router);
     try {
+      this.logger.log(`[PROVISIONING] Creating hotspot user ${username} on ${router.name}...`);
+      
+      // Stage 1.5: Ensure user exists in /ip/hotspot/user
+      const users = await api.write('/ip/hotspot/user/print', [`?name=${username}`]);
+      if (users.length === 0) {
+        const userArgs = [
+          `=name=${username}`,
+          `=password=${pass}`
+        ];
+        if (profile) userArgs.push(`=profile=${profile}`);
+        await api.write('/ip/hotspot/user/add', userArgs);
+        this.logger.log(`[PROVISIONING SUCCESS] User ${username} created with profile ${profile || 'default'}`);
+      }
+
+      // Stage 2: Perform Fresh Login (inject to active)
       const args = [
         `=user=${username}`,
         `=password=${pass}`

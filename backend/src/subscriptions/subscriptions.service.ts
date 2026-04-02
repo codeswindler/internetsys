@@ -277,7 +277,8 @@ export class SubscriptionsService {
           sub.mikrotikUsername,
           sub.mikrotikPassword,
           finalIp,
-          finalMac
+          finalMac,
+          sub.package.bandwidthProfile
         );
         this.logger.log(`Session authorized for sub ${sub.id} using ${finalMac ? 'MAC: ' + finalMac : 'IP: ' + finalIp}`);
       } catch (e) {
