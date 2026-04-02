@@ -163,6 +163,7 @@ export default function Packages() {
           onClick={() => navigate('/user/subscriptions')}
           className="mb-10 glass-panel p-6 border-cyan-500/30 bg-gradient-to-r from-[rgba(14,165,233,0.1)] to-transparent flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:border-cyan-400/50 transition-all group animate-fade-in"
         >
+          {/* Left Side: Session Info */}
           <div className="flex items-center gap-5">
             <div className="p-4 bg-cyan-500/20 text-cyan-400 rounded-2xl group-hover:scale-110 transition-transform">
               <Activity className="animate-pulse" size={32} />
@@ -179,57 +180,61 @@ export default function Packages() {
                   <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-1.5">
                     Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
-                    {!activeSub.user?.lastMac && !localStorage.getItem('hotspot_mac') && (
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const gateway = activeSub.router.localGateway || '10.5.50.1';
-                          window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
-                        }}
-                        className="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 transition-all"
-                      >
-                        <RefreshCw size={10} />
-                        Fix Connection
-                      </button>
-                    )}
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {activeSub.startedAt && (
-            <div className="flex flex-col md:flex-row items-center gap-4 bg-black/20 px-4 py-2 rounded-xl border border-white/5">
-              <div className="flex items-center gap-2 text-cyan-400">
-                <Download size={14} />
-                <span className="text-xs font-mono font-bold w-16">{traffic.downloadSpeed}</span>
-              </div>
-              <div className="w-px h-4 bg-white/10 hidden md:block"></div>
-              <div className="flex items-center gap-2 text-blue-400">
-                <Upload size={14} />
-                <span className="text-xs font-mono font-bold w-16">{traffic.uploadSpeed}</span>
-              </div>
-            </div>
-          )}
-
+          {/* Right Side: Action or Status */}
           <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
             {activeSub.startedAt ? (
-              <div className="flex flex-col items-center md:items-end gap-2">
+              <div className="flex flex-col items-center md:items-end gap-2 text-right">
                 <CountdownBadge expiresAt={activeSub.expiresAt} variant="block" />
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Time Remaining</p>
+                
+                {/* Traffic Speedometer - Only active when internet is running */}
+                <div className="flex items-center gap-3 mt-1 bg-black/40 px-3 py-1 rounded-lg border border-white/5">
+                  <div className="flex items-center gap-1.5 text-cyan-400">
+                    <Download size={12} />
+                    <span className="text-[10px] font-mono font-bold">{traffic.downloadSpeed}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-blue-400">
+                    <Upload size={12} />
+                    <span className="text-[10px] font-mono font-bold">{traffic.uploadSpeed}</span>
+                  </div>
+                </div>
               </div>
             ) : (
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  startMutation.mutate(activeSub.id);
-                }}
-                disabled={startMutation.isPending}
-                className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 px-6 py-3 rounded-xl flex items-center gap-3 text-amber-400 font-black uppercase tracking-widest transition-all active:scale-95"
-              >
-                {startMutation.isPending ? <Clock className="animate-spin" size={18} /> : <Zap size={18} fill="currentColor" />}
-                1-Click Connect
-              </button>
+              <div className="w-full md:w-auto">
+                {!(activeSub.user?.lastMac || localStorage.getItem('hotspot_mac')) ? (
+                  /* STEP 1: Verify Identity if missing */
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const gateway = activeSub.router.localGateway || '10.5.50.1';
+                      window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
+                    }}
+                    className="w-full md:w-auto bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-3 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all hover:scale-105 active:scale-95"
+                  >
+                    <RefreshCw size={18} className="animate-spin" />
+                    Verify Device
+                  </button>
+                ) : (
+                  /* STEP 2: Connect once identity is known */
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startMutation.mutate(activeSub.id);
+                    }}
+                    disabled={startMutation.isPending}
+                    className="w-full md:w-auto bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-6 py-3 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
+                  >
+                    {startMutation.isPending ? <Clock className="animate-spin" size={18} /> : <Zap size={18} fill="currentColor" />}
+                    1-Click Connect
+                  </button>
+                )}
+              </div>
             )}
             
             <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold group-hover:gap-3 transition-all">

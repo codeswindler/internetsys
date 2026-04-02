@@ -128,33 +128,49 @@ export default function Subscriptions() {
                 <div className="flex flex-col gap-4">
                   {activeSub.router.connectionMode === 'hotspot' && (
                     <div className="space-y-4">
-                      {/* 1-Click Connect Button */}
-                      <button 
-                        onClick={() => {
-                          if (!activeSub.startedAt) {
-                            startMutation.mutate(activeSub.id, {
-                              onSuccess: () => {
-                                // After starting session, submit the form to the router
-                                document.getElementById('hotspot-login-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                              }
-                            });
-                          } else {
-                            // If already started, just submit
-                            (document.getElementById('hotspot-login-form') as HTMLFormElement)?.submit();
-                          }
-                        }}
-                        disabled={startMutation.isPending}
-                        className="w-full py-4 rounded-xl font-black uppercase tracking-widest bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] hover:shadow-[0_0_30px_rgba(6,182,212,0.6)] transition-all flex items-center justify-center gap-3 active:scale-95"
-                      >
-                        {startMutation.isPending ? (
-                          <Clock className="animate-spin" size={20} />
-                        ) : (
-                          <>
-                            <Zap size={20} fill="currentColor" />
-                            {activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet'}
-                          </>
-                        )}
-                      </button>
+                      {!(activeSub.user?.lastMac || localStorage.getItem('hotspot_mac')) ? (
+                        /* STEP 1: Verify Identity if missing */
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const gateway = activeSub.router.localGateway || '10.5.50.1';
+                            window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
+                          }}
+                          className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-4 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 border-none"
+                        >
+                          <RefreshCw size={20} className="animate-spin" />
+                          Verify Device
+                        </button>
+                      ) : (
+                        /* STEP 2: Connect once identity is known */
+                        <button 
+                          onClick={() => {
+                            if (!activeSub.startedAt) {
+                              startMutation.mutate(activeSub.id, {
+                                onSuccess: () => {
+                                  // After starting session, submit the form to the router
+                                  document.getElementById('hotspot-login-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                                }
+                              });
+                            } else {
+                              // If already started, just try to re-submit form to gain internet
+                              document.getElementById('hotspot-login-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                              toast.success('Refreshing connection...');
+                            }
+                          }}
+                          disabled={startMutation.isPending}
+                          className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-[0.1em] py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 border border-cyan-400/30 transition-all active:scale-[0.98]"
+                        >
+                          {startMutation.isPending ? (
+                            <Clock size={20} className="animate-spin" />
+                          ) : (
+                            <>
+                              <Zap size={20} fill="currentColor" />
+                              {activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet'}
+                            </>
+                          )}
+                        </button>
+                      )}
 
                       {activeSub.startedAt && (
                         <div className="flex justify-around items-center bg-black/40 p-4 rounded-xl border border-white/5">
