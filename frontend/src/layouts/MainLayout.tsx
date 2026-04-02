@@ -33,18 +33,27 @@ export default function MainLayout({ role }: LayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (mainRef.current?.scrollTop === 0) {
+    // Only START pulling if we are precisely at the top of the content
+    if (mainRef.current && mainRef.current.scrollTop <= 0) {
       startY.current = e.touches[0].pageY;
       setIsPulling(true);
+    } else {
+      setIsPulling(false);
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (isPulling) {
       const currentY = e.touches[0].pageY;
-      const diff = Math.max(0, currentY - startY.current);
-      if (diff > 0) {
-        setPullDistance(Math.min(diff / 2.5, 80)); // Resistance logic
+      const diff = currentY - startY.current;
+      
+      // If pull is downward and we are at top
+      if (diff > 0 && mainRef.current && mainRef.current.scrollTop <= 0) {
+        setPullDistance(Math.min(diff / 2.8, 100)); // More resistance
+      } else {
+        // If they pull up, they are just naturally scrolling down
+        setIsPulling(false);
+        setPullDistance(0);
       }
     }
   };
