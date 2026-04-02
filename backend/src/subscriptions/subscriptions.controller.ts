@@ -22,6 +22,11 @@ export class SubscriptionsController {
     return this.subscriptionsService.findMy(req.user.id);
   }
 
+  @Get('my/traffic')
+  myTraffic(@Request() req: any) {
+    return this.subscriptionsService.getTrafficStats(req.user.id);
+  }
+
   @Post(':id/start')
   start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }, @Ip() clientIp: string) {
     const finalIp = body.ip || clientIp;

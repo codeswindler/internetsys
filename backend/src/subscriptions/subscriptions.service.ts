@@ -245,7 +245,19 @@ export class SubscriptionsService {
     // IF MAC is STILL missing, try looking it up on the router using the IP
     if (!finalMac && finalIp) {
       try {
-        const foundMac = await this.mikrotikService.findMacByIp(sub.router, finalIp);
+        // 1. Try primary router
+        let foundMac = await this.mikrotikService.findMacByIp(sub.router, finalIp);
+        
+        // 2. GLOBAL SCAN: If not on primary, check all other online routers
+        if (!foundMac) {
+          const onlineRouters = await this.routerRepo.find({ where: { isOnline: true } });
+          for (const r of onlineRouters) {
+            if (r.id === sub.router.id) continue;
+            foundMac = await this.mikrotikService.findMacByIp(r, finalIp);
+            if (foundMac) break;
+          }
+        }
+
         if (foundMac) {
           finalMac = foundMac;
           // Store it for next time
@@ -293,5 +305,21 @@ export class SubscriptionsService {
     sub.expiresAt = expiresAt;
     
     return this.subRepo.save(sub);
+  }
+
+  async getTrafficStats(userId: string): Promise<any> {
+    const sub = await this.subRepo.findOne({
+      where: { user: { id: userId }, status: 'active' as any },
+      relations: ['router'],
+    });
+
+    if (!sub || !sub.router.isOnline) return null;
+
+    try {
+      const stats = await this.mikrotikService.getUserTraffic(sub.router, sub.mikrotikUsername);
+      return stats;
+    } catch (e) {
+      return null;
+    }
   }
 }

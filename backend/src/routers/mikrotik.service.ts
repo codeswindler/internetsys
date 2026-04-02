@@ -269,16 +269,43 @@ export class MikrotikService {
   async findMacByIp(router: Router, ip: string): Promise<string | null> {
     const api = await this.connect(router);
     try {
-      // Look in ARP table or DHCP leases
-      const results = await api.write('/ip/arp/print', [
-        `?address=${ip}`
-      ]);
-      if (results && results.length > 0) {
+      // 1. Look in ARP table
+      let results = await api.write('/ip/arp/print', [`?address=${ip}`]);
+      if (results && results.length > 0 && results[0]['mac-address']) {
         return results[0]['mac-address'];
       }
+      
+      // 2. Fallback to DHCP leases
+      results = await api.write('/ip/dhcp-server/lease/print', [`?address=${ip}`]);
+      if (results && results.length > 0 && results[0]['mac-address']) {
+        return results[0]['mac-address'];
+      }
+
       return null;
     } catch (e: any) {
       this.logger.warn(`Failed to lookup MAC for IP ${ip} on router ${router.name}: ${e.message}`);
+      return null;
+    } finally {
+      api.close();
+    }
+  }
+
+  async getUserTraffic(router: Router, username: string): Promise<{ bytesIn: number, bytesOut: number } | null> {
+    const api = await this.connect(router);
+    try {
+      const results = await api.write('/ip/hotspot/active/print', [
+        `?user=${username}`,
+        '.proplist=bytes-in,bytes-out'
+      ]);
+      if (results && results.length > 0) {
+        return {
+          bytesIn: parseInt(results[0]['bytes-in'] || '0'),
+          bytesOut: parseInt(results[0]['bytes-out'] || '0')
+        };
+      }
+      return null;
+    } catch (e: any) {
+      this.logger.error(`Failed to fetch traffic for ${username} on ${router.name}: ${e.message}`);
       return null;
     } finally {
       api.close();

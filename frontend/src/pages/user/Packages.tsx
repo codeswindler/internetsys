@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap } from 'lucide-react';
+import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload } from 'lucide-react';
+import { useRef } from 'react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
@@ -13,6 +14,8 @@ export default function Packages() {
   const [routerId, setRouterId] = useState('');
   const [paymentType, setPaymentType] = useState<'voucher' | 'manual' | 'mpesa'>('voucher');
   const [voucherCode, setVoucherCode] = useState('');
+  const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
+  const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
 
 
   const { data: packages, isLoading: pkgsLoading } = useQuery({
@@ -43,6 +46,45 @@ export default function Packages() {
   }, [routers]);
 
   const activeSub = subs?.find((s: any) => s.status === 'active');
+
+  // Poll for real-time traffic
+  useEffect(() => {
+    if (!activeSub || !activeSub.startedAt) return;
+
+    const fetchTraffic = async () => {
+      try {
+        const res = await api.get('/subscriptions/my/traffic');
+        const data = res.data; // { bytesIn, bytesOut }
+        if (!data) return;
+
+        const now = Date.now();
+        if (lastTraffic.current) {
+          const timeDiff = (now - lastTraffic.current.time) / 1000;
+          const downBits = (data.bytesOut - lastTraffic.current.bytesOut) * 8;
+          const upBits = (data.bytesIn - lastTraffic.current.bytesIn) * 8;
+          
+          const formatSpeed = (bits: number) => {
+            const bps = bits / timeDiff;
+            if (bps > 1000000) return `${(bps / 1000000).toFixed(1)} Mbps`;
+            if (bps > 1000) return `${(bps / 1000).toFixed(0)} Kbps`;
+            return `${bps.toFixed(0)} bps`;
+          };
+
+          setTraffic({
+            downloadSpeed: formatSpeed(downBits),
+            uploadSpeed: formatSpeed(upBits)
+          });
+        }
+        lastTraffic.current = { ...data, time: now };
+      } catch (e) {
+        console.error('Traffic poll failed', e);
+      }
+    };
+
+    const interval = setInterval(fetchTraffic, 5000);
+    fetchTraffic();
+    return () => clearInterval(interval);
+  }, [activeSub?.id, activeSub?.startedAt]);
 
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
@@ -135,13 +177,30 @@ export default function Packages() {
                 <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
                 <div className="flex items-center gap-1.5">
                   <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-1.5">
                     Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
+                    {!activeSub.user?.lastMac && (
+                      <RefreshCw size={10} className="animate-spin text-cyan-500 cursor-help" />
+                    )}
                   </span>
                 </div>
               </div>
             </div>
           </div>
+
+          {activeSub.startedAt && (
+            <div className="flex flex-col md:flex-row items-center gap-4 bg-black/20 px-4 py-2 rounded-xl border border-white/5">
+              <div className="flex items-center gap-2 text-cyan-400">
+                <Download size={14} />
+                <span className="text-xs font-mono font-bold w-16">{traffic.downloadSpeed}</span>
+              </div>
+              <div className="w-px h-4 bg-white/10 hidden md:block"></div>
+              <div className="flex items-center gap-2 text-blue-400">
+                <Upload size={14} />
+                <span className="text-xs font-mono font-bold w-16">{traffic.uploadSpeed}</span>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
             {activeSub.startedAt ? (

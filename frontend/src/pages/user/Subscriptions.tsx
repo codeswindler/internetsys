@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Wifi, Clock, Activity, Lock, Router as RouterIcon, ExternalLink, ChevronDown, ChevronUp, Zap } from 'lucide-react';
+import { Wifi, Clock, Activity, Lock, Router as RouterIcon, ExternalLink, ChevronDown, ChevronUp, Zap, Download, Upload, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useRef, useEffect } from 'react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
   const [showManual, setShowManual] = useState(false);
+  const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
+  const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
 
   const { data: subs, isLoading } = useQuery({
     queryKey: ['my_subscriptions'],
@@ -30,6 +33,45 @@ export default function Subscriptions() {
 
   const activeSub = subs?.find((s: any) => s.status === 'active');
   const pastSubs = subs?.filter((s: any) => s.status !== 'active') || [];
+
+  // Poll for real-time traffic
+  useEffect(() => {
+    if (!activeSub || !activeSub.startedAt) return;
+
+    const fetchTraffic = async () => {
+      try {
+        const res = await api.get('/subscriptions/my/traffic');
+        const data = res.data;
+        if (!data) return;
+
+        const now = Date.now();
+        if (lastTraffic.current) {
+          const timeDiff = (now - lastTraffic.current.time) / 1000;
+          const downBits = (data.bytesOut - lastTraffic.current.bytesOut) * 8;
+          const upBits = (data.bytesIn - lastTraffic.current.bytesIn) * 8;
+          
+          const formatSpeed = (bits: number) => {
+            const bps = bits / timeDiff;
+            if (bps > 1000000) return `${(bps / 1000000).toFixed(1)} Mbps`;
+            if (bps > 1000) return `${(bps / 1000).toFixed(0)} Kbps`;
+            return `${bps.toFixed(0)} bps`;
+          };
+
+          setTraffic({
+            downloadSpeed: formatSpeed(downBits),
+            uploadSpeed: formatSpeed(upBits)
+          });
+        }
+        lastTraffic.current = { ...data, time: now };
+      } catch (e) {
+        console.error('Traffic poll failed', e);
+      }
+    };
+
+    const interval = setInterval(fetchTraffic, 5000);
+    fetchTraffic();
+    return () => clearInterval(interval);
+  }, [activeSub?.id, activeSub?.startedAt]);
 
   if (isLoading) return (
     <div className="flex items-center justify-center p-16 text-slate-400 gap-3">
@@ -60,11 +102,14 @@ export default function Subscriptions() {
                   <div className="flex items-center gap-2">
                     <RouterIcon size={16} /> Connected to <span className="font-medium text-white">{activeSub.router.name}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1">
+                   <div className="flex items-center gap-1.5 mt-1">
                     <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-                      Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
-                    </span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-1.5">
+                    Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
+                    {!activeSub.user?.lastMac && (
+                      <RefreshCw size={10} className="animate-spin text-cyan-500 cursor-help" />
+                    )}
+                  </span>
                   </div>
                 </div>
               </div>
@@ -100,6 +145,26 @@ export default function Subscriptions() {
                           </>
                         )}
                       </button>
+
+                      {activeSub.startedAt && (
+                        <div className="flex justify-around items-center bg-black/40 p-4 rounded-xl border border-white/5">
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-2 text-cyan-400 font-bold">
+                              <Download size={16} />
+                              <span className="text-sm font-mono">{traffic.downloadSpeed}</span>
+                            </div>
+                            <span className="text-[9px] uppercase tracking-tighter text-slate-500">Download</span>
+                          </div>
+                          <div className="w-px h-8 bg-white/10"></div>
+                          <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-2 text-blue-400 font-bold">
+                              <Upload size={16} />
+                              <span className="text-sm font-mono">{traffic.uploadSpeed}</span>
+                            </div>
+                            <span className="text-[9px] uppercase tracking-tighter text-slate-500">Upload</span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Hidden Router Form */}
                       <form 
