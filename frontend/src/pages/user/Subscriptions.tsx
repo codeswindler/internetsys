@@ -171,16 +171,18 @@ export default function Subscriptions() {
                           Verify My Device
                         </button>
                       ) : (
-                        /* Condition: If speed is > 0 show ONLINE badge */
-                        (traffic.downloadSpeed !== '0 bps' || traffic.uploadSpeed !== '0 bps') ? (
-                          <div className="w-full flex items-center justify-center gap-3 bg-emerald-500/10 border border-emerald-500/30 px-6 py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                            <span className="text-emerald-400 font-black tracking-widest uppercase text-sm">SURFING LIVE</span>
+                        /* Condition: If speed is > 0 OR session started in last 60 seconds, show ONLINE badge */
+                        (traffic.downloadSpeed !== '0 bps' || traffic.uploadSpeed !== '0 bps' || (activeSub.startedAt && (Date.now() - new Date(activeSub.startedAt).getTime()) < 60000)) ? (
+                          <div className="w-full flex items-center justify-between gap-4 bg-emerald-500/10 border border-emerald-500/30 px-6 py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                            <div className="flex items-center gap-3">
+                              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                              <span className="text-emerald-400 font-black tracking-widest uppercase text-sm">SURFING LIVE</span>
+                            </div>
                             <button 
                               onClick={() => startMutation.mutate(activeSub.id)}
-                              className="ml-4 text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase transition-colors"
+                              className="text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase transition-colors"
                             >
-                              Sync
+                              REFRESH
                             </button>
                           </div>
                         ) : (
