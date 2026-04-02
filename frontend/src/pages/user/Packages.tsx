@@ -10,6 +10,7 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 export default function Packages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const formRef = useRef<HTMLFormElement>(null);
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [routerId, setRouterId] = useState('');
   const [paymentType, setPaymentType] = useState<'voucher' | 'manual' | 'mpesa'>('voucher');
@@ -190,7 +191,23 @@ export default function Packages() {
               <h3 className="text-2xl font-black text-white">{activeSub.package.name}</h3>
               <div className="flex flex-col gap-1">
                 <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
-                <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700/50">
+                  {/* Hidden MikroTik Login Form */}
+                  {activeSub && (
+                    <form 
+                      ref={formRef}
+                      method="post" 
+                      action={`http://${activeSub.router.localGateway || '10.5.50.1'}/login`}
+                      className="hidden"
+                      target="ghost-frame"
+                    >
+                      <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
+                      <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
+                      <input type="hidden" name="dst" value="https://google.com" />
+                    </form>
+                  )}
+                  <iframe name="ghost-frame" className="hidden" />
+
+                  <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700/50">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
                       <Smartphone size={20} />

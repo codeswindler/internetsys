@@ -29,6 +29,7 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
+  const formRef = useRef<HTMLFormElement>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
@@ -157,93 +158,101 @@ export default function Subscriptions() {
               <div className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 w-full md:w-auto min-w-[300px]">
                 <div className="flex flex-col gap-4">
                   {activeSub.router.connectionMode === 'hotspot' && (
-                    <div className="space-y-4">
-                      {!(activeSub.user?.lastMac || localStorage.getItem('hotspot_mac')) ? (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const gateway = activeSub.router.localGateway || '10.5.50.1';
-                            window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
-                          }}
-                          className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-4 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 border-none"
-                        >
-                          <RefreshCw size={20} className="animate-spin" />
-                          Verify My Device
-                        </button>
-                      ) : (
-                        /* Condition: If session is STARTED and within validity, show ONLINE badge */
-                        (activeSub.startedAt || traffic.downloadSpeed !== '0 bps' || traffic.uploadSpeed !== '0 bps') ? (
-                          <div className="w-full flex items-center justify-between gap-4 bg-emerald-500/10 border border-emerald-500/30 px-6 py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                            <div className="flex items-center gap-3">
-                              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                              <span className="text-emerald-400 font-black tracking-widest uppercase text-sm">SURFING LIVE</span>
-                            </div>
-                            <button 
-                              onClick={() => {
-                                localStorage.removeItem('hotspot_mac');
-                                localStorage.removeItem('hotspot_ip');
-                                startMutation.mutate(activeSub.id);
-                              }}
-                              className="text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase transition-colors"
-                              title="Click if no internet"
-                            >
-                              FIX IDENTITY
-                            </button>
-                          </div>
-                        ) : (
-                          <button 
-                            onClick={() => {
-                              startMutation.mutate(activeSub.id, {
-                                onSuccess: () => {
-                                  document.getElementById('hotspot-login-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                                }
-                              });
-                            }}
-                            disabled={startMutation.isPending}
-                            className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-[0.1em] py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 border border-cyan-400/30 transition-all active:scale-[0.98]"
-                          >
-                            {startMutation.isPending ? (
-                              <RefreshCw size={20} className="animate-spin" />
-                            ) : (
-                              <Zap size={20} fill="currentColor" />
-                            )}
-                            {startMutation.isPending ? 'Certifying Connection...' : (activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet')}
-                          </button>
-                        )
-                      )}
-
-                      {activeSub.startedAt && (
-                        <div className="flex justify-around items-center bg-black/40 p-4 rounded-xl border border-white/5">
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex items-center gap-2 text-cyan-400 font-bold">
-                              <Download size={16} />
-                              <span className="text-sm font-mono">{traffic.downloadSpeed}</span>
-                            </div>
-                            <span className="text-[9px] uppercase tracking-tighter text-slate-500">Download</span>
-                          </div>
-                          <div className="w-px h-8 bg-white/10"></div>
-                          <div className="flex flex-col items-center gap-1">
-                            <div className="flex items-center gap-2 text-blue-400 font-bold">
-                              <Upload size={16} />
-                              <span className="text-sm font-mono">{traffic.uploadSpeed}</span>
-                            </div>
-                            <span className="text-[9px] uppercase tracking-tighter text-slate-500">Upload</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Hidden Router Form */}
+                    <>
+                      {/* Hidden MikroTik Login Form */}
                       <form 
-                        id="hotspot-login-form"
-                        method="POST" 
+                        ref={formRef}
+                        method="post" 
                         action={`http://${activeSub.router.localGateway || '10.5.50.1'}/login`}
                         className="hidden"
+                        target="ghost-frame"
                       >
                         <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
                         <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
                         <input type="hidden" name="dst" value="https://google.com" />
                       </form>
-                    </div>
+                      <iframe name="ghost-frame" className="hidden" />
+
+                      <div className="space-y-6">
+                        {!(activeSub.user?.lastMac || localStorage.getItem('hotspot_mac')) ? (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const gateway = activeSub.router.localGateway || '10.5.50.1';
+                              window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
+                            }}
+                            className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-4 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 border-none"
+                          >
+                            <RefreshCw size={20} className="animate-spin" />
+                            Verify My Device
+                          </button>
+                        ) : (
+                          /* Condition: If session is STARTED and within validity, show ONLINE badge */
+                          (activeSub.startedAt || traffic.downloadSpeed !== '0 bps' || traffic.uploadSpeed !== '0 bps') ? (
+                            <div className="w-full flex items-center justify-between gap-4 bg-emerald-500/10 border border-emerald-500/30 px-6 py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                              <div className="flex items-center gap-3">
+                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                                <span className="text-emerald-400 font-black tracking-widest uppercase text-sm">SURFING LIVE</span>
+                              </div>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  localStorage.removeItem('hotspot_mac');
+                                  localStorage.removeItem('hotspot_ip');
+                                  startMutation.mutate(activeSub.id);
+                                }}
+                                className="text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase transition-colors"
+                                title="Click if no internet"
+                              >
+                                FIX IDENTITY
+                              </button>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startMutation.mutate(activeSub.id, {
+                                  onSuccess: () => {
+                                    setTimeout(() => {
+                                      if (formRef.current) formRef.current.submit();
+                                    }, 500);
+                                  }
+                                });
+                              }}
+                              disabled={startMutation.isPending}
+                              className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-[0.1em] py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 border border-cyan-400/30 transition-all active:scale-[0.98]"
+                            >
+                              {startMutation.isPending ? (
+                                <RefreshCw size={20} className="animate-spin" />
+                              ) : (
+                                <Zap size={20} fill="currentColor" />
+                              )}
+                              {startMutation.isPending ? 'Certifying Connection...' : (activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet')}
+                            </button>
+                          )
+                        )}
+
+                        {activeSub.startedAt && (
+                          <div className="flex justify-around items-center bg-black/40 p-4 rounded-xl border border-white/5">
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-2 text-cyan-400 font-bold">
+                                <Download size={16} />
+                                <span className="text-sm font-mono">{traffic.downloadSpeed}</span>
+                              </div>
+                              <span className="text-[9px] uppercase tracking-tighter text-slate-500">Download</span>
+                            </div>
+                            <div className="w-px h-8 bg-white/10"></div>
+                            <div className="flex flex-col items-center gap-1">
+                              <div className="flex items-center gap-2 text-blue-400 font-bold">
+                                <Upload size={16} />
+                                <span className="text-sm font-mono">{traffic.uploadSpeed}</span>
+                              </div>
+                              <span className="text-[9px] uppercase tracking-tighter text-slate-500">Upload</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
 
                   <div className="pt-4 border-t border-white/10 flex justify-between items-end">

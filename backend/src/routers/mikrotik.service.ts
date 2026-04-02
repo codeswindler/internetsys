@@ -319,20 +319,23 @@ export class MikrotikService {
           await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
         }
 
+        const isValidIpv4 = (val?: string) => val && val.includes('.') && !val.includes(':');
+
         const bindingArgs = [
           `=mac-address=${mac}`,
           '=type=bypassed',
           `=comment=Pulselynk: ${username}`
         ];
-        if (ip) bindingArgs.push(`=address=${ip}`);
+        if (isValidIpv4(ip)) bindingArgs.push(`=address=${ip}`);
         
         await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
         this.logger.log(`[STAGE 2 SUCCESS] IP-Binding BYPASS created for ${mac}. Internet should flow instantly.`);
       }
 
       // Stage 3: Attempt API login as fallback (helps with accounting)
+      const isValidIpv4 = (val?: string) => val && val.includes('.') && !val.includes(':');
       const loginArgs = [`=user=${username}`, `=password=${pass}`];
-      if (ip) loginArgs.push(`=address=${ip}`);
+      if (isValidIpv4(ip)) loginArgs.push(`=address=${ip}`);
       if (mac) loginArgs.push(`=mac-address=${mac}`);
       
       try {
