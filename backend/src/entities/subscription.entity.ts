@@ -51,10 +51,10 @@ export class Subscription {
   mikrotikPassword: string;
 
   @Column({ type: 'timestamp', nullable: true })
-  startedAt: Date;
+  startedAt: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  expiresAt: Date;
+  expiresAt: Date | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   amountPaid: number;
