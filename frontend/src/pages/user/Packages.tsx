@@ -183,8 +183,8 @@ export default function Packages() {
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Attempt to redirect to local router to capture IP/MAC
-                          window.location.href = `http://${activeSub.router.host || '10.5.50.1'}/login?dst=${encodeURIComponent(window.location.href)}`;
+                          const gateway = activeSub.router.localGateway || '10.5.50.1';
+                          window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
                         }}
                         className="flex items-center gap-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-500 px-2 py-0.5 rounded border border-amber-500/30 transition-all"
                       >

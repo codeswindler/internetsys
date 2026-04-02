@@ -31,6 +31,9 @@ export class Router {
   @Column()
   host: string;
 
+  @Column({ nullable: true })
+  localGateway: string;
+
   @Column({ default: 8728 })
   port: number;
 

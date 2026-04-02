@@ -32,7 +32,8 @@ export default function Routers() {
     isNated: false,
     vpnIp: '',
     vpnUsername: '',
-    vpnPasswordEncrypted: ''
+    vpnPasswordEncrypted: '',
+    localGateway: '10.5.50.1'
   });
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   
@@ -122,7 +123,8 @@ export default function Routers() {
       isNated: r.isNated || false,
       vpnIp: r.vpnIp || '',
       vpnUsername: r.vpnUsername || '',
-      vpnPasswordEncrypted: r.vpnPasswordEncrypted || ''
+      vpnPasswordEncrypted: r.vpnPasswordEncrypted || '',
+      localGateway: r.localGateway || '10.5.50.1'
     });
     setShowModal(true);
   };
@@ -142,7 +144,8 @@ export default function Routers() {
       isNated: false,
       vpnIp: '',
       vpnUsername: '',
-      vpnPasswordEncrypted: ''
+      vpnPasswordEncrypted: '',
+      localGateway: '10.5.50.1'
     });
   };
 
