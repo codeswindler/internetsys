@@ -69,12 +69,16 @@ export default function Subscriptions() {
         const data = res.data;
         const now = Date.now();
         
-        if (lastTraffic.current && lastTraffic.current.time) {
-          const timeDiff = (now - lastTraffic.current.time) / 1000;
-          const downBits = ((data.bytesIn - lastTraffic.current.bytesIn) * 8) / timeDiff;
-          const upBits = ((data.bytesOut - lastTraffic.current.bytesOut) * 8) / timeDiff;
+        if (lastTraffic.current && lastTraffic.current.time && data) {
+          const timeDiff = Math.max((now - lastTraffic.current.time) / 1000, 1);
+          const bytesIn = Number(data.bytesIn) || 0;
+          const bytesOut = Number(data.bytesOut) || 0;
+          
+          const downBits = Math.max((bytesIn - lastTraffic.current.bytesIn) * 8, 0) / timeDiff;
+          const upBits = Math.max((bytesOut - lastTraffic.current.bytesOut) * 8, 0) / timeDiff;
 
           const formatSpeed = (bits: number) => {
+            if (!bits || isNaN(bits)) return '0 bps';
             if (bits > 1000000) return (bits / 1000000).toFixed(1) + ' Mbps';
             if (bits > 1000) return (bits / 1000).toFixed(0) + ' Kbps';
             return bits.toFixed(0) + ' bps';
@@ -167,24 +171,38 @@ export default function Subscriptions() {
                           Verify My Device
                         </button>
                       ) : (
-                        <button 
-                          onClick={() => {
-                            startMutation.mutate(activeSub.id, {
-                              onSuccess: () => {
-                                document.getElementById('hotspot-login-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                              }
-                            });
-                          }}
-                          disabled={startMutation.isPending}
-                          className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-[0.1em] py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 border border-cyan-400/30 transition-all active:scale-[0.98]"
-                        >
-                          {startMutation.isPending ? (
-                            <RefreshCw size={20} className="animate-spin" />
-                          ) : (
-                            <Zap size={20} fill="currentColor" />
-                          )}
-                          {startMutation.isPending ? 'Certifying Connection...' : (activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet')}
-                        </button>
+                        /* Condition: If speed is > 0 show ONLINE badge */
+                        (traffic.downloadSpeed !== '0 bps' || traffic.uploadSpeed !== '0 bps') ? (
+                          <div className="w-full flex items-center justify-center gap-3 bg-emerald-500/10 border border-emerald-500/30 px-6 py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+                            <span className="text-emerald-400 font-black tracking-widest uppercase text-sm">SURFING LIVE</span>
+                            <button 
+                              onClick={() => startMutation.mutate(activeSub.id)}
+                              className="ml-4 text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase transition-colors"
+                            >
+                              Sync
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => {
+                              startMutation.mutate(activeSub.id, {
+                                onSuccess: () => {
+                                  document.getElementById('hotspot-login-form')?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                                }
+                              });
+                            }}
+                            disabled={startMutation.isPending}
+                            className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-[0.1em] py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 border border-cyan-400/30 transition-all active:scale-[0.98]"
+                          >
+                            {startMutation.isPending ? (
+                              <RefreshCw size={20} className="animate-spin" />
+                            ) : (
+                              <Zap size={20} fill="currentColor" />
+                            )}
+                            {startMutation.isPending ? 'Certifying Connection...' : (activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet')}
+                          </button>
+                        )
                       )}
 
                       {activeSub.startedAt && (

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { useTheme } from '../context/ThemeContext';
@@ -25,6 +25,46 @@ export default function MainLayout({ role }: LayoutProps) {
   const [userInitials, setUserInitials] = useState(role[0].toUpperCase());
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+
+  const queryClient = useQueryClient();
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const startY = useRef(0);
+  const mainRef = useRef<HTMLElement>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (mainRef.current?.scrollTop === 0) {
+      startY.current = e.touches[0].pageY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isPulling) {
+      const currentY = e.touches[0].pageY;
+      const diff = Math.max(0, currentY - startY.current);
+      if (diff > 0) {
+        setPullDistance(Math.min(diff / 2.5, 80)); // Resistance logic
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isPulling) {
+      if (pullDistance > 60) {
+        toast.promise(
+          queryClient.invalidateQueries(),
+          {
+            loading: 'Refreshing...',
+            success: 'Updated!',
+            error: 'Refresh failed'
+          }
+        );
+      }
+      setPullDistance(0);
+      setIsPulling(false);
+    }
+  };
 
   // Automatically heal or load user details on mount
   useEffect(() => {
@@ -268,7 +308,25 @@ export default function MainLayout({ role }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth w-full">
+      <main 
+        ref={mainRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth w-full"
+      >
+        {/* Pull to Refresh Indicator */}
+        {pullDistance > 10 && (
+          <div 
+            className="flex flex-col items-center justify-center overflow-hidden transition-all duration-75 overflow-visible"
+            style={{ height: `${pullDistance}px`, opacity: Math.min(pullDistance / 60, 1) }}
+          >
+            <div className="flex items-center gap-2 text-cyan-400 font-bold bg-slate-900/80 px-4 py-2 rounded-full border border-cyan-500/30 shadow-lg">
+              <RefreshCw size={16} className={pullDistance > 60 ? 'animate-spin' : ''} />
+              <span className="text-xs uppercase tracking-widest">{pullDistance > 60 ? 'Release to Sync' : 'Pull to Refresh'}</span>
+            </div>
+          </div>
+        )}
         {/* Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 glass-panel mb-6 border border-white/5">
           <button 
