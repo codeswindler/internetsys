@@ -293,27 +293,32 @@ export class SubscriptionsService {
       }
     }
 
-    // 3. Mark session as STARTED if successful
+    // 3. Mark session as STARTED and handle "stuck" sessions
     if (!sub.startedAt && (finalMac || finalIp)) {
       sub.startedAt = new Date();
       sub.status = SubscriptionStatus.ACTIVE;
-      
-      // Calculate Expiration Date
+    }
+
+    // Timer Force-Patch: Ensure expiresAt is ALWAYS calculated if missing
+    if (sub.startedAt && !sub.expiresAt) {
       const duration = sub.package.durationValue;
-      const type = sub.package.durationType; // 'minutes', 'hours', 'days'
+      const type = sub.package.durationType; 
       let expiresAt = new Date(sub.startedAt);
       if (type === 'minutes') expiresAt.setMinutes(expiresAt.getMinutes() + duration);
       else if (type === 'hours') expiresAt.setHours(expiresAt.getHours() + duration);
       else if (type === 'days') expiresAt.setDate(expiresAt.getDate() + duration);
       sub.expiresAt = expiresAt;
-      
+      this.logger.log(`[TIMER PATCH] Expiration calculated for session ${sub.id}: ${sub.expiresAt}`);
+    }
+
+    if (finalMac || finalIp) {
       await this.subRepo.save(sub);
-      this.logger.log(`[CERTIFICATION] Session ${sub.id} started. Expires at: ${sub.expiresAt}`);
+      this.logger.log(`[CERTIFICATION] Session ${sub.id} finalized. Status: ${sub.status}`);
       
       // Optional background check
       setTimeout(async () => {
         try {
-          const stats = await this.mikrotikService.getUserTraffic(sub.router, sub.mikrotikUsername);
+          const stats = await this.mikrotikService.getUserTraffic(sub.router, sub.mikrotikUsername, finalIp, finalMac);
           this.logger.log(`[TRAFFIC] Initial check for ${sub.id}: In=${stats?.bytesIn}, Out=${stats?.bytesOut}`);
         } catch (e) {}
       }, 5000);
@@ -325,7 +330,7 @@ export class SubscriptionsService {
   async getTrafficStats(userId: string): Promise<any> {
     const sub = await this.subRepo.findOne({
       where: { user: { id: userId }, status: 'active' as any },
-      relations: ['router'],
+      relations: ['router', 'user'],
     });
 
     if (!sub || !sub.router.isOnline) return null;
