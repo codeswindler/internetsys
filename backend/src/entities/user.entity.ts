@@ -39,6 +39,9 @@ export class User {
   lastMac: string;
 
   @Column({ nullable: true })
+  deviceModel: string;
+
+  @Column({ nullable: true })
   lastIp: string;
 
   @OneToMany(() => Subscription, (subscription) => subscription.user)

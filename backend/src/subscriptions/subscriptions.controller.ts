@@ -29,10 +29,11 @@ export class SubscriptionsController {
   }
 
   @Post(':id/start')
-  start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }, @Ip() clientIp: string) {
+  start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }, @Ip() clientIp: string, @Request() req: any) {
     this.logger.log(`[DIAGNOSTIC] START REQUEST RECEIVED for sub ${id}. MAC: ${body.mac}, IP: ${body.ip}, ClientIP: ${clientIp}`);
     const finalIp = body.ip || clientIp;
-    return this.subscriptionsService.startSession(id, body.mac, finalIp);
+    const userAgent = req.headers['user-agent'];
+    return this.subscriptionsService.startSession(id, body.mac, finalIp, userAgent);
   }
 
   // Admins can activate pending manual subscriptions

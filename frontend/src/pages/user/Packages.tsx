@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload } from 'lucide-react';
+import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone } from 'lucide-react';
 import { useRef } from 'react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
@@ -187,11 +187,27 @@ export default function Packages() {
               <h3 className="text-2xl font-black text-white">{activeSub.package.name}</h3>
               <div className="flex flex-col gap-1">
                 <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
-                <div className="flex items-center gap-1.5">
-                  <div className={`w-1.5 h-1.5 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-amber-500 animate-pulse'}`}></div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-1.5">
-                    Device ID: {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Detecting...'}
-                  </span>
+                <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
+                      <Smartphone size={20} />
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ID</div>
+                      <div className="text-slate-100 font-black font-mono">
+                        {activeSub.user?.deviceModel || activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') || 'DETECTING...'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full animate-pulse ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.5)]'}`} />
+                    <div className="text-sm font-bold text-slate-300">
+                      {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Identity Required'}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

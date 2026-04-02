@@ -227,13 +227,32 @@ export class SubscriptionsService {
     return this.subRepo.save(sub);
   }
 
-  async startSession(subId: string, mac?: string, ip?: string): Promise<Subscription> {
+  private parseUserAgent(ua: string): string {
+    if (!ua) return 'Unknown Device';
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/iPad/.test(ua)) return 'iPad';
+    if (/Android/.test(ua)) {
+      const match = ua.match(/Android\s[0-9.]+;\s([^;]+)/);
+      return match ? match[1] : 'Android Device';
+    }
+    if (/Windows/.test(ua)) return 'Windows PC';
+    if (/Macintosh/.test(ua)) return 'MacBook';
+    return 'Generic Device';
+  }
+
+  async startSession(id: string, mac?: string, ip?: string, userAgent?: string): Promise<Subscription> {
     const sub = await this.subRepo.findOne({
-      where: { id: subId },
-      relations: ['package', 'router', 'user'],
+      where: { id },
+      relations: ['user', 'package', 'router'],
     });
 
     if (!sub) throw new NotFoundException('Subscription not found');
+    
+    // Capture and Save Device Model if missing
+    if (userAgent && !sub.user.deviceModel) {
+      sub.user.deviceModel = this.parseUserAgent(userAgent);
+      await this.userRepo.save(sub.user);
+    }
     if (sub.status !== SubscriptionStatus.ACTIVE) {
       throw new BadRequestException(`Subscription is in ${sub.status} state, cannot start`);
     }
