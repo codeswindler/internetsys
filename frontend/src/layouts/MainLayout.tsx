@@ -63,6 +63,21 @@ export default function MainLayout({ role }: LayoutProps) {
     fetchProfile();
   }, [token, API_URL]);
 
+  // Capture Hotspot Metadata (MAC, IP, etc) from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mac = params.get('mac');
+    const ip = params.get('ip');
+    const linkLogin = params.get('link-login') || params.get('link-login-only') || params.get('link-login-esc');
+    
+    if (mac) {
+      localStorage.setItem('hotspot_mac', mac);
+      // toast.success(`Hotspot detected: ${mac}`, { id: 'hotspot-detect' });
+    }
+    if (ip) localStorage.setItem('hotspot_ip', ip);
+    if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
+  }, [location.search]);
+
   const { data: unreadTotal = 0 } = useQuery({
     queryKey: ['admin-unread-total'],
     queryFn: async () => {
