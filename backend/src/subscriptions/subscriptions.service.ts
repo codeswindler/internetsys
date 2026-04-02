@@ -293,12 +293,20 @@ export class SubscriptionsService {
       }
     }
 
-        } else {
-          this.logger.warn(`Session injected but no traffic detected for sub ${sub.id}. Countdown remains paused.`);
-        }
-      } catch (e) {
-        this.logger.error(`Certification failed for sub ${sub.id}: ${e.message}`);
-      }
+    // 3. Mark session as STARTED if successful
+    if (!sub.startedAt && (finalMac || finalIp)) {
+      sub.startedAt = new Date();
+      sub.status = SubscriptionStatus.ACTIVE;
+      await this.subRepo.save(sub);
+      this.logger.log(`[CERTIFICATION] Session ${sub.id} started immediately on router ${sub.router.name}`);
+      
+      // Optional background check
+      setTimeout(async () => {
+        try {
+          const stats = await this.mikrotikService.getUserTraffic(sub.router, sub.mikrotikUsername);
+          this.logger.log(`[TRAFFIC] Initial check for ${sub.id}: In=${stats?.bytesIn}, Out=${stats?.bytesOut}`);
+        } catch (e) {}
+      }, 5000);
     }
 
     return sub;
