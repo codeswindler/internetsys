@@ -321,7 +321,12 @@ export class SubscriptionsService {
     if (!sub || !sub.router.isOnline) return null;
 
     try {
-      const stats = await this.mikrotikService.getUserTraffic(sub.router, sub.mikrotikUsername, sub.user.lastIp);
+      const stats = await this.mikrotikService.getUserTraffic(
+        sub.router, 
+        sub.mikrotikUsername, 
+        sub.user.lastIp, 
+        sub.user.lastMac
+      );
       return stats;
     } catch (e) {
       return null;

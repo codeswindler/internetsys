@@ -404,13 +404,15 @@ export class MikrotikService {
     }
   }
 
-  async getUserTraffic(router: Router, username: string, ip?: string): Promise<{ bytesIn: number, bytesOut: number } | null> {
+  async getUserTraffic(router: Router, username: string, ip?: string, mac?: string): Promise<{ bytesIn: number, bytesOut: number } | null> {
     const api = await this.connect(router);
+    const finalMac = this.normalizeMac(mac);
     try {
-      // 1. Try ACTIVE list first (Standard Login)
-      const query = ip ? `?address=${ip}` : `?user=${username}`;
+      // 1. Try ACTIVE list (Standard Mode)
+      // Search by MAC first, then IP, then User
+      let activeQuery = finalMac ? `?mac-address=${finalMac}` : (ip ? `?address=${ip}` : `?user=${username}`);
       const results = await api.write('/ip/hotspot/active/print', [
-        query,
+        activeQuery,
         '.proplist=bytes-in,bytes-out'
       ]);
       
@@ -421,8 +423,9 @@ export class MikrotikService {
         };
       }
 
-      // 2. FALLBACK: Try HOST list (For BYPASSED users)
-      const hostQuery = ip ? `?address=${ip}` : `?comment=~${username}`;
+      // 2. FALLBACK: Try HOST list (Bypass Mode)
+      // Bypassed users ONLY appear in the Host list
+      let hostQuery = finalMac ? `?mac-address=${finalMac}` : (ip ? `?address=${ip}` : `?comment=~${username}`);
       const hosts = await api.write('/ip/hotspot/host/print', [
         hostQuery,
         '.proplist=bytes-in,bytes-out'
@@ -437,7 +440,7 @@ export class MikrotikService {
 
       return null;
     } catch (e: any) {
-      this.logger.error(`Failed to fetch traffic for ${username}/${ip} on ${router.name}: ${e.message}`);
+      this.logger.error(`Failed to fetch traffic for ${username}/${ip}/${mac} on ${router.name}: ${e.message}`);
       return null;
     } finally {
       api.close();
