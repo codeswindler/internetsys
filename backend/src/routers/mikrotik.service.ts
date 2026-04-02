@@ -243,4 +243,26 @@ export class MikrotikService {
       api.close();
     }
   }
+
+  async loginUser(router: Router, username: string, pass: string, ip?: string, mac?: string): Promise<any> {
+    const api = await this.connect(router);
+    try {
+      const args = [
+        `=user=${username}`,
+        `=password=${pass}`
+      ];
+      if (ip) args.push(`=address=${ip}`);
+      if (mac) args.push(`=mac-address=${mac}`);
+      
+      // Inject into active sessions
+      const result = await api.write('/ip/hotspot/active/add', args);
+      return result;
+    } catch (e: any) {
+      this.logger.warn(`MikroTik manual login failed for ${username}: ${e.message}`);
+      // Don't throw here, as the user can still manual login if this fails
+      return null;
+    } finally {
+      api.close();
+    }
+  }
 }

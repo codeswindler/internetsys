@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { User as UserIcon, Phone, Lock, ArrowRight } from 'lucide-react';
+import { useEffect } from 'react';
 import api from '../../services/api';
 
 export default function Register() {
@@ -11,6 +12,17 @@ export default function Register() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mac = params.get('mac');
+    const ip = params.get('ip');
+    const linkLogin = params.get('link-login') || params.get('link-login-only');
+    
+    if (mac) localStorage.setItem('hotspot_mac', mac);
+    if (ip) localStorage.setItem('hotspot_ip', ip);
+    if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

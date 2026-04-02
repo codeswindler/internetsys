@@ -16,10 +16,14 @@ export default function Subscriptions() {
   });
 
   const startMutation = useMutation({
-    mutationFn: (subId: string) => api.post(`/subscriptions/${subId}/start`),
+    mutationFn: (subId: string) => {
+      const mac = localStorage.getItem('hotspot_mac');
+      const ip = localStorage.getItem('hotspot_ip');
+      return api.post(`/subscriptions/${subId}/start`, { mac, ip });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
-      toast.success('Session started! Connecting...');
+      toast.success('Session started! You are now connected.');
     },
     onError: () => toast.error('Failed to start session timer'),
   });

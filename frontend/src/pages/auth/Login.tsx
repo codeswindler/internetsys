@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { User as UserIcon, ShieldAlert, ArrowRight, Phone, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { useEffect } from 'react';
 import api from '../../services/api';
 
 export default function Login() {
@@ -11,6 +12,17 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mac = params.get('mac');
+    const ip = params.get('ip');
+    const linkLogin = params.get('link-login') || params.get('link-login-only');
+    
+    if (mac) localStorage.setItem('hotspot_mac', mac);
+    if (ip) localStorage.setItem('hotspot_ip', ip);
+    if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

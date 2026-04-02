@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink } from 'lucide-react';
+import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
@@ -32,6 +32,19 @@ export default function Packages() {
   });
 
   const activeSub = subs?.find((s: any) => s.status === 'active');
+
+  const startMutation = useMutation({
+    mutationFn: (subId: string) => {
+      const mac = localStorage.getItem('hotspot_mac');
+      const ip = localStorage.getItem('hotspot_ip');
+      return api.post(`/subscriptions/${subId}/start`, { mac, ip });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      toast.success('Internet Activated!');
+    },
+    onError: () => toast.error('Failed to connect'),
+  });
 
   const purchaseMutation = useMutation({
     mutationFn: (data: { packageId: string; routerId: string }) => api.post('/subscriptions/purchase', data),
@@ -118,9 +131,17 @@ export default function Packages() {
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Time Remaining</p>
               </div>
             ) : (
-              <div className="bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl flex items-center gap-2 text-amber-400 text-sm font-bold">
-                <Clock size={16} /> Ready to Connect
-              </div>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  startMutation.mutate(activeSub.id);
+                }}
+                disabled={startMutation.isPending}
+                className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 px-6 py-3 rounded-xl flex items-center gap-3 text-amber-400 font-black uppercase tracking-widest transition-all active:scale-95"
+              >
+                {startMutation.isPending ? <Clock className="animate-spin" size={18} /> : <Zap size={18} fill="currentColor" />}
+                1-Click Connect
+              </button>
             )}
             
             <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold group-hover:gap-3 transition-all">

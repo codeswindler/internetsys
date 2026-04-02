@@ -23,8 +23,8 @@ export class SubscriptionsController {
   }
 
   @Post(':id/start')
-  start(@Param('id') id: string) {
-    return this.subscriptionsService.startSession(id);
+  start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }) {
+    return this.subscriptionsService.startSession(id, body.mac, body.ip);
   }
 
   // Admins can activate pending manual subscriptions
