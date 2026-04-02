@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw } from 'lucide-react';
+import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -181,8 +181,34 @@ export default function MainLayout({ role }: LayoutProps) {
         });
       }
     }
-    prevUnreadRef.current = unreadTotal;
+  prevUnreadRef.current = unreadTotal;
   }, [unreadTotal, role, theme]);
+
+  // Global Sync Sentinal: Monitor Active Subscription for Timer & Auto-Redirect
+  const { data: activeSub = null } = useQuery({
+    queryKey: ['active-subscription'],
+    queryFn: async () => {
+      if (role !== 'user' || !token) return null;
+      const res = await axios.get(`${API_URL}/subscriptions/active`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    },
+    refetchInterval: 10000,
+    enabled: role === 'user' && !!token,
+  });
+
+  // Auto-Redirect Sentinel: Detect Expiration and Nudge User
+  useEffect(() => {
+    if (role === 'user' && activeSub) {
+      const isExpired = activeSub.expiresAt && new Date(activeSub.expiresAt).getTime() < Date.now();
+      
+      if (isExpired && location.pathname.includes('/user/subscriptions')) {
+        toast('Your plan has ended. Redirecting to packages...', { icon: '⌛' });
+        setTimeout(() => navigate('/user/packages'), 2000);
+      }
+    }
+  }, [activeSub, location.pathname, navigate, role]);
 
 
   // Simple auth check
@@ -308,10 +334,10 @@ export default function MainLayout({ role }: LayoutProps) {
           
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
+            className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all font-medium"
           >
             <LogOut size={20} />
-            <span className="font-medium">Logout</span>
+            <span>Logout</span>
           </button>
         </div>
       </aside>
@@ -350,12 +376,25 @@ export default function MainLayout({ role }: LayoutProps) {
              PulseLynk
           </span>
           
-          <button 
-            onClick={() => setIsProfileModalOpen(true)}
-            className="flex-shrink-0 focus:outline-none transition-transform active:scale-95"
-          >
-            {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
-          </button>
+          <div className="flex items-center gap-3">
+             {role === 'user' && activeSub && (
+               <div 
+                 onClick={() => navigate('/user/packages')}
+                 className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1.5 rounded-full animate-pulse cursor-pointer hover:bg-cyan-500/20 transition-all"
+               >
+                 <Zap size={14} className="text-cyan-400 fill-cyan-400" />
+                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-tighter">
+                   {new Date(activeSub.expiresAt).getTime() < Date.now() ? 'RENEW NOW' : 'ACTIVE'}
+                 </span>
+               </div>
+             )}
+             <button 
+               onClick={() => setIsProfileModalOpen(true)}
+               className="flex-shrink-0 focus:outline-none transition-transform active:scale-95"
+             >
+               {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
+             </button>
+           </div>
         </header>
 
         <div className="animate-fade-in max-w-7xl mx-auto">

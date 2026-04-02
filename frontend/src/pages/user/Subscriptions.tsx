@@ -49,6 +49,8 @@ export default function Subscriptions() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-subscription-list'] });
+      queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
       toast.success('Connection Verified!');
     },
     onError: (err: any) => {

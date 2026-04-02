@@ -137,8 +137,14 @@ export default function Packages() {
   const stkPushMutation = useMutation({
     mutationFn: (data: { subId: string }) => api.post('/subscriptions/stk-push', data),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['active-subscription-list'] });
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       toast.success('Payment successful! Your internet is now active.');
+      // If we have identity, trigger the local login form simultaneously
+      setTimeout(() => {
+        if (formRef.current) formRef.current.submit();
+      }, 500);
       navigate('/user/subscriptions');
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Payment simulation failed')
