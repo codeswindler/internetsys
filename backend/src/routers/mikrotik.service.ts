@@ -378,14 +378,20 @@ export class MikrotikService {
     }
   }
 
-  async getUserTraffic(router: Router, username: string): Promise<{ bytesIn: number, bytesOut: number } | null> {
+  async getUserTraffic(router: Router, username: string, ip?: string): Promise<{ bytesIn: number, bytesOut: number } | null> {
     const api = await this.connect(router);
     try {
+      // Search by USERNAME or IP for maximum reliability
+      const query = ip ? `?address=${ip}` : `?user=${username}`;
       const results = await api.write('/ip/hotspot/active/print', [
-        `?user=${username}`,
+        query,
         '.proplist=bytes-in,bytes-out'
       ]);
+      
       if (results && results.length > 0) {
+        // MICROTIK LOGIC:
+        // bytes-in = DATA TO ROUTER (User Upload)
+        // bytes-out = DATA FROM ROUTER (User Download)
         return {
           bytesIn: parseInt(results[0]['bytes-in'] || '0'),
           bytesOut: parseInt(results[0]['bytes-out'] || '0')
@@ -393,7 +399,7 @@ export class MikrotikService {
       }
       return null;
     } catch (e: any) {
-      this.logger.error(`Failed to fetch traffic for ${username} on ${router.name}: ${e.message}`);
+      this.logger.error(`Failed to fetch traffic for ${username}/${ip} on ${router.name}: ${e.message}`);
       return null;
     } finally {
       api.close();

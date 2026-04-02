@@ -67,11 +67,11 @@ export default function Packages() {
         const now = Date.now();
         if (lastTraffic.current && lastTraffic.current.time && data) {
           const timeDiff = Math.max((now - lastTraffic.current.time) / 1000, 1);
-          const bytesIn = Number(data.bytesIn) || 0;
-          const bytesOut = Number(data.bytesOut) || 0;
+          const bytesIn = Number(data.bytesIn) || 0; // Upload
+          const bytesOut = Number(data.bytesOut) || 0; // Download
           
-          const downBits = Math.max((bytesIn - lastTraffic.current.bytesIn) * 8, 0) / timeDiff;
-          const upBits = Math.max((bytesOut - lastTraffic.current.bytesOut) * 8, 0) / timeDiff;
+          const downBits = Math.max((bytesOut - lastTraffic.current.bytesOut) * 8, 0) / timeDiff;
+          const upBits = Math.max((bytesIn - lastTraffic.current.bytesIn) * 8, 0) / timeDiff;
 
           const formatSpeed = (bits: number) => {
             if (!bits || isNaN(bits)) return '0 bps';
