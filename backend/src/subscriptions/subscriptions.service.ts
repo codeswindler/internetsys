@@ -239,8 +239,23 @@ export class SubscriptionsService {
     }
 
     // Fallback to saved user metadata if not provided
-    const finalMac = mac || sub.user.lastMac;
+    let finalMac = mac || sub.user.lastMac;
     const finalIp = ip || sub.user.lastIp;
+
+    // IF MAC is STILL missing, try looking it up on the router using the IP
+    if (!finalMac && finalIp) {
+      try {
+        const foundMac = await this.mikrotikService.findMacByIp(sub.router, finalIp);
+        if (foundMac) {
+          finalMac = foundMac;
+          // Store it for next time
+          sub.user.lastMac = foundMac;
+          await this.userRepo.save(sub.user);
+        }
+      } catch (e) {
+        this.logger.warn(`MAC lookup by IP failed: ${e.message}`);
+      }
+    }
 
     // Attempt direct login if mac/ip are available
     if (finalMac || finalIp) {

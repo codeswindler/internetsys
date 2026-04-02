@@ -265,4 +265,23 @@ export class MikrotikService {
       api.close();
     }
   }
+
+  async findMacByIp(router: Router, ip: string): Promise<string | null> {
+    const api = await this.connect(router);
+    try {
+      // Look in ARP table or DHCP leases
+      const results = await api.write('/ip/arp/print', [
+        `?address=${ip}`
+      ]);
+      if (results && results.length > 0) {
+        return results[0]['mac-address'];
+      }
+      return null;
+    } catch (e: any) {
+      this.logger.warn(`Failed to lookup MAC for IP ${ip} on router ${router.name}: ${e.message}`);
+      return null;
+    } finally {
+      api.close();
+    }
+  }
 }

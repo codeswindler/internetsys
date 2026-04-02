@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, Request, Ip } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -23,8 +23,9 @@ export class SubscriptionsController {
   }
 
   @Post(':id/start')
-  start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }) {
-    return this.subscriptionsService.startSession(id, body.mac, body.ip);
+  start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }, @Ip() clientIp: string) {
+    const finalIp = body.ip || clientIp;
+    return this.subscriptionsService.startSession(id, body.mac, finalIp);
   }
 
   // Admins can activate pending manual subscriptions
