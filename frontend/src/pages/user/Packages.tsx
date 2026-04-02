@@ -13,6 +13,7 @@ export default function Packages() {
   const formRef = useRef<HTMLFormElement>(null);
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [routerId, setRouterId] = useState('');
+  const [isLaunching, setIsLaunching] = useState(false);
   const [paymentType, setPaymentType] = useState<'voucher' | 'manual' | 'mpesa'>('voucher');
   const [voucherCode, setVoucherCode] = useState('');
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
@@ -140,11 +141,23 @@ export default function Packages() {
       queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['active-subscription-list'] });
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
-      toast.success('Payment successful! Your internet is now active.');
+      
+      setIsLaunching(true);
+      toast.success('Internet Flowing! Launching in 3s...', { 
+        icon: '🚀',
+        duration: 3000 
+      });
+
+      // The "Fluid Magic" Redirect: Satisfies the phone's OS that we are now UNBLOCKED
+      setTimeout(() => {
+        window.location.href = 'https://google.com';
+      }, 3000);
+      
       // If we have identity, trigger the local login form simultaneously
       setTimeout(() => {
         if (formRef.current) formRef.current.submit();
       }, 500);
+      
       navigate('/user/subscriptions');
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Payment simulation failed')
@@ -295,16 +308,21 @@ export default function Packages() {
                       </button>
                     </div>
                   ) : (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startMutation.mutate(activeSub.id);
-                      }}
-                      disabled={startMutation.isPending}
-                      className="w-full md:w-auto bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-6 py-3 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-cyan-500/20 transition-all hover:scale-105 active:scale-95"
+                    <button
+                      onClick={() => startMutation.mutate(activeSub.id)}
+                      disabled={startMutation.isPending || isLaunching}
+                      className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-cyan-900/40 border border-cyan-400/30 flex items-center justify-center min-w-[140px]"
                     >
-                      {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : <Zap size={18} fill="currentColor" />}
-                      {startMutation.isPending ? 'Certifying...' : '1-Click Connect'}
+                      {isLaunching ? (
+                        <div className="flex flex-col items-center gap-1.5 w-full">
+                           <span className="text-[9px] font-black animate-pulse text-white/90">LAUNCHING...</span>
+                           <div className="w-24 h-1 bg-white/10 rounded-full overflow-hidden">
+                             <div className="h-full bg-cyan-300 animate-launch-progress" />
+                           </div>
+                        </div>
+                      ) : (
+                        startMutation.isPending ? 'Connecting...' : 'Connect'
+                      )}
                     </button>
                   )
                 )}

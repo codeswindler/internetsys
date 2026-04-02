@@ -30,6 +30,8 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 export default function Subscriptions() {
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
+  const [isFixing, setIsFixing] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
@@ -51,7 +53,17 @@ export default function Subscriptions() {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['active-subscription-list'] });
       queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
-      toast.success('Connection Verified!');
+      
+      setIsLaunching(true);
+      toast.success('Internet Flowing! Launching in 3s...', { 
+        icon: '🚀',
+        duration: 3000 
+      });
+
+      // The "Fluid Magic" Redirect: Satisfies the phone's OS that we are now UNBLOCKED
+      setTimeout(() => {
+        window.location.href = 'https://google.com';
+      }, 3000);
     },
     onError: (err: any) => {
       const msg = err.response?.data?.message || 'Connection failed. Try "Verify Device" again.';
@@ -210,9 +222,8 @@ export default function Subscriptions() {
                               </button>
                             </div>
                           ) : (
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
+                            <button
+                              onClick={() => {
                                 startMutation.mutate(activeSub.id, {
                                   onSuccess: () => {
                                     setTimeout(() => {
@@ -221,15 +232,25 @@ export default function Subscriptions() {
                                   }
                                 });
                               }}
-                              disabled={startMutation.isPending}
-                              className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black uppercase tracking-[0.1em] py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 border border-cyan-400/30 transition-all active:scale-[0.98]"
+                              disabled={startMutation.isPending || isLaunching}
+                              className="w-full h-14 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black rounded-2xl shadow-lg shadow-cyan-500/25 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-50 group"
                             >
-                              {startMutation.isPending ? (
-                                <RefreshCw size={20} className="animate-spin" />
+                              {isLaunching ? (
+                                <div className="flex flex-col items-center gap-1.5 w-full px-8">
+                                  <div className="flex items-center gap-2">
+                                     <span className="text-[10px] font-black animate-pulse text-white/90">LAUNCHING INTERNET</span>
+                                     <Zap size={14} className="animate-bounce" />
+                                  </div>
+                                  <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                                    <div className="h-full bg-cyan-300 animate-launch-progress" />
+                                  </div>
+                                </div>
                               ) : (
-                                <Zap size={20} fill="currentColor" />
+                                <>
+                                  <Zap size={20} className="fill-white group-active:scale-90 transition-transform" />
+                                  {startMutation.isPending ? 'Unblocking Gate...' : '1-Click Connect'}
+                                </>
                               )}
-                              {startMutation.isPending ? 'Certifying Connection...' : (activeSub.startedAt ? 'Bring Internet to this Device' : '1-Click Start Internet')}
                             </button>
                           )
                         )}

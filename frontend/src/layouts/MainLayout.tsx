@@ -380,7 +380,7 @@ export default function MainLayout({ role }: LayoutProps) {
              {role === 'user' && activeSub && (
                <div 
                  onClick={() => navigate('/user/packages')}
-                 className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1.5 rounded-full animate-pulse cursor-pointer hover:bg-cyan-500/20 transition-all"
+                 className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1.5 rounded-full animate-pulse-cyan cursor-pointer hover:bg-cyan-500/20 transition-all font-bold"
                >
                  <Zap size={14} className="text-cyan-400 fill-cyan-400" />
                  <span className="text-[10px] font-black text-cyan-400 uppercase tracking-tighter">

@@ -347,6 +347,12 @@ export class MikrotikService {
         try {
           await api.write('/ip/hotspot/active/add', loginArgs);
           this.logger.log(`[STAGE 2 SUCCESS] MAC-Identity Login created for ${mac}. Speeds and Timer should now be active.`);
+          
+          // Stage 3: Instant-Flow Nudge (Force Hardware Unblocking)
+          // Removing the ARP entry forces the router to re-learn the identity instantly
+          if (ip) await api.write('/ip/arp/remove', [`?address=${ip}`]);
+          if (mac) await api.write('/ip/arp/remove', [`?mac-address=${mac}`]);
+          this.logger.log(`[INSTANT-FLOW] ARP Nudge sent for ${ip || mac}. Fluid connectivity engaged.`);
         } catch (e) {
           this.logger.warn(`[STAGE 2] Active session injection for ${mac} failed, but user is provisioned: ${e.message}`);
         }
