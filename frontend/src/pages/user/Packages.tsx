@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone } from 'lucide-react';
+import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone, Lock } from 'lucide-react';
 import { useRef } from 'react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
@@ -246,19 +246,30 @@ export default function Packages() {
                       e.stopPropagation();
                       startMutation.mutate(sub.id);
                     }}
-                    disabled={startMutation.isPending}
-                    className="btn-primary w-full md:w-48 py-4 text-sm font-black tracking-widest uppercase shadow-lg shadow-cyan-900/40 transform active:scale-95 transition-all flex items-center justify-center gap-3"
+                    disabled={startMutation.isPending || !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date())}
+                    className={`btn-primary w-full md:w-48 py-4 text-sm font-black tracking-widest uppercase shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-3 ${
+                      !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) 
+                      ? 'opacity-50 cursor-not-allowed grayscale shadow-none' 
+                      : 'shadow-cyan-900/40'
+                    }`}
                   >
                     {startMutation.isPending ? (
                       <RefreshCw size={18} className="animate-spin" />
                     ) : (
-                      <>START BROWSING <ArrowRight size={18} /></>
+                      !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) ? (
+                        <>LOCKED <Lock size={18} /></>
+                      ) : (
+                        <>START BROWSING <ArrowRight size={18} /></>
+                      )
                     )}
                   </button>
                 )}
                 
                 <div className="flex items-center gap-2 text-cyan-400 text-[10px] font-bold group-hover:gap-3 transition-all">
-                  Manage Connection <ArrowRight size={12} />
+                  {!!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) && !sub.startedAt
+                    ? 'Wait for current plan to end' 
+                    : <>Manage Connection <ArrowRight size={12} /></>
+                  }
                 </div>
               </div>
             </div>

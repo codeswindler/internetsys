@@ -209,10 +209,22 @@ export default function Subscriptions() {
                   ) : (
                     <button 
                       onClick={() => startMutation.mutate(sub.id)}
-                      disabled={startMutation.isPending}
-                      className="btn-primary w-full md:w-56 py-4 text-sm font-black tracking-widest uppercase shadow-lg shadow-cyan-900/40 hover:scale-105 transition-all flex items-center justify-center gap-3"
+                      disabled={startMutation.isPending || !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date())}
+                      className={`btn-primary w-full md:w-56 py-4 text-sm font-black tracking-widest uppercase shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3 ${
+                        !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) 
+                        ? 'opacity-50 cursor-not-allowed grayscale shadow-none' 
+                        : 'shadow-cyan-900/40'
+                      }`}
                     >
-                      {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : <><Play size={18} /> Start Browsing</>}
+                      {startMutation.isPending ? (
+                        <RefreshCw className="animate-spin" size={18} />
+                      ) : (
+                        !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) ? (
+                          <><Lock size={18} /> Locked</>
+                        ) : (
+                          <><Play size={18} /> Start Browsing</>
+                        )
+                      )}
                     </button>
                   )}
                   

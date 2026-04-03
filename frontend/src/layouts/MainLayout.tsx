@@ -161,7 +161,13 @@ export default function MainLayout({ role }: LayoutProps) {
   });
 
   // Pick the most relevant one for the quick-actions banner
-  const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
+  // Pick the most relevant one for the quick-actions banner:
+  // Priority: 1. Running (Active + startedAt), 2. Ready (Active but no startedAt), 3. Pending
+  const activeSub = ([...allActiveSubs].sort((a: any, b: any) => {
+    if (a.startedAt && !b.startedAt) return -1;
+    if (!a.startedAt && b.startedAt) return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  })[0]) || null;
 
 
   const fireInternet = (customUser?: string, customPass?: string) => {
@@ -206,15 +212,7 @@ export default function MainLayout({ role }: LayoutProps) {
     }
   }, [location.search, token, API_URL]);
 
-  // Auto-Fire Sentinel: Keep the user connected if they have an active sub
-  useEffect(() => {
-    if (activeSub?.isActive && role === 'user' && !activeSub.startedAt) {
-      // If we have an active sub but it hasn't technically "started" (meaning we just bought it),
-      // we fire the internet immediately to trigger the router login.
-      console.log("AUTO-FIRING NEW SUBSCRIPTION...");
-      setTimeout(() => fireInternet(), 2000);
-    }
-  }, [activeSub?.id, activeSub?.isActive, role]);
+  // User must explicitly choose which plan to start, so automatic firing is disabled.
 
 
   const { data: unreadTotal = 0 } = useQuery({
@@ -522,21 +520,32 @@ export default function MainLayout({ role }: LayoutProps) {
                <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider">Redeem</span>
              </button>
 
-             {role === 'user' && (
-               <div 
-                 onClick={() => navigate(activeSub ? '/user/subscriptions' : '/user/packages')}
-                 className={`flex items-center gap-1 border px-2 py-0.5 rounded-full cursor-pointer transition-all font-medium ${
-                   activeSub 
-                   ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan hover:bg-cyan-500/20' 
-                   : 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 animate-bounce shadow-lg shadow-amber-900/10 text-amber-400'
-                 }`}
-               >
-                 <Zap size={10} className={activeSub ? 'text-cyan-400 fill-cyan-400' : 'text-amber-400 fill-amber-400'} />
-                 <span className="text-[10px] uppercase tracking-tighter">
-                   {activeSub ? (new Date(activeSub.expiresAt).getTime() < Date.now() ? 'RENEW NOW' : 'ACTIVE •') : 'BUY NEW PACKAGE'}
-                 </span>
-               </div>
-             )}
+              {role === 'user' && (
+                <div 
+                  onClick={() => navigate(activeSub ? '/user/subscriptions' : '/user/packages')}
+                  className={`flex items-center gap-1 border px-2 py-0.5 rounded-full cursor-pointer transition-all font-medium ${
+                    activeSub 
+                    ? (activeSub.startedAt ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan' : 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10')
+                    : 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 animate-bounce shadow-lg shadow-amber-900/10 text-amber-400'
+                  }`}
+                >
+                  <Zap size={10} className={activeSub ? (activeSub.startedAt ? 'text-cyan-400 fill-cyan-400' : 'text-emerald-400 fill-emerald-400 animate-pulse') : 'text-amber-400 fill-amber-400'} />
+                  <span className={`text-[10px] uppercase tracking-tighter ${activeSub?.startedAt ? 'text-cyan-400' : (activeSub ? 'text-emerald-400' : '')}`}>
+                    {activeSub ? (
+                      !activeSub.startedAt 
+                        ? 'CHOOSE PLAN' 
+                        : new Date(activeSub.expiresAt).getTime() < Date.now() 
+                          ? 'RENEW NOW' 
+                          : 'ACTIVE SESSION •'
+                    ) : 'BUY NEW PACKAGE'}
+                  </span>
+                  {allActiveSubs.length > 1 && (
+                    <span className="ml-1 px-1.5 bg-white/10 rounded text-[9px] font-bold text-white/80 border border-white/5 shadow-sm">
+                      +{allActiveSubs.length - 1} MORE
+                    </span>
+                  )}
+                </div>
+              )}
 
              <button 
                onClick={() => setIsProfileModalOpen(true)}
