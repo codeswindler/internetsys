@@ -109,7 +109,7 @@ export class SubscriptionsService {
   async purchase(
     userId: string,
     packageId: string,
-    routerId: string,
+    routerId?: string,
   ): Promise<Subscription> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
@@ -119,10 +119,15 @@ export class SubscriptionsService {
     });
     if (!pkg) throw new NotFoundException('Package not found or inactive');
 
-    const router = await this.routerRepo.findOne({
-      where: { id: routerId, isOnline: true },
-    });
-    if (!router) throw new NotFoundException('Router not found or offline');
+    // Auto-resolve router if none provided
+    let router;
+    if (routerId) {
+      router = await this.routerRepo.findOne({ where: { id: routerId, isOnline: true } });
+    }
+    if (!router) {
+      router = await this.routerRepo.findOne({ where: { isOnline: true } });
+    }
+    if (!router) throw new NotFoundException('No router available or online');
 
     const sub = this.subRepo.create({
       user,
