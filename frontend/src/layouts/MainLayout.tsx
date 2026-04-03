@@ -56,7 +56,9 @@ export default function MainLayout({ role }: LayoutProps) {
       });
       setIsRedeemModalOpen(false);
       setVoucherCode('');
-      
+       useEffect(() => {
+    console.log('🚀 PulseLynk Connectivity Engine V5.0 Loaded');
+  }, []);
       // Auto-Fire Internet after redemption success
       setTimeout(() => fireInternet(), 1000);
     },
@@ -455,24 +457,24 @@ export default function MainLayout({ role }: LayoutProps) {
           <div className="flex items-center gap-2">
              <button 
                onClick={() => setIsRedeemModalOpen(true)}
-               className="p-1.5 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all"
+               className="p-1 px-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all"
                title="Redeem Voucher"
              >
-               <Ticket size={18} />
+               <Ticket size={16} />
              </button>
 
              {role === 'user' && (
                <div 
                  onClick={() => navigate(activeSub ? '/user/subscriptions' : '/user/packages')}
-                 className={`flex items-center gap-1.5 border px-2.5 py-1 rounded-full cursor-pointer transition-all font-bold ${
+                 className={`flex items-center gap-1 border px-2 py-0.5 rounded-full cursor-pointer transition-all font-medium ${
                    activeSub 
                    ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan hover:bg-cyan-500/20' 
                    : 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 animate-bounce shadow-lg shadow-amber-900/10 text-amber-400'
                  }`}
                >
-                 <Zap size={12} className={activeSub ? 'text-cyan-400 fill-cyan-400' : 'text-amber-400 fill-amber-400'} />
-                 <span className="text-[10px] font-black uppercase tracking-tighter">
-                   {activeSub ? (new Date(activeSub.expiresAt).getTime() < Date.now() ? 'RENEW NOW' : 'ACTIVE') : 'BUY NEW PACKAGE'}
+                 <Zap size={10} className={activeSub ? 'text-cyan-400 fill-cyan-400' : 'text-amber-400 fill-amber-400'} />
+                 <span className="text-[10px] uppercase tracking-tighter">
+                   {activeSub ? (new Date(activeSub.expiresAt).getTime() < Date.now() ? 'RENEW NOW' : 'ACTIVE •') : 'BUY NEW PACKAGE'}
                  </span>
                </div>
              )}

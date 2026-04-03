@@ -17,6 +17,7 @@
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
+  --deploy-v: "5.0";
 }
 
 :root.light {
@@ -228,9 +229,16 @@ th {
 /* Mobile Specific Zoom Out */
 @media (max-width: 768px) {
   html, body {
-    /* Standardized robust scrolling for mobile captive portals */
+    /* Standardized robust scrolling with clean zoom-out */
     min-height: 100%;
+    zoom: 0.85;
+    -moz-transform: scale(0.85); /* Firefox fallback */
+    -moz-transform-origin: top left;
   }
+}
+
+:root {
+  --deploy-v: "5.1";
 }
 
 /* Fluid Magic Animations */
