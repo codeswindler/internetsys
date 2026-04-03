@@ -22,8 +22,12 @@ export class MpesaService {
     return process.env.MPESA_CALLBACK_URL;
   }
 
-  // For production, change to api.safaricom.co.ke
-  private readonly baseUrl = 'https://sandbox.safaricom.co.ke';
+  // Choose environment: 'production' or 'sandbox'
+  private get baseUrl() {
+    return process.env.MPESA_ENV === 'sandbox'
+      ? 'https://sandbox.safaricom.co.ke'
+      : 'https://api.safaricom.co.ke';
+  }
 
   async getAccessToken(): Promise<string> {
     const credentials = Buffer.from(
