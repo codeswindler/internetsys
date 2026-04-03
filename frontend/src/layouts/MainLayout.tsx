@@ -185,14 +185,18 @@ export default function MainLayout({ role }: LayoutProps) {
     // Trigger the hidden MikroTik login form
     if (formRef.current) {
       console.log('FIRING INTERNET FORM...');
+      
+      // If custom credentials provided, we'd need a way to set them. 
+      // For now we assume activeSub is correct or form is already populated.
       formRef.current.submit();
     }
 
     // Satisfy the phone's OS that we are now UNBLOCKED and redirect to trigger portal dismissal
-    // We use a small delay to ensure the POST request from the form goes out first
+    // We use a longer delay (2.5s) to ensure the router processes the login before the device checks
+    // We use HTTP connectivity check because it's more resilient than HTTPS during the switchover
     setTimeout(() => {
-      window.location.href = 'https://www.google.com/generate_204';
-    }, 1500);
+      window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
+    }, 2500);
   };
 
   // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
@@ -573,13 +577,14 @@ export default function MainLayout({ role }: LayoutProps) {
           <form 
             ref={formRef}
             method="post" 
-            action={`http://${activeSub.router.localGateway || '10.5.50.1'}/login`}
+            action={localStorage.getItem('hotspot_link_login') || `http://${activeSub.router?.localGateway || '10.5.50.1'}/login`}
             className="hidden"
             target="ghost-frame"
           >
             <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
             <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
-            <input type="hidden" name="dst" value="https://google.com" />
+            <input type="hidden" name="dst" value="http://connectivitycheck.gstatic.com/generate_204" />
+            <input type="hidden" name="popup" value="true" />
           </form>
         )}
         <iframe name="ghost-frame" className="hidden" />
