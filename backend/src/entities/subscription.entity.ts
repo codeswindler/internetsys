@@ -13,12 +13,11 @@ import { Package } from './package.entity';
 import { Router } from './router.entity';
 import { DeviceSession } from './device-session.entity';
 
-
 export enum SubscriptionStatus {
-  PENDING = 'pending',
-  ACTIVE = 'active',
-  EXPIRED = 'expired',
-  CANCELLED = 'cancelled',
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  EXPIRED = 'EXPIRED',
+  CANCELLED = 'CANCELLED',
 }
 
 export enum PaymentMethod {

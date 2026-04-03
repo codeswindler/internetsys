@@ -492,23 +492,6 @@ export default function MainLayout({ role }: LayoutProps) {
 
           {/* Icons Stack: Right aligned on both views */}
           <div className="flex-1 flex items-center justify-end gap-3">
-             <button 
-               onClick={toggleTheme}
-               className="p-2.5 rounded-xl bg-white/5 text-muted hover:text-cyan-400 hover:bg-white/10 hover:shadow-[0_0_15px_rgba(34,211,238,0.1)] transition-all duration-300 border border-white/5 group relative"
-               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-             >
-               <div className="relative w-5 h-5 flex items-center justify-center">
-                 {theme === 'dark' ? (
-                   <Sun size={20} className="transition-all duration-500 rotate-0 scale-100 group-hover:rotate-45" />
-                 ) : (
-                   <Moon size={20} className="transition-all duration-500 rotate-0 scale-100 group-hover:-rotate-12" />
-                 )}
-               </div>
-               {/* Tooltip hint for premium feel */}
-               <span className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 border border-white/10 rounded text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                 Toggle Theme
-               </span>
-             </button>
 
 
              <button 
