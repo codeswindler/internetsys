@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link } from 'lucide-react';
 import api from '../../services/api';
@@ -259,6 +260,22 @@ export default function UserDashboard() {
                                  ID: <span className="text-slate-400">{sub.id.substring(0, 8)}</span>
                                </span>
                              </div>
+
+                             <div className="flex items-center gap-4 mt-1">
+                               <div className="flex items-center gap-1.5">
+                                 <Clock size={10} className="text-slate-500" />
+                                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                   Acquired: <span className="text-slate-400">{sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, HH:mm') : 'Unknown'}</span>
+                                 </span>
+                               </div>
+                               <div className="flex items-center gap-1.5">
+                                 <CreditCard size={10} className="text-cyan-500/50" />
+                                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                   Via: <span className="text-cyan-400/70 capitalize">{sub.paymentMethod || 'Manual'}</span>
+                                 </span>
+                               </div>
+                             </div>
+
                              {/* Connected Devices List */}
                              {(sub.deviceSessions?.filter((s: any) => s.isActive).length > 0) ? (
                                <div className="flex flex-col gap-1 mt-1">

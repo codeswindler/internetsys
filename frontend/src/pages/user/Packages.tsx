@@ -185,7 +185,7 @@ export default function Packages() {
   });
 
   const handleSubscribe = async (e: React.FormEvent) => {
-    // e.preventDefault();
+    e.preventDefault();
     // if (!routerId) return toast.error('Please select an active hotspot location');
     
     if (paymentType === 'mpesa') {
