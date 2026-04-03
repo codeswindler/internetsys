@@ -121,6 +121,8 @@ export class MikrotikService {
   async removeHotspotUser(router: Router, username: string): Promise<void> {
     const api = await this.connect(router);
     try {
+      this.logger.log(`[EXPIRY] Fully removing user and bypasses for ${username} on ${router.name}...`);
+      
       const users = await api.write('/ip/hotspot/user/print', [
         `?name=${username}`,
       ]);
@@ -136,7 +138,38 @@ export class MikrotikService {
         await api.write('/ip/hotspot/active/remove', [
           `=.id=${session['.id']}`,
         ]);
+        
+        // Also remove from Hosts table using the MAC from the active session. This forces the immediate Captive Portal popup!
+        if (session['mac-address']) {
+          const hosts = await api.write('/ip/hotspot/host/print', [
+            `?mac-address=${session['mac-address']}`
+          ]);
+          for (const host of hosts) {
+            await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+          }
+        }
       }
+
+      // CRITICAL: Remove the IP-Binding (Triple-Thrust Bypass) we created for them
+      const bindings = await api.write('/ip/hotspot/ip-binding/print', [
+        `?comment=Pulselynk: ${username}`,
+      ]);
+      for (const binding of bindings) {
+        await api.write('/ip/hotspot/ip-binding/remove', [
+          `=.id=${binding['.id']}`,
+        ]);
+        
+        // Ensure the host is removed using the mac from the binding!
+        if (binding['mac-address']) {
+           const hosts = await api.write('/ip/hotspot/host/print', [
+             `?mac-address=${binding['mac-address']}`
+           ]);
+           for (const host of hosts) {
+             await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+           }
+        }
+      }
+
     } catch (e) {
       this.logger.error(
         `Error removing hotspot user ${username} on ${router.host}`,
