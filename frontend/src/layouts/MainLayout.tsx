@@ -348,12 +348,23 @@ export default function MainLayout({ role }: LayoutProps) {
               PulseLynk
             </span>
           </div>
+
+          <div className="flex items-center gap-2">
             <button 
-              className="md:hidden text-slate-400 hover:text-white"
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-white/5 text-muted hover:text-cyan-400 transition-all border border-white/5 active:scale-95"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+
+            <button 
+              className="md:hidden text-slate-400 hover:text-white p-2"
               onClick={() => setIsMenuOpen(false)}
             >
               <X size={20} />
             </button>
+          </div>
         </div>
 
         
