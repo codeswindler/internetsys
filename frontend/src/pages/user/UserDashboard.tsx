@@ -16,6 +16,20 @@ export default function UserDashboard() {
   }>();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
+  
+  const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    if (/Windows NT 10.0/.test(ua)) setLocalDeviceName('Windows 10/11');
+    else if (/Windows NT/.test(ua)) setLocalDeviceName('Windows PC');
+    else if (/Mac OS X/.test(ua)) setLocalDeviceName('MacBook');
+    else if (/iPhone/.test(ua)) setLocalDeviceName('iPhone');
+    else if (/iPad/.test(ua)) setLocalDeviceName('iPad');
+    else if (/Android/.test(ua)) {
+      const match = ua.match(/Android\s[0-9.]+;\s([^;]+)/);
+      setLocalDeviceName(match ? match[1].trim() : 'Android Device');
+    }
+  }, []);
 
   // Unified Query Key: Centralizes the ACTIVE timer/status
   const { data: activeSubsData, isLoading: activeSubsLoading } = useQuery({
@@ -180,14 +194,14 @@ export default function UserDashboard() {
                                  ID: <span className="text-slate-400">{sub.id.substring(0, 8)}</span>
                                </span>
                              </div>
-                             {sub.deviceSessions?.[0]?.deviceModel && (
+                             {(sub.deviceSessions?.[0]?.deviceModel || (localStorage.getItem('hotspot_mac') && localDeviceName)) ? (
                                <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-slate-900/50 border border-slate-800 rounded-md max-w-fit">
                                  <Smartphone size={10} className="text-blue-500" />
                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                   DEVICE: <span className="text-blue-300 ml-1">{sub.deviceSessions[0].deviceModel}</span>
+                                   DEVICE: <span className="text-blue-300 ml-1">{sub.deviceSessions?.[0]?.deviceModel || localDeviceName}</span>
                                  </span>
                                </div>
-                             )}
+                             ) : null}
                           </div>
                         </div>
                       </div>
@@ -218,7 +232,7 @@ export default function UserDashboard() {
                                  onClick={(e) => { 
                                    e.stopPropagation(); 
                                    if (!localStorage.getItem('hotspot_mac')) {
-                                     window.location.href = 'http://neverssl.com';
+                                     window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
                                    } else {
                                      startMutation.mutate(sub.id); 
                                    }
@@ -245,7 +259,7 @@ export default function UserDashboard() {
                               onClick={(e) => { 
                                 e.stopPropagation(); 
                                 if (!localStorage.getItem('hotspot_mac')) {
-                                  window.location.href = 'http://neverssl.com';
+                                  window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
                                 } else {
                                   startMutation.mutate(sub.id); 
                                 }

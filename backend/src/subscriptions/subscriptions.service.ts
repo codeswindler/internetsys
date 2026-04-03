@@ -143,7 +143,7 @@ export class SubscriptionsService {
   async findMy(userId: string): Promise<Subscription[]> {
     return this.subRepo.find({
       where: { user: { id: userId } },
-      relations: ['package', 'router', 'user'],
+      relations: ['package', 'router', 'user', 'deviceSessions'],
       order: { createdAt: 'DESC' },
     });
   }
