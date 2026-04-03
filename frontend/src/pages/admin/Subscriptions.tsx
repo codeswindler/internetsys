@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -15,11 +15,41 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 function TrafficIndicator({ subId }: { subId: string }) {
+  const [trafficStats, setTrafficStats] = useState({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
+  const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
+
   const { data: traffic } = useQuery({
     queryKey: ['traffic', subId],
     queryFn: () => api.get(`/subscriptions/${subId}/traffic`).then(res => res.data),
     refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    if (!traffic) return;
+
+    const now = Date.now();
+    if (lastTraffic.current && lastTraffic.current.time) {
+      const timeDiff = Math.max((now - lastTraffic.current.time) / 1000, 1);
+      const bytesIn = Number(traffic.bytesIn) || 0;
+      const bytesOut = Number(traffic.bytesOut) || 0;
+      
+      const downBits = Math.max((bytesOut - lastTraffic.current.bytesOut) * 8, 0) / timeDiff;
+      const upBits = Math.max((bytesIn - lastTraffic.current.bytesIn) * 8, 0) / timeDiff;
+
+      const formatSpeed = (bits: number) => {
+        if (!bits || isNaN(bits)) return '0 bps';
+        if (bits > 1000000) return (bits / 1000000).toFixed(1) + ' Mbps';
+        if (bits > 1000) return (bits / 1000).toFixed(0) + ' Kbps';
+        return bits.toFixed(0) + ' bps';
+      };
+
+      setTrafficStats({
+        downloadSpeed: formatSpeed(downBits),
+        uploadSpeed: formatSpeed(upBits)
+      });
+    }
+    lastTraffic.current = { ...traffic, time: now };
+  }, [traffic]);
 
   if (!traffic) return <span className="text-xs text-slate-600">—</span>;
 
@@ -27,11 +57,11 @@ function TrafficIndicator({ subId }: { subId: string }) {
     <div className="flex flex-col gap-1 text-[10px] font-mono whitespace-nowrap">
       <div className="flex items-center gap-1.5 text-cyan-400">
         <Download size={10} />
-        <b>{traffic.downloadSpeed}</b>
+        <b>{trafficStats.downloadSpeed}</b>
       </div>
       <div className="flex items-center gap-1.5 text-blue-400">
         <Upload size={10} />
-        <b>{traffic.uploadSpeed}</b>
+        <b>{trafficStats.uploadSpeed}</b>
       </div>
     </div>
   );

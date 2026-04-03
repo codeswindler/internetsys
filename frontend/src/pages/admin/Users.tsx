@@ -105,7 +105,7 @@ function ActivePlansPopup({
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
-                        <CountdownBadge expiresAt={s.expiresAt} variant="inline" />
+                        <CountdownBadge expiresAt={s.expiresAt} startedAt={s.startedAt} variant="inline" />
                         <button
                           onClick={() => onCancelClick(s.id)}
                           disabled={cancelPending}
@@ -468,7 +468,7 @@ export default function Users() {
                       <RouterIcon size={10} /> {mostRecentActive.router.name}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
-                      <CountdownBadge expiresAt={mostRecentActive.expiresAt} variant="inline" />
+                      <CountdownBadge expiresAt={mostRecentActive.expiresAt} startedAt={mostRecentActive.startedAt} variant="inline" />
                       <div className="flex items-center gap-2">
                         <button
                           className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
