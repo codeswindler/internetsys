@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Request, Ip, Logger } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
+import { MpesaService } from './mpesa.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -10,7 +11,10 @@ import { PaymentMethod } from '../entities/subscription.entity';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SubscriptionsController {
   private readonly logger = new Logger(SubscriptionsController.name);
-  constructor(private readonly subscriptionsService: SubscriptionsService) {}
+  constructor(
+    private readonly subscriptionsService: SubscriptionsService,
+    private readonly mpesaService: MpesaService,
+  ) {}
 
   @Post('purchase')
   purchase(@Request() req: any, @Body() body: { packageId: string; routerId: string }) {
@@ -80,15 +84,25 @@ export class SubscriptionsController {
   }
 
   @Post('stk-push')
-  async stkPush(@Request() req: any, @Body() body: { subId: string }) {
-    // 1. Simulate STK Push to the user's phone
-    this.subscriptionsService['logger'].log(`Triggering STK Push for sub ${body.subId}...`);
-    
-    // 2. Delay to simulate user entering pin
-    await new Promise(r => setTimeout(r, 2000));
-    
-    // 3. Activate as MPESA
-    return this.subscriptionsService.activate(body.subId, PaymentMethod.MPESA, `SIM_${Math.random().toString(36).substring(7).toUpperCase()}`);
+  async stkPush(@Request() req: any, @Body() body: { subId: string, phone: string, amount: number }) {
+    this.logger.log(`Triggering STK Push for sub ${body.subId} with phone ${body.phone}...`);
+
+    try {
+      // 1. Trigger STK Push to the user's phone via Daraja API
+      const mpesaRes = await this.mpesaService.stkPush(
+        body.phone,
+        body.amount,
+        `SUB-${body.subId.substring(0, 8)}`,
+        'Internet Subscription'
+      );
+
+      // The subscription stays pending for now, wait for callback webhook to hit to activate it.
+      // But if Daraja isn't setup fully, you might still want manual fallback.
+      return { success: true, message: 'STK push sent', daraja: mpesaRes };
+    } catch (e: any) {
+      this.logger.error('Daraja STK push failed: ' + e?.response?.data?.errorMessage || e.message);
+      throw e;
+    }
   }
 }
 

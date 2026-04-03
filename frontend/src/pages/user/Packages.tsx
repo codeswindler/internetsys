@@ -14,8 +14,9 @@ export default function Packages() {
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [routerId, setRouterId] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);
-  const [paymentType, setPaymentType] = useState<'voucher' | 'manual' | 'mpesa'>('voucher');
+  const [paymentType, setPaymentType] = useState<'manual' | 'mpesa'>('mpesa');
   const [voucherCode, setVoucherCode] = useState('');
+  const [stkPhone, setStkPhone] = useState(localStorage.getItem('phone') || '');
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [showScroll, setShowScroll] = useState(false);
@@ -133,17 +134,18 @@ export default function Packages() {
   });
 
   const redeemMutation = useMutation({
-    mutationFn: (data: { code: string; routerId: string }) => api.post('/vouchers/redeem', data),
-    onSuccess: () => {
+    mutationFn: (data: { code: string; routerId: string }) => api.post('/vouchers/redeem', data).then(res => res.data),
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
-      toast.success('Voucher redeemed! Internet activated.');
+      const pkgName = data?.package?.name || 'Package';
+      toast.success(`Voucher redeemed! Activated: ${pkgName}`);
       navigate('/user/subscriptions');
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to redeem voucher')
   });
 
   const stkPushMutation = useMutation({
-    mutationFn: (data: { subId: string }) => api.post('/subscriptions/stk-push', data),
+    mutationFn: (data: { subId: string, phone: string, amount: number }) => api.post('/subscriptions/stk-push', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['active-subscription-list'] });
@@ -175,14 +177,11 @@ export default function Packages() {
     e.preventDefault();
     if (!routerId) return toast.error('Please select an active hotspot location');
     
-    if (paymentType === 'voucher') {
-      if (!voucherCode) return toast.error('Enter voucher code');
-      redeemMutation.mutate({ code: voucherCode, routerId });
-    } else if (paymentType === 'mpesa') {
-      // First create pure pending sub, then trigger STK
+    if (paymentType === 'mpesa') {
       try {
+        if (!stkPhone) return toast.error('Please enter M-Pesa phone number');
         const sub = await api.post('/subscriptions/purchase', { packageId: selectedPkg.id, routerId }).then(res => res.data);
-        stkPushMutation.mutate({ subId: sub.id });
+        stkPushMutation.mutate({ subId: sub.id, phone: stkPhone, amount: selectedPkg.price });
       } catch (err: any) {
         toast.error(err.response?.data?.message || 'Failed to initiate STK push');
       }
@@ -198,6 +197,36 @@ export default function Packages() {
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-white mb-2">Available Hotspot Plans</h2>
         <p className="text-slate-400">Select a plan to start browsing the internet instantly.</p>
+      </div>
+
+      {/* Global Voucher Redemption */}
+      <div className="mb-8 p-6 bg-cyan-900/10 border border-cyan-500/20 rounded-2xl animate-fade-in relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none"></div>
+        <h3 className="text-lg font-bold text-white mb-3">Have a Voucher Code?</h3>
+        <form 
+          className="flex flex-col sm:flex-row gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!voucherCode) return toast.error('Enter voucher code');
+            if (!routerId) return toast.error('Router not selected. Please connect to Hotspot first.');
+            redeemMutation.mutate({ code: voucherCode, routerId });
+          }}
+        >
+          <input 
+            className="flex-1 text-center sm:text-left tracking-widest uppercase font-mono text-lg bg-[rgba(15,23,42,0.8)] border-[rgba(255,255,255,0.1)] focus:border-cyan-400 rounded-lg p-3 text-white"
+            value={voucherCode} 
+            onChange={e => setVoucherCode(e.target.value.toUpperCase())} 
+            placeholder="ENTER VOUCHER CODE" 
+            required 
+          />
+          <button 
+            type="submit" 
+            disabled={redeemMutation.isPending}
+            className="btn-primary py-3 px-8 shadow-lg shadow-cyan-500/20 whitespace-nowrap"
+          >
+            {redeemMutation.isPending ? 'Redeeming...' : 'Redeem & Connect'}
+          </button>
+        </form>
       </div>
 
       {activeSub && (
@@ -407,12 +436,12 @@ export default function Packages() {
                 <div className="flex bg-[rgba(0,0,0,0.2)] rounded-lg p-1 mb-4">
                   <button
                     type="button"
-                    onClick={() => setPaymentType('voucher')}
+                    onClick={() => setPaymentType('mpesa')}
                     className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                      paymentType === 'voucher' ? 'bg-cyan-500/20 text-cyan-400 shadow translate-y-[0px]' : 'text-slate-400 hover:text-white'
+                      paymentType === 'mpesa' ? 'bg-green-500/20 text-green-400 shadow translate-y-[0px]' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Voucher Code
+                    M-Pesa STK
                   </button>
                   <button
                     type="button"
@@ -421,43 +450,35 @@ export default function Packages() {
                       paymentType === 'manual' ? 'bg-amber-500/20 text-amber-400 shadow translate-y-[0px]' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Pay via Admin
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentType('mpesa')}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                      paymentType === 'mpesa' ? 'bg-green-500/20 text-green-400 shadow translate-y-[0px]' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    M-Pesa STK
+                    Request Admin Activation
                   </button>
                 </div>
 
-                {paymentType === 'voucher' && (
-                  <div className="animate-fade-in">
-                    <input 
-                      className="w-full text-center tracking-widest uppercase font-mono text-lg bg-[rgba(15,23,42,0.8)] border-[rgba(255,255,255,0.1)] focus:border-cyan-400"
-                      value={voucherCode} 
-                      onChange={e => setVoucherCode(e.target.value.toUpperCase())} 
-                      placeholder="ENTER VOUCHER CODE" 
-                      required 
-                    />
-                    <p className="text-xs text-slate-500 mt-2 text-center">Codes are case-insensitive</p>
-                  </div>
-                )}
                 {paymentType === 'mpesa' && (
-                  <div className="p-4 bg-green-500/10 rounded-xl text-green-200 text-sm leading-relaxed animate-fade-in border border-green-500/20">
-                    <p className="font-bold mb-2">Automated Payment (STK Push)</p>
-                    Click the button below and you will receive a prompt on your phone (<strong>{localStorage.getItem('phone')}</strong>) to enter your M-Pesa PIN.
+                  <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20 animate-fade-in relative">
+                    <p className="font-bold text-green-300 mb-3 block text-sm">Pay with M-Pesa</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-slate-400 text-sm font-medium">Phone:</span>
+                      <input 
+                        type="tel"
+                        className="flex-1 bg-[rgba(15,23,42,0.8)] border border-[rgba(255,255,255,0.1)] focus:border-green-400 rounded-lg p-2.5 text-white font-mono"
+                        placeholder="e.g. 254712345678"
+                        value={stkPhone}
+                        onChange={(e) => setStkPhone(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <p className="text-[11px] text-green-200/60 mt-3 leading-relaxed">
+                      Confirm or edit the phone number above. An M-Pesa prompt will be sent to this number to complete the payment of KES {selectedPkg.price}.
+                    </p>
                   </div>
                 )}
               </div>
 
               <div className="flex justify-end gap-3 mt-4">
                 <button type="button" className="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-[rgba(255,255,255,0.05)] font-medium transition-colors" onClick={() => setSelectedPkg(null)}>Cancel</button>
-                <button type="submit" className="btn-primary text-base px-8 py-2.5 shadow-lg shadow-cyan-500/30" disabled={purchaseMutation.isPending || redeemMutation.isPending || stkPushMutation.isPending}>
-                  {paymentType === 'voucher' ? 'Redeem & Connect' : paymentType === 'mpesa' ? 'Pay Now (STK Push)' : 'Request Connection'}
+                <button type="submit" className="btn-primary text-base px-8 py-2.5 shadow-lg shadow-cyan-500/30" disabled={purchaseMutation.isPending || stkPushMutation.isPending}>
+                  {paymentType === 'mpesa' ? 'Send STK Prompt' : 'Submit Request'}
                 </button>
               </div>
             </form>

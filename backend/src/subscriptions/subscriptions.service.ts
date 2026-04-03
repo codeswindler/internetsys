@@ -121,6 +121,26 @@ export class SubscriptionsService {
     });
   }
 
+  async activatePendingByPhone(phone: string, paymentMethod: PaymentMethod, paymentRef?: string): Promise<Subscription> {
+    const phoneSuffix = phone.length > 9 ? phone.substring(phone.length - 9) : phone;
+
+    const sub = await this.subRepo.createQueryBuilder('sub')
+      .leftJoinAndSelect('sub.user', 'user')
+      .leftJoinAndSelect('sub.package', 'package')
+      .leftJoinAndSelect('sub.router', 'router')
+      .where("user.phone LIKE :phone", { phone: `%${phoneSuffix}` })
+      .andWhere("sub.status = :status", { status: SubscriptionStatus.PENDING })
+      .orderBy("sub.createdAt", "DESC")
+      .getOne();
+
+    if (!sub) {
+      this.logger.warn(`Webhook received for ${phone} but no pending subscription found.`);
+      throw new NotFoundException('No pending subscription found for phone');
+    }
+
+    return this.activate(sub.id, paymentMethod, paymentRef);
+  }
+
   async allocate(userId: string, packageId: string, routerId: string): Promise<Subscription> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
