@@ -58,13 +58,14 @@ export default function Packages() {
   }, [routers]);
 
   // Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
-  const { data: recentSub = null } = useQuery({
-    queryKey: ['recent-subscription'],
-    queryFn: () => api.get('/subscriptions/recent').then(res => res.data),
+  const { data: allActiveSubs = [] } = useQuery({
+    queryKey: ['active-all-subscriptions'],
+    queryFn: () => api.get('/subscriptions/active-all').then(res => res.data),
     refetchInterval: 10000,
   });
 
-  const activeSub = recentSub;
+  const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
+
 
 
   // Poll for real-time traffic
@@ -205,157 +206,66 @@ export default function Packages() {
 
 
 
-      {activeSub && (
-        <div 
-          onClick={() => navigate('/user/subscriptions')}
-          className="mb-10 glass-panel p-6 border-cyan-500/30 bg-gradient-to-r from-[rgba(14,165,233,0.1)] to-transparent flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:border-cyan-400/50 transition-all group animate-fade-in"
-        >
-          {/* Left Side: Session Info */}
-          <div className="flex items-center gap-5">
-            <div className="p-4 bg-cyan-500/20 text-cyan-400 rounded-2xl group-hover:scale-110 transition-transform">
-              <Activity className="animate-pulse" size={32} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">Active Session</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-              </div>
-              <h3 className="text-2xl font-black text-main">{activeSub.package?.name}</h3>
-              <div className="flex flex-col gap-3">
-                <p className="text-xs text-muted">Connected to <span className="font-bold text-main">{activeSub.router?.name}</span></p>
-
-
-                <div className="flex flex-wrap gap-4">
-                  {activeSub.deviceSessions && activeSub.deviceSessions.length > 0 ? (
-                    activeSub.deviceSessions.map((session: any) => (
-                      <div key={session.id} className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/80 backdrop-blur-md p-4 rounded-2xl border border-cyan-500/20 shadow-lg group/card hover:border-cyan-400 transition-all">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover/card:scale-110 transition-transform">
-                            <Smartphone size={20} />
-                          </div>
-                          <div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Device ID</div>
-                            <div className="text-slate-100 font-black font-mono text-xs">
-                              {session.deviceModel || 'Unknown Device'}
-                            </div>
-                            <div className="text-[9px] text-slate-500 font-mono truncate max-w-[120px]">{session.macAddress}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
-                        
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${session.isActive ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
-                          <div className="text-[11px] font-bold text-slate-300">
-                            {session.isActive ? 'Verified' : 'Inactive'}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="flex items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700/50">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center text-slate-500">
-                          <Smartphone size={20} />
-                        </div>
-                        <div>
-                          <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ID</div>
-                          <div className="text-slate-100 font-black font-mono">
-                            READY TO CONNECT
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
+      {allActiveSubs.length > 0 && (
+        <div className="mb-12 space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-[10px] font-black tracking-[0.2em] text-cyan-400 uppercase">Your Active Plans ({allActiveSubs.length})</h3>
           </div>
-
-          {/* Right Side: Action or Status */}
-          <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
-            {activeSub.startedAt ? (
-              <div className="flex flex-col items-center md:items-end gap-2 text-right">
-                <CountdownBadge expiresAt={activeSub.expiresAt} startedAt={activeSub.startedAt} variant="block" />
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Time Remaining</p>
-                
-                {/* Traffic Speedometer - Only active when internet is running */}
-                <div className="flex items-center gap-3 mt-1 bg-black/40 px-3 py-1 rounded-lg border border-white/5">
-                  <div className="flex items-center gap-1.5 text-cyan-400">
-                    <Download size={12} />
-                    <span className="text-[10px] font-mono font-bold">{traffic.downloadSpeed}</span>
+          
+          {allActiveSubs.map((sub: any) => (
+            <div 
+              key={sub.id}
+              onClick={() => navigate('/user/subscriptions')}
+              className="glass-panel p-6 border-cyan-500/30 bg-panel flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:border-cyan-400/50 transition-all group animate-fade-in"
+            >
+              <div className="flex items-center gap-5">
+                <div className="p-4 bg-cyan-500/20 text-cyan-400 rounded-2xl group-hover:scale-110 transition-transform">
+                  <Activity className={sub.startedAt ? "animate-pulse" : ""} size={32} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">
+                      {sub.startedAt ? 'Session Live' : 'READY TO START'}
+                    </span>
+                    {sub.startedAt && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>}
                   </div>
-                  <div className="flex items-center gap-1.5 text-blue-400">
-                    <Upload size={12} />
-                    <span className="text-[10px] font-mono font-bold">{traffic.uploadSpeed}</span>
-                  </div>
+                  <h3 className="text-2xl font-black text-main">{sub.package?.name}</h3>
+                  <p className="text-xs text-muted font-bold">Authorized for <span className="text-cyan-400">{sub.router?.name}</span></p>
                 </div>
               </div>
-            ) : (
-              <div className="w-full md:w-auto">
-                {!(activeSub.user?.lastMac || localStorage.getItem('hotspot_mac')) ? (
-                  /* STEP 1: Verify Identity if missing */
+
+              <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
+                {sub.startedAt ? (
+                  <div className="flex flex-col items-center md:items-end gap-2 text-right">
+                    <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="block" />
+                    <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Time Remaining</p>
+                  </div>
+                ) : (
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      const gateway = activeSub.router.localGateway || '10.5.50.1';
-                      window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
+                      startMutation.mutate(sub.id);
                     }}
-                    className="w-full md:w-auto bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-3 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all hover:scale-105 active:scale-95"
+                    disabled={startMutation.isPending}
+                    className="btn-primary w-full md:w-48 py-4 text-sm font-black tracking-widest uppercase shadow-lg shadow-cyan-900/40 transform active:scale-95 transition-all flex items-center justify-center gap-3"
                   >
-                    <RefreshCw size={18} className="animate-spin" />
-                    Verify Device
+                    {startMutation.isPending ? (
+                      <RefreshCw size={18} className="animate-spin" />
+                    ) : (
+                      <>START BROWSING <ArrowRight size={18} /></>
+                    )}
                   </button>
-                ) : (
-                  /* STEP 2: Connect once identity is known */
-                  /* Condition: If session is STARTED and within validity, show ONLINE badge */
-                  (activeSub.startedAt || traffic.downloadSpeed !== '0 bps' || traffic.uploadSpeed !== '0 bps') ? (
-                    <div className="w-full md:w-auto flex items-center justify-between gap-4 bg-emerald-500/10 border border-emerald-500/30 px-6 py-3 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                        <span className="text-emerald-400 font-black tracking-widest uppercase text-sm">SURFING LIVE & ACTIVE</span>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          localStorage.removeItem('hotspot_mac');
-                          localStorage.removeItem('hotspot_ip');
-                          startMutation.mutate(activeSub.id);
-                        }}
-                        className="text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase transition-colors"
-                        title="Click if no internet"
-                      >
-                        FIX IDENTITY
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => startMutation.mutate(activeSub.id)}
-                      disabled={startMutation.isPending || isLaunching}
-                      className="bg-cyan-600 hover:bg-cyan-500 text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-cyan-900/40 border border-cyan-400/30 flex items-center justify-center min-w-[140px]"
-                    >
-                      {isLaunching ? (
-                        <div className="flex flex-col items-center gap-1.5 w-full">
-                           <span className="text-[9px] font-black animate-pulse text-white/90">LAUNCHING...</span>
-                           <div className="w-24 h-1 bg-white/10 rounded-full overflow-hidden">
-                             <div className="h-full bg-cyan-300 animate-launch-progress" />
-                           </div>
-                        </div>
-                      ) : (
-                        startMutation.isPending ? 'Connecting...' : 'Connect'
-                      )}
-                    </button>
-                  )
                 )}
+                
+                <div className="flex items-center gap-2 text-cyan-400 text-[10px] font-bold group-hover:gap-3 transition-all">
+                  Manage Connection <ArrowRight size={12} />
+                </div>
               </div>
-            )}
-            
-            <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold group-hover:gap-3 transition-all">
-              Manage Connection <ArrowRight size={14} />
             </div>
-          </div>
+          ))}
         </div>
       )}
+
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {packages?.map((pkg: any) => (

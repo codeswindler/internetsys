@@ -147,11 +147,11 @@ export default function MainLayout({ role }: LayoutProps) {
   }, [token, API_URL]);
 
   // Global Sync Sentinal: Monitor Recent/Active Subscription for Banner & Auto-Redirect
-  const { data: recentSub = null } = useQuery({
-    queryKey: ['recent-subscription'],
+  const { data: allActiveSubs = [] } = useQuery({
+    queryKey: ['active-all-subscriptions'],
     queryFn: async () => {
-      if (role !== 'user' || !token) return null;
-      const res = await axios.get(`${API_URL}/subscriptions/recent`, {
+      if (role !== 'user' || !token) return [];
+      const res = await axios.get(`${API_URL}/subscriptions/active-all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
@@ -160,8 +160,9 @@ export default function MainLayout({ role }: LayoutProps) {
     enabled: role === 'user' && !!token,
   });
 
-  // Alias for backward compatibility in the JSX
-  const activeSub = recentSub;
+  // Pick the most relevant one for the quick-actions banner
+  const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
+
 
   const fireInternet = (customUser?: string, customPass?: string) => {
     if (!activeSub && !customUser) {
@@ -406,10 +407,18 @@ export default function MainLayout({ role }: LayoutProps) {
 
         {role === 'user' && activeSub && (
           <div className="p-4 mx-4 mb-2 glass-panel border-cyan-500/30 bg-panel">
-            <div className="flex items-center gap-2 mb-1">
-              <Zap size={14} className="text-cyan-400 fill-cyan-400 animate-pulse" />
-              <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Session</span>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <div className="flex items-center gap-2">
+                <Zap size={14} className="text-cyan-400 fill-cyan-400 animate-pulse" />
+                <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Session</span>
+              </div>
+              {allActiveSubs.length > 1 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 text-[9px] font-bold">
+                   +{allActiveSubs.length - 1} MORE
+                </span>
+              )}
             </div>
+
             <div className="text-xs text-main font-medium truncate mb-2">
               {activeSub.package?.name || 'Hotspot Plan'}
             </div>
@@ -434,18 +443,8 @@ export default function MainLayout({ role }: LayoutProps) {
                 <span className="font-bold text-sm truncate text-main">{currentUser?.name || currentUser?.username || 'Profile'}</span>
                 <span className="text-[10px] text-cyan-400/80 uppercase tracking-wider font-bold">{role}</span>
               </div>
-            </button>
+            </button>  </div>
 
-
-            <button 
-              onClick={toggleTheme}
-              className="p-3 rounded-lg bg-panel text-muted hover:text-cyan-400 hover:bg-panel-hover transition-all border border-border-color"
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-
-          </div>
           
           <button 
             onClick={handleLogout}
@@ -484,6 +483,25 @@ export default function MainLayout({ role }: LayoutProps) {
 
           {/* Icons Stack: Right aligned on both views */}
           <div className="flex-1 flex items-center justify-end gap-3">
+             <button 
+               onClick={toggleTheme}
+               className="p-2.5 rounded-xl bg-white/5 text-muted hover:text-cyan-400 hover:bg-white/10 hover:shadow-[0_0_15px_rgba(34,211,238,0.1)] transition-all duration-300 border border-white/5 group relative"
+               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+             >
+               <div className="relative w-5 h-5 flex items-center justify-center">
+                 {theme === 'dark' ? (
+                   <Sun size={20} className="transition-all duration-500 rotate-0 scale-100 group-hover:rotate-45" />
+                 ) : (
+                   <Moon size={20} className="transition-all duration-500 rotate-0 scale-100 group-hover:-rotate-12" />
+                 )}
+               </div>
+               {/* Tooltip hint for premium feel */}
+               <span className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 border border-white/10 rounded text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                 Toggle Theme
+               </span>
+             </button>
+
+
              <button 
                onClick={() => setIsRedeemModalOpen(true)}
                className="p-1 px-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all flex items-center gap-1.5"

@@ -118,19 +118,52 @@ export class SubscriptionsService {
   }
 
   async findRecent(userId: string): Promise<any | null> {
-    // Get the absolute most recent subscription for the banner
-    const sub = await this.subRepo.findOne({
+    // Priority 1: Specifically Active and not expired
+    const active = await this.subRepo.findOne({
+      where: { 
+        user: { id: userId }, 
+        status: SubscriptionStatus.ACTIVE,
+        // If expiresAt is set, it must be in the future. If null, it's "Ready to Start".
+      },
+      relations: ['package', 'router', 'user', 'deviceSessions'],
+      order: { createdAt: 'DESC' },
+    });
+
+    if (active && (!active.expiresAt || new Date(active.expiresAt) > new Date())) {
+      return { ...active, isActive: true };
+    }
+
+    // Priority 2: Absolute most recent regardless of status
+    const recent = await this.subRepo.findOne({
       where: { user: { id: userId } },
       relations: ['package', 'router', 'user', 'deviceSessions'],
       order: { createdAt: 'DESC' },
     });
     
-    if (!sub) return null;
+    if (!recent) return null;
     
-    // Check if it's "effectively" active (not expired yet)
-    const isActive = sub.status === SubscriptionStatus.ACTIVE;
-    return { ...sub, isActive };
+    const isActive = recent.status === SubscriptionStatus.ACTIVE && (!recent.expiresAt || new Date(recent.expiresAt) > new Date());
+    return { ...recent, isActive };
   }
+
+  async findAllActive(userId: string): Promise<Subscription[]> {
+    const all = await this.subRepo.find({
+      where: { user: { id: userId } },
+      relations: ['package', 'router', 'user', 'deviceSessions'],
+      order: { createdAt: 'DESC' },
+    });
+
+    // Filter for "Actionable" subs: Active & Not Expired, or Pending
+    return all.filter(sub => {
+      if (sub.status === SubscriptionStatus.PENDING) return true;
+      if (sub.status === SubscriptionStatus.ACTIVE) {
+        if (!sub.expiresAt) return true; // Ready to start
+        return new Date(sub.expiresAt) > new Date(); // Running
+      }
+      return false;
+    });
+  }
+
 
 
   async findAll(): Promise<Subscription[]> {

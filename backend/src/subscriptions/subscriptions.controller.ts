@@ -37,6 +37,12 @@ export class SubscriptionsController {
     return this.subscriptionsService.findRecent(req.user.id);
   }
 
+  @Get('active-all')
+  findActiveAll(@Request() req: any) {
+    return this.subscriptionsService.findAllActive(req.user.id);
+  }
+
+
 
   @Get('my/traffic')
   myTraffic(@Request() req: any) {

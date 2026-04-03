@@ -27,6 +27,7 @@ import { useRef, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
+
 export default function Subscriptions() {
   const queryClient = useQueryClient();
   const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string) => void }>();
@@ -46,17 +47,16 @@ export default function Subscriptions() {
   });
 
   // 2. Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
-  const { data: recentSub = null } = useQuery({
-    queryKey: ['recent-subscription'],
+  const { data: allActiveSubs = [] } = useQuery({
+    queryKey: ['active-all-subscriptions'],
     queryFn: async () => {
-      const res = await api.get('/subscriptions/recent');
+      const res = await api.get('/subscriptions/active-all');
       return res.data;
     },
     refetchInterval: 10000,
   });
 
-  const activeSub = recentSub;
-
+  const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
 
   const startMutation = useMutation({
     mutationFn: (id: string) => api.post(`/subscriptions/${id}/start`, { 
@@ -65,8 +65,7 @@ export default function Subscriptions() {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
-      queryClient.invalidateQueries({ queryKey: ['active-subscription-list'] });
-      queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       
       setIsLaunching(true);
       toast.success('Internet Flowing! Launching in 3s...', { 
@@ -87,10 +86,10 @@ export default function Subscriptions() {
   });
 
   const pastSubs = Array.isArray(subscriptions) 
-    ? subscriptions.filter((s: any) => s.id !== activeSub?.id)
+    ? subscriptions.filter((s: any) => !allActiveSubs.some((a: any) => a.id === s.id))
     : [];
 
-  // Poll traffic for active session
+  // Poll traffic for active session (only for the primary one)
   useEffect(() => {
     if (!activeSub?.id || !activeSub?.startedAt) return;
 
@@ -138,198 +137,100 @@ export default function Subscriptions() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto pb-20">
+    <div className="max-w-4xl mx-auto pb-20 px-4">
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-main mb-2">My Connection</h2>
         <p className="text-muted">Manage your active Wi-Fi sessions and device identity.</p>
       </div>
 
-
-      {activeSub && (
-        <div className="mb-10 animate-fade-in">
+      {allActiveSubs.length > 0 && (
+        <div className="mb-12 space-y-6">
           <h3 className="text-sm font-bold tracking-widest text-cyan-400 uppercase mb-4 flex items-center gap-2">
-            <Activity size={16} className="animate-pulse" /> Current Active Session
+            <Activity size={16} className="animate-pulse" />
+            Current Active Sessions ({allActiveSubs.length})
           </h3>
           
-          <div className="glass-panel p-8 relative overflow-hidden border-cyan-500/30 shadow-[0_0_30px_rgba(14,165,233,0.15)] bg-gradient-to-br from-[#0f172a] to-[rgba(14,165,233,0.1)]">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 blur-[80px] rounded-full pointer-events-none"></div>
-            
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
-              <div className="flex-1">
-                <h4 className="text-3xl font-black text-main mb-2">{activeSub.package.name}</h4>
-                <div className="flex items-center gap-2 text-muted mb-4">
-                  <RouterIcon size={16} /> 
-                  <span>Location: <span className="text-main font-bold">{activeSub.router.name}</span></span>
-                </div>
-
-
-                <div className="flex flex-wrap gap-4 mt-2">
-                  {activeSub.deviceSessions && activeSub.deviceSessions.length > 0 ? (
-                    activeSub.deviceSessions.map((session: any) => (
-                      <div key={session.id} className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/80 backdrop-blur-md p-4 rounded-xl border border-cyan-500/20 shadow-lg group/card hover:border-cyan-400 transition-all flex-1 min-w-[200px]">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover/card:scale-110 transition-transform">
-                            <Smartphone size={20} />
-                          </div>
-                          <div>
-                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Device ID</div>
-                            <div className="text-slate-200 font-mono text-xs font-bold truncate max-w-[120px]">
-                              {session.deviceModel || 'Unknown Device'}
-                            </div>
-                            <div className="text-[9px] text-slate-500 font-mono truncate max-w-[120px]">{session.macAddress}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
-                        
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${session.isActive ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
-                          <div className="text-[11px] font-bold text-slate-400">
-                            {session.isActive ? 'Verified' : 'Inactive'}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="flex items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-slate-700/30 w-full">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-slate-500">
-                          <Smartphone size={20} />
-                        </div>
-                        <div>
-                          <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Device Model</div>
-                          <div className="text-slate-200 font-mono text-xs font-bold">
-                            READY TO CONNECT
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              <div className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 w-full md:w-auto min-w-[300px]">
-                <div className="flex flex-col gap-4">
-                  {activeSub.router.connectionMode === 'hotspot' && (
-                    <>
-                      {/* Hidden MikroTik Login Form */}
-                      <form 
-                        method="post" 
-                        action={`http://${activeSub.router.localGateway || '10.5.50.1'}/login`}
-                        className="hidden"
-                        target="ghost-frame"
-                      >
-                        <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
-                        <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
-                        <input type="hidden" name="dst" value="https://google.com" />
-                      </form>
-                      <iframe name="ghost-frame" className="hidden" />
-
-                      <div className="space-y-6">
-                        {!(activeSub.user?.lastMac || localStorage.getItem('hotspot_mac')) ? (
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const gateway = activeSub.router.localGateway || '10.5.50.1';
-                              window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.href)}`;
-                            }}
-                            className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 px-6 py-4 rounded-xl flex items-center justify-center gap-3 font-black uppercase tracking-widest shadow-xl shadow-amber-500/20 transition-all hover:scale-105 active:scale-95 border-none"
-                          >
-                            <RefreshCw size={20} className="animate-spin" />
-                            Verify My Device
-                          </button>
-                        ) : (
-                          /* Condition: If session is STARTED and within validity, show ONLINE badge */
-                          (activeSub.startedAt || traffic.downloadSpeed !== '0 bps' || traffic.uploadSpeed !== '0 bps') ? (
-                            <div className="w-full flex items-center justify-between gap-4 bg-emerald-500/10 border border-emerald-500/30 px-6 py-4 rounded-xl shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                              <div className="flex items-center gap-3">
-                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-                                <span className="text-emerald-400 font-black tracking-widest uppercase text-sm">SURFING LIVE</span>
-                              </div>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  fireInternet();
-                                  toast.success('Connection request sent!', { icon: '🔥' });
-                                }}
-                                className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-lg border border-cyan-500/30 text-[10px] font-black uppercase transition-all"
-                                title="Click if no internet"
-                              >
-                                RESUME SESSION
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                startMutation.mutate(activeSub.id, {
-                                  onSuccess: () => {
-                                    setTimeout(() => fireInternet(), 500);
-                                  }
-                                });
-                              }}
-                              disabled={startMutation.isPending || isLaunching}
-                              className="w-full h-14 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black rounded-2xl shadow-lg shadow-cyan-500/25 transition-all text-sm uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-50 group"
-                            >
-                              {isLaunching ? (
-                                <div className="flex flex-col items-center gap-1.5 w-full px-8">
-                                  <div className="flex items-center gap-2">
-                                     <span className="text-[10px] font-black animate-pulse text-white/90">LAUNCHING INTERNET</span>
-                                     <Zap size={14} className="animate-bounce" />
-                                  </div>
-                                  <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
-                                    <div className="h-full bg-cyan-300 animate-launch-progress" />
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <Zap size={20} className="fill-white group-active:scale-90 transition-transform" />
-                                  {startMutation.isPending ? 'Unblocking Gate...' : '1-Click Connect'}
-                                </>
-                              )}
-                            </button>
-                          )
-                        )}
-
-                        {activeSub.startedAt && (
-                          <div className="flex justify-around items-center bg-black/40 p-4 rounded-xl border border-white/5">
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="flex items-center gap-2 text-cyan-400 font-bold">
-                                <Download size={16} />
-                                <span className="text-sm font-mono">{traffic.downloadSpeed}</span>
-                              </div>
-                              <span className="text-[9px] uppercase tracking-tighter text-slate-500">Download</span>
-                            </div>
-                            <div className="w-px h-8 bg-white/10"></div>
-                            <div className="flex flex-col items-center gap-1">
-                              <div className="flex items-center gap-2 text-blue-400 font-bold">
-                                <Upload size={16} />
-                                <span className="text-sm font-mono">{traffic.uploadSpeed}</span>
-                              </div>
-                              <span className="text-[9px] uppercase tracking-tighter text-slate-500">Upload</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-
-                  <div className="pt-4 border-t border-white/10 flex justify-between items-end">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Remaining Time</span>
-                      <CountdownBadge expiresAt={activeSub.expiresAt} startedAt={activeSub.startedAt} size="lg" />
-                    </div>
-                    <div className="text-right">
-                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Status</span>
-                       <div className="text-emerald-400 font-bold text-sm bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                         {activeSub.startedAt ? 'CONNECTED' : 'READY TO START'}
-                       </div>
-                    </div>
+          {allActiveSubs.map((sub: any) => (
+            <div key={sub.id} className="glass-panel p-6 border-cyan-500/30 bg-panel shadow-lg shadow-cyan-900/10 animate-fade-in relative overflow-hidden group">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${sub.startedAt ? 'bg-emerald-500/20 text-emerald-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                      {sub.startedAt ? 'Online Now' : 'READY TO START'}
+                    </span>
+                    {sub.startedAt && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>}
                   </div>
+                  <h4 className="text-3xl font-black text-main mb-2">{sub.package.name}</h4>
+                  <div className="flex items-center gap-2 text-muted mb-4">
+                    <RouterIcon size={16} /> 
+                    <span>Authorized for: <span className="text-main font-bold">{sub.router.name}</span></span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-4">
+                    {sub.deviceSessions && sub.deviceSessions.length > 0 ? (
+                      sub.deviceSessions.map((session: any) => (
+                        <div key={session.id} className="flex items-center gap-3 bg-panel p-3 rounded-xl border border-border-color shadow-sm">
+                          <Smartphone size={16} className="text-cyan-400" />
+                          <div>
+                            <div className="text-[10px] text-main font-bold font-mono">
+                              {session.deviceModel || 'Connected Device'}
+                            </div>
+                            <div className="text-[8px] text-muted font-mono">{session.macAddress}</div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex items-center gap-3 bg-panel p-3 rounded-xl border border-border-color shadow-sm border-dashed">
+                        <Smartphone size={16} className="text-muted" />
+                        <div className="text-[10px] text-muted font-bold">READY TO CONNECT</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
+                  {sub.startedAt ? (
+                    <div className="flex flex-col items-center md:items-end gap-2">
+                      <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="block" />
+                      
+                      {sub.id === activeSub?.id && (
+                        <div className="flex items-center gap-4 bg-muted/5 px-4 py-2 rounded-xl border border-border-color">
+                           <div className="flex items-center gap-2 text-cyan-400">
+                             <Download size={14} />
+                             <span className="text-xs font-mono font-bold">{traffic.downloadSpeed}</span>
+                           </div>
+                           <div className="flex items-center gap-2 text-blue-400">
+                             <Upload size={14} />
+                             <span className="text-xs font-mono font-bold">{traffic.uploadSpeed}</span>
+                           </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => startMutation.mutate(sub.id)}
+                      disabled={startMutation.isPending}
+                      className="btn-primary w-full md:w-56 py-4 text-sm font-black tracking-widest uppercase shadow-lg shadow-cyan-900/40 hover:scale-105 transition-all flex items-center justify-center gap-3"
+                    >
+                      {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : <><Play size={18} /> Start Browsing</>}
+                    </button>
+                  )}
+                  
+                  <button 
+                    onClick={() => {
+                        localStorage.removeItem('hotspot_mac');
+                        localStorage.removeItem('hotspot_ip');
+                        startMutation.mutate(sub.id);
+                        toast.success('Repaired device identity!', { icon: '🔧' });
+                    }}
+                    className="text-[10px] font-bold text-muted hover:text-cyan-400 flex items-center gap-1.5 transition-colors"
+                  >
+                    <RefreshCw size={12} /> Fix Connection
+                  </button>
                 </div>
               </div>
             </div>
-          </div>
+          ))}
         </div>
       )}
 
@@ -356,15 +257,15 @@ export default function Subscriptions() {
                       <History size={24} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-white text-lg">{sub.package.name}</h4>
-                      <p className="text-xs text-slate-500 flex items-center gap-2">
+                      <h4 className="font-bold text-main text-lg">{sub.package.name}</h4>
+                      <p className="text-xs text-muted flex items-center gap-2">
                         <MapPin size={12} /> {sub.router.name} • {new Date(sub.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-white font-bold mb-1">KES {sub.amountPaid}</div>
-                    <div className="text-[10px] text-slate-500 font-bold px-2 py-1 bg-slate-800 rounded uppercase tracking-wider">
+                    <div className="text-main font-bold mb-1">KES {sub.amountPaid}</div>
+                    <div className="text-[10px] text-muted font-bold px-2 py-1 bg-panel border border-border-color rounded uppercase tracking-wider">
                       {sub.status}
                     </div>
                   </div>
