@@ -310,9 +310,10 @@ export class SubscriptionsService {
         }
       } catch (e) {
         this.logger.error(
-          `Failed to remove user on expire for sub ${subId}`,
+          `Failed to remove user from router on expire for sub ${subId}. Aborting expiry to retry.`,
           e,
         );
+        throw e; // Rethrow to prevent marking as EXPIRED in DB
       }
     }
 
