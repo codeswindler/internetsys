@@ -606,13 +606,12 @@ export default function MainLayout({ role }: LayoutProps) {
                   </button>
                </div>
                <div className="p-8 flex flex-col gap-6">
-                  <p className="text-sm text-slate-400">Enter your 6-digit voucher code below to instantly activate your internet plan.</p>
+                  <p className="text-sm text-slate-400">Enter your voucher code below to instantly activate your internet plan.</p>
                   <form 
                     className="flex flex-col gap-4"
                     onSubmit={(e) => {
                       e.preventDefault();
-                      const rid = localStorage.getItem('hotspot_router_id') || activeSub?.router?.id;
-                      if (!rid) return toast.error('HOTSPOT ERROR: Please disconnect and reconnect to the WiFi to detect your location.');
+                      const rid = localStorage.getItem('hotspot_router_id') || activeSub?.router?.id || '';
                       redeemMutation.mutate({ code: voucherCode, routerId: rid });
                     }}
                   >
@@ -621,8 +620,8 @@ export default function MainLayout({ role }: LayoutProps) {
                       className="w-full text-center tracking-[0.4em] uppercase font-mono text-3xl bg-black/40 border-slate-700 focus:border-cyan-500 rounded-xl p-4 text-cyan-400 shadow-inner"
                       value={voucherCode} 
                       onChange={e => setVoucherCode(e.target.value.toUpperCase())} 
-                      placeholder="XXXXXX" 
-                      maxLength={10}
+                      placeholder="Enter code" 
+                      maxLength={12}
                       required 
                     />
                     <button 

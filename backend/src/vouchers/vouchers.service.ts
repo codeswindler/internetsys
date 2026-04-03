@@ -47,7 +47,7 @@ export class VouchersService {
   async redeem(
     code: string,
     user: User,
-    routerId: string,
+    routerId: string | undefined,
     subscriptionsService: any,
   ): Promise<any> {
     const voucher = await this.voucherRepo.findOne({
@@ -58,11 +58,28 @@ export class VouchersService {
     if (voucher.isRedeemed)
       throw new BadRequestException('Voucher has already been redeemed');
 
+    // Auto-resolve router if none provided
+    let finalRouterId = routerId;
+    if (!finalRouterId) {
+      // Use the first online router from the database
+      const { Repository } = require('typeorm');
+      const Router = require('../entities/router.entity').Router;
+      const routerRepo = subscriptionsService.routerRepo as Repository<typeof Router>;
+      if (routerRepo) {
+        const firstRouter = await routerRepo.findOne({ where: { isOnline: true } });
+        if (firstRouter) finalRouterId = firstRouter.id;
+      }
+    }
+
+    if (!finalRouterId) {
+      throw new BadRequestException('No router available. Contact support.');
+    }
+
     // Purchase using SubscriptionsService
     const sub = await subscriptionsService.purchase(
       user.id,
       voucher.package.id,
-      routerId,
+      finalRouterId,
     );
 
     // Activate immediately
