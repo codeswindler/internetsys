@@ -122,6 +122,7 @@ export default function Packages() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       toast.success('Internet Activated!');
     },
     onError: (err: any) => {
@@ -135,6 +136,7 @@ export default function Packages() {
     mutationFn: (data: { packageId: string; routerId: string }) => api.post('/subscriptions/purchase', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       toast.success('Subscription requested! Admin will review your payment.');
       navigate('/user/subscriptions');
     },
@@ -145,6 +147,7 @@ export default function Packages() {
     mutationFn: (data: { code: string; routerId: string }) => api.post('/vouchers/redeem', data).then(res => res.data),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       const pkgName = data?.package?.name || 'Package';
       toast.success(`Voucher redeemed! Activated: ${pkgName}`);
       navigate('/user/subscriptions');
@@ -155,8 +158,7 @@ export default function Packages() {
   const stkPushMutation = useMutation({
     mutationFn: (data: { subId: string, phone: string, amount: number }) => api.post('/subscriptions/stk-push', data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
-      queryClient.invalidateQueries({ queryKey: ['active-subscription-list'] });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       
       setIsLaunching(true);
