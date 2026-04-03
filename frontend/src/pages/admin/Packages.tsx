@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -16,6 +16,30 @@ export default function Packages() {
     name: '', durationType: 'hours', durationValue: 1, price: 0, bandwidthProfile: 'default', dataLimitMB: 0, isActive: true,
     downloadSpeed: '', uploadSpeed: ''
   });
+
+  useEffect(() => {
+    if (formData.bandwidthProfile) {
+      if (formData.bandwidthProfile === 'default') {
+        setFormData(prev => ({ ...prev, downloadSpeed: 'Unlimited', uploadSpeed: 'Unlimited' }));
+        return;
+      }
+      
+      const bProfile = formData.bandwidthProfile.toUpperCase();
+      // Test Rx/Tx like 5M/10M
+      const rxTxMatch = bProfile.match(/(\d+)[A-Z]*\/(\d+)[A-Z]*/);
+      if (rxTxMatch) {
+        setFormData(prev => ({ ...prev, uploadSpeed: `${rxTxMatch[1]} Mbps`, downloadSpeed: `${rxTxMatch[2]} Mbps` }));
+        return;
+      }
+      
+      // Test single speed like 10Mbps_Home
+      const singleMatch = bProfile.match(/(\d+)(M|MBPS)/);
+      if (singleMatch) {
+        const speed = `${singleMatch[1]} Mbps`;
+        setFormData(prev => ({ ...prev, downloadSpeed: speed, uploadSpeed: speed }));
+      }
+    }
+  }, [formData.bandwidthProfile]);
 
   const { data: packages, isLoading } = useQuery({
     queryKey: ['packages', 'all'],
@@ -219,18 +243,26 @@ export default function Packages() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-cyan-500/5 border border-cyan-500/10 rounded-xl">
-                    <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-4">Marketing Speeds</h4>
+                  <div className="p-4 bg-cyan-500/5 border border-cyan-500/10 rounded-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 -mr-4 -mt-4 w-20 h-20 bg-cyan-500/10 blur-2xl pointer-events-none rounded-full"></div>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Marketing Speeds</h4>
+                      <span className="text-[9px] uppercase tracking-wider bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded border border-cyan-500/30">Auto-Derived</span>
+                    </div>
                     <div className="flex gap-4">
                       <div className="flex-1">
-                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Download (e.g. 5 Mbps)</label>
-                        <input className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-cyan-500 transition-all text-sm" value={formData.downloadSpeed} onChange={e => setFormData({...formData, downloadSpeed: e.target.value})} placeholder="Download" />
+                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Download</label>
+                        <input className="w-full bg-slate-900 border border-slate-700/50 rounded-lg p-2.5 text-cyan-300 font-bold focus:outline-none text-sm cursor-not-allowed" value={formData.downloadSpeed || 'N/A'} readOnly title="Auto-derived from Bandwidth Profile" />
                       </div>
                       <div className="flex-1">
-                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Upload (e.g. 2 Mbps)</label>
-                        <input className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-cyan-500 transition-all text-sm" value={formData.uploadSpeed} onChange={e => setFormData({...formData, uploadSpeed: e.target.value})} placeholder="Upload" />
+                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Upload</label>
+                        <input className="w-full bg-slate-900 border border-slate-700/50 rounded-lg p-2.5 text-cyan-300 font-bold focus:outline-none text-sm cursor-not-allowed" value={formData.uploadSpeed || 'N/A'} readOnly title="Auto-derived from Bandwidth Profile" />
                       </div>
                     </div>
+                    <p className="text-[10px] text-cyan-200/50 mt-3 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/50 block"></span>
+                      Display speeds for the user dashboard are extracted from the Profile name.
+                    </p>
                   </div>
                 </div>
 
