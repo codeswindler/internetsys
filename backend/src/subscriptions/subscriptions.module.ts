@@ -9,11 +9,14 @@ import { Package } from '../entities/package.entity';
 import { User } from '../entities/user.entity';
 import { Router } from '../entities/router.entity';
 import { RoutersModule } from '../routers/routers.module';
+import { DeviceSession } from '../entities/device-session.entity';
+
 import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Subscription, Package, User, Router]),
+    TypeOrmModule.forFeature([Subscription, Package, User, Router, DeviceSession]),
+
     RoutersModule, // To use MikrotikService
     TransactionsModule,
   ],

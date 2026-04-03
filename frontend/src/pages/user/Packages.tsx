@@ -198,9 +198,10 @@ export default function Packages() {
   return (
     <div>
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">Available Hotspot Plans</h2>
-        <p className="text-slate-400">Select a plan to start browsing the internet instantly.</p>
+        <h2 className="text-3xl font-bold text-main mb-2">Available Hotspot Plans</h2>
+        <p className="text-muted">Select a plan to start browsing the internet instantly.</p>
       </div>
+
 
 
 
@@ -219,9 +220,10 @@ export default function Packages() {
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">Active Session</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
               </div>
-              <h3 className="text-2xl font-black text-white">{activeSub.package?.name}</h3>
+              <h3 className="text-2xl font-black text-main">{activeSub.package?.name}</h3>
               <div className="flex flex-col gap-3">
-                <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router?.name}</span></p>
+                <p className="text-xs text-muted">Connected to <span className="font-bold text-main">{activeSub.router?.name}</span></p>
+
 
                 <div className="flex flex-wrap gap-4">
                   {activeSub.deviceSessions && activeSub.deviceSessions.length > 0 ? (
@@ -385,14 +387,15 @@ export default function Packages() {
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 {pkg.dataLimitMB === 0 ? 'Unlimited Data' : `Up to ${pkg.dataLimitMB} MB Data Limit`}
               </li>
-              <li className="flex items-center gap-2">
+              <li className="flex items-center gap-2 text-muted">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 {pkg.downloadSpeed ? `${pkg.downloadSpeed} Download Speed` : 'High-speed connectivity'}
               </li>
-              <li className="flex items-center gap-2">
+              <li className="flex items-center gap-2 text-muted">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 Supports {pkg.maxDevices || 1} Device(s)
               </li>
+
 
               {pkg.uploadSpeed && (
                 <li className="flex items-center gap-2">

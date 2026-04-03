@@ -426,14 +426,15 @@ export default function MainLayout({ role }: LayoutProps) {
           <div className="flex items-center gap-2 w-full">
             <button 
               onClick={() => setIsProfileModalOpen(true)}
-              className="hidden md:flex items-center gap-3 px-4 py-3 flex-1 text-left rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-all overflow-hidden"
+              className="hidden md:flex items-center gap-3 px-4 py-3 flex-1 text-left rounded-lg text-muted hover:bg-white/5 hover:text-main transition-all overflow-hidden"
             >
               {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8 flex-shrink-0")}
               <div className="flex flex-col truncate">
-                <span className="font-bold text-sm truncate">{currentUser?.name || currentUser?.username || 'Profile'}</span>
+                <span className="font-bold text-sm truncate text-main">{currentUser?.name || currentUser?.username || 'Profile'}</span>
                 <span className="text-[10px] text-cyan-400/80 uppercase tracking-wider font-bold">{role}</span>
               </div>
             </button>
+
 
             <button 
               onClick={toggleTheme}
@@ -446,11 +447,12 @@ export default function MainLayout({ role }: LayoutProps) {
           
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all font-medium"
+            className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-muted hover:bg-red-500/10 hover:text-red-400 transition-all font-medium"
           >
             <LogOut size={20} />
-            <span>Logout</span>
+            <span className="text-main">Logout</span>
           </button>
+
         </div>
       </aside>
 

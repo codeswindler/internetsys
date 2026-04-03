@@ -11,7 +11,14 @@ export default {
           850: '#151e32',
           900: '#0f172a',
           950: '#0a0f18',
-        }
+        },
+        main: 'var(--text-main)',
+        muted: 'var(--text-muted)',
+        panel: 'var(--bg-panel)',
+        'panel-hover': 'var(--bg-panel-hover)',
+        input: 'var(--bg-input)',
+        'border-color': 'var(--border-color)',
+
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out forwards',

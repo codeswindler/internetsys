@@ -140,9 +140,10 @@ export default function Subscriptions() {
   return (
     <div className="max-w-4xl mx-auto pb-20">
       <div className="mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">My Connection</h2>
-        <p className="text-slate-400">Manage your active Wi-Fi sessions and device identity.</p>
+        <h2 className="text-3xl font-bold text-main mb-2">My Connection</h2>
+        <p className="text-muted">Manage your active Wi-Fi sessions and device identity.</p>
       </div>
+
 
       {activeSub && (
         <div className="mb-10 animate-fade-in">
@@ -155,11 +156,12 @@ export default function Subscriptions() {
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
               <div className="flex-1">
-                <h4 className="text-3xl font-black text-white mb-2">{activeSub.package.name}</h4>
-                <div className="flex items-center gap-2 text-slate-400 mb-4">
+                <h4 className="text-3xl font-black text-main mb-2">{activeSub.package.name}</h4>
+                <div className="flex items-center gap-2 text-muted mb-4">
                   <RouterIcon size={16} /> 
-                  <span>Location: <span className="text-slate-200 font-bold">{activeSub.router.name}</span></span>
+                  <span>Location: <span className="text-main font-bold">{activeSub.router.name}</span></span>
                 </div>
+
 
                 <div className="flex flex-wrap gap-4 mt-2">
                   {activeSub.deviceSessions && activeSub.deviceSessions.length > 0 ? (
@@ -332,9 +334,10 @@ export default function Subscriptions() {
       )}
 
       <div>
-        <h3 className="text-sm font-bold tracking-widest text-slate-500 uppercase mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-bold tracking-widest text-muted uppercase mb-4 flex items-center gap-2">
           <History size={16} /> Past Sessions
         </h3>
+
         {pastSubs.length === 0 ? (
           <div className="glass-panel p-8 text-center text-slate-500 border-dashed">
             No previous sessions found. Your history will appear here.

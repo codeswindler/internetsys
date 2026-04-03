@@ -25,19 +25,21 @@ export const AVATAR_OPTIONS = [
 export const renderAvatar = (avatarId: string | undefined, initials: string, className = "w-8 h-8") => {
   if (!avatarId) {
     return (
-      <div className={`${className} rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-xs font-bold text-cyan-400 uppercase shadow-inner`}>
+      <div className={`${className} rounded-full bg-panel border border-white/10 flex items-center justify-center text-xs font-bold text-cyan-400 uppercase shadow-inner`}>
         {initials}
       </div>
     );
+
   }
 
   const avatar = AVATAR_OPTIONS.find(a => a.id === avatarId);
   if (!avatar) {
     return (
-      <div className={`${className} rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-xs font-bold text-cyan-400 uppercase shadow-inner`}>
+      <div className={`${className} rounded-full bg-panel border border-white/10 flex items-center justify-center text-xs font-bold text-cyan-400 uppercase shadow-inner`}>
         {initials}
       </div>
     );
+
   }
 
   const Icon = avatar.icon;
@@ -99,7 +101,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onSuccess }
           <X size={20} />
         </button>
 
-        <h2 className="text-xl font-bold text-white mb-6">Edit Profile</h2>
+        <h2 className="text-xl font-bold text-main mb-6">Edit Profile</h2>
+
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-3">
@@ -128,51 +131,55 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onSuccess }
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Display Name</label>
+              <label className="block text-sm font-medium text-muted mb-1">Display Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                className="w-full bg-input border border-border-color rounded-lg px-4 py-2 text-main focus:outline-none focus:border-cyan-500 transition-colors"
                 placeholder="Your full name"
                 required
               />
             </div>
+
             
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Username</label>
+              <label className="block text-sm font-medium text-muted mb-1">Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                className="w-full bg-input border border-border-color rounded-lg px-4 py-2 text-main focus:outline-none focus:border-cyan-500 transition-colors"
                 placeholder="Choose a username"
                 required
               />
             </div>
 
+
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number</label>
+              <label className="block text-sm font-medium text-muted mb-1">Phone Number</label>
               <input
                 type="text"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                className="w-full bg-input border border-border-color rounded-lg px-4 py-2 text-main focus:outline-none focus:border-cyan-500 transition-colors"
                 placeholder="Your phone number"
               />
             </div>
+
             
             <div className="pt-2 border-t border-white/5 mt-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">New Password (Optional)</label>
+              <label className="block text-sm font-medium text-muted mb-1">New Password (Optional)</label>
               <input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                className="w-full bg-input border border-border-color rounded-lg px-4 py-2 text-main focus:outline-none focus:border-cyan-500 transition-colors"
                 placeholder="Leave blank to keep current password"
                 minLength={6}
               />
             </div>
+
           </div>
 
           <button

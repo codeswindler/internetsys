@@ -3,23 +3,25 @@
   display: flex;
   min-height: 100vh;
   width: 100%;
-  background-color: #0a0f18;
-  color: white;
+  background-color: var(--bg-main);
+  color: var(--text-main);
   font-family: 'Inter', sans-serif;
   overflow: hidden;
 }
 
+
 .auth-left {
   display: none;
   position: relative;
-  background-color: #0f172a;
+  background-color: var(--bg-main);
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-right: 1px solid var(--border-color);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   z-index: 10;
 }
+
 
 @media (min-width: 1024px) {
   .auth-left {
@@ -253,26 +255,29 @@
 .auth-header h2 {
   font-size: 1.875rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-main);
   margin-bottom: 0.5rem;
   letter-spacing: -0.025em;
 }
+
 .auth-header p {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-weight: 500;
 }
 
+
 .role-toggle {
   display: flex;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-input);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-radius: 0.75rem;
   padding: 0.25rem;
   margin-bottom: 2rem;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
   box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
 }
+
 
 .role-btn {
   flex: 1;
@@ -286,8 +291,9 @@
   gap: 0.5rem;
   transition: all 0.3s;
   background: transparent;
-  color: #64748b;
+  color: var(--text-muted);
 }
+
 
 .role-btn:hover:not(.active) {
   color: #cbd5e1;
@@ -315,9 +321,10 @@
   display: block;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #cbd5e1;
+  color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
+
 
 .input-wrapper {
   position: relative;
@@ -362,13 +369,14 @@
 .auth-input {
   width: 100%;
   padding: 0.875rem 1rem 0.875rem 2.75rem;
-  background-color: #141d2f;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
   border-radius: 0.75rem;
-  color: white;
+  color: var(--text-main);
   font-weight: 500;
   transition: all 0.2s;
 }
+
 
 .auth-input::placeholder {
   color: #475569;
@@ -423,7 +431,7 @@
 }
 
 .auth-link {
-  color: #22d3ee;
+  color: var(--accent-primary);
   font-weight: 600;
   text-decoration: none;
   transition: all 0.2s;
@@ -432,8 +440,9 @@
 .auth-link:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
-  color: #67e8f9;
+  color: var(--accent-secondary);
 }
+
 
 @keyframes pulse-slow {
   0%, 100% { transform: scale(1) rotate(-6deg); opacity: 1; }

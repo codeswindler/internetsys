@@ -21,16 +21,24 @@
 }
 
 :root.light {
-  --bg-main: #f8fafc;
-  --bg-panel: rgba(255, 255, 255, 0.95);
-  --bg-panel-hover: #ffffff;
-  --bg-input: #ffffff;
-  --text-main: #020617; /* Near black */
-  --text-muted: #1e293b; /* Dark slate (very visible) */
+  --bg-main: #fcfcfd;
+  --bg-panel: #ffffff;
+  --bg-panel-hover: #f1f5f9;
+  --bg-input: #f8fafc;
+  --text-main: #1e293b; /* Strong Dark Slate */
+  --text-muted: #475569; /* Mid Slate (good contrast) */
   --accent-primary: #0284c7;
   --accent-secondary: #0369a1;
-  --border-color: rgba(0, 0, 0, 0.15);
+  --border-color: rgba(14, 165, 233, 0.1);
 }
+
+.text-main { color: var(--text-main) !important; }
+.text-muted { color: var(--text-muted) !important; }
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-main) !important;
+}
+
 
 * {
   box-sizing: border-box;
