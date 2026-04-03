@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock } from 'lucide-react';
+import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock, ArrowRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -291,20 +291,28 @@ export default function MainLayout({ role }: LayoutProps) {
     navigate('/login');
   };
 
-  const adminLinks = [
+  interface SidebarLink {
+    name: string;
+    path: string;
+    icon: React.ReactNode;
+    onClick?: () => void;
+  }
+
+  const adminLinks: SidebarLink[] = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <Wifi size={20} /> },
     { name: 'Routers', path: '/admin/routers', icon: <Router size={20} /> },
     { name: 'Packages', path: '/admin/packages', icon: <Package size={20} /> },
     { name: 'Subscriptions', path: '/admin/subscriptions', icon: <Settings size={20} /> },
     { name: 'Vouchers', path: '/admin/vouchers', icon: <Ticket size={20} /> },
     { name: 'Users', path: '/admin/users', icon: <Users size={20} /> },
-    { name: 'Transactions', path: '/admin/transactions', icon: <Wifi size={20} /> }, // Wifi as fallback for now
+    { name: 'Transactions', path: '/admin/transactions', icon: <Wifi size={20} /> }, 
     { name: 'Support', path: '/admin/support', icon: <MessageCircle size={20} /> },
   ];
 
-  const userLinks = [
+  const userLinks: SidebarLink[] = [
     { name: 'Browse Packages', path: '/user/packages', icon: <Package size={20} /> },
     { name: 'My Subscriptions', path: '/user/subscriptions', icon: <Wifi size={20} /> },
+    { name: 'Redeem Voucher', path: '#', icon: <Ticket size={20} />, onClick: () => setIsRedeemModalOpen(true) },
   ];
 
   const links = role === 'admin' ? adminLinks : userLinks;
@@ -362,6 +370,12 @@ export default function MainLayout({ role }: LayoutProps) {
               <Link
                 key={link.path}
                 to={link.path}
+                onClick={(e) => {
+                  if (link.onClick) {
+                    e.preventDefault();
+                    link.onClick();
+                  }
+                }}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative ${
                   isActive 
                   ? 'bg-gradient-to-r from-cyan-500/10 to-transparent text-cyan-400 border-l-2 border-cyan-400 font-bold' 
@@ -396,6 +410,24 @@ export default function MainLayout({ role }: LayoutProps) {
             )
           })}
         </nav>
+
+        {role === 'user' && activeSub && (
+          <div className="p-4 mx-4 mb-2 glass-panel border-cyan-500/30 bg-cyan-500/5">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap size={14} className="text-cyan-400 fill-cyan-400 animate-pulse" />
+              <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Session</span>
+            </div>
+            <div className="text-xs text-slate-300 font-medium truncate mb-2">
+              {activeSub.package?.name || 'Hotspot Plan'}
+            </div>
+            <button 
+              onClick={() => navigate('/user/subscriptions')}
+              className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold uppercase transition-colors flex items-center gap-1"
+            >
+              Manage <ArrowRight size={10} />
+            </button>
+          </div>
+        )}
 
         <div className="p-4 border-t border-white/5 space-y-2">
           {/* Desktop User Profile Button */}

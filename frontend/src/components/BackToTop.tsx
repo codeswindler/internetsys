@@ -30,7 +30,7 @@ export function BackToTop() {
     <button
       onClick={scrollTop}
       title="Back to top"
-      className="fixed bottom-32 right-9 z-[9000] p-2 rounded-full bg-slate-950/40 backdrop-blur-md border border-white/5 text-slate-500 hover:bg-cyan-500 hover:text-white shadow-xl transition-all duration-200 hover:scale-110 active:scale-95"
+      className="fixed bottom-[120px] right-9 z-[9000] p-2 rounded-full bg-pink-600 text-white shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
     >
       <ArrowUp size={14} />
     </button>
