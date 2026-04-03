@@ -461,38 +461,30 @@ export default function MainLayout({ role }: LayoutProps) {
         onTouchEnd={handleTouchEnd}
         className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth w-full main-content-scroll"
       >
-        {/* Pull to Refresh Indicator */}
-        {pullDistance > 10 && (
-          <div 
-            className="flex flex-col items-center justify-center overflow-hidden transition-all duration-75 overflow-visible"
-            style={{ height: `${pullDistance}px`, opacity: Math.min(pullDistance / 60, 1) }}
-          >
-            <div className="flex items-center gap-2 text-cyan-400 font-bold bg-slate-900/80 px-4 py-2 rounded-full border border-cyan-500/30 shadow-lg">
-              <RefreshCw size={16} className={pullDistance > 60 ? 'animate-spin' : ''} />
-              <span className="text-xs uppercase tracking-widest">{pullDistance > 60 ? 'Release to Sync' : 'Pull to Refresh'}</span>
-            </div>
+        {/* Page Header (Desktop Header & Mobile Status) */}
+        <header className="flex items-center justify-between p-4 glass-panel mb-6 border border-white/5 md:bg-transparent md:border-none md:p-0">
+          {/* Mobile-Only Menu Button & PL Logo */}
+          <div className="flex items-center gap-4 md:hidden">
+            <button 
+              onClick={() => setIsMenuOpen(true)}
+              className="p-2 -ml-2 text-slate-300 hover:text-white transition-colors"
+            >
+              <Menu size={24} />
+            </button>
+            <span className="font-bold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">
+              PulseLynk
+            </span>
           </div>
-        )}
-        {/* Mobile Header */}
-        <header className="md:hidden flex items-center justify-between p-4 glass-panel mb-6 border border-white/5">
-          <button 
-            onClick={() => setIsMenuOpen(true)}
-            className="p-2 -ml-2 text-slate-300 hover:text-white transition-colors"
-          >
-            <Menu size={24} />
-          </button>
-          
-          <span className="font-bold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">
-             PulseLynk
-          </span>
-          
-          <div className="flex items-center gap-2">
+
+          {/* Icons Stack: Right aligned on both views */}
+          <div className="flex-1 flex items-center justify-end gap-3">
              <button 
                onClick={() => setIsRedeemModalOpen(true)}
-               className="p-1 px-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all"
+               className="p-1 px-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all flex items-center gap-1.5"
                title="Redeem Voucher"
              >
                <Ticket size={16} />
+               <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider">Redeem</span>
              </button>
 
              {role === 'user' && (
@@ -510,14 +502,31 @@ export default function MainLayout({ role }: LayoutProps) {
                  </span>
                </div>
              )}
+
              <button 
                onClick={() => setIsProfileModalOpen(true)}
-               className="flex-shrink-0 focus:outline-none transition-transform active:scale-95 ml-1"
+               className="md:hidden flex items-center justify-center rounded-full border border-white/10 p-0.5 overflow-hidden"
              >
                {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
              </button>
-           </div>
+          </div>
         </header>
+
+        {/* Pull to Refresh Indicator (Mobile Only) */}
+        <div className="md:hidden">
+          {pullDistance > 10 && (
+            <div 
+              className="flex flex-col items-center justify-center overflow-hidden transition-all duration-75 overflow-visible"
+              style={{ height: `${pullDistance}px`, opacity: Math.min(pullDistance / 60, 1) }}
+            >
+              <div className="flex items-center gap-2 text-cyan-400 font-bold bg-slate-900/80 px-4 py-2 rounded-full border border-cyan-500/30 shadow-lg mb-4">
+                <RefreshCw size={16} className={pullDistance > 60 ? 'animate-spin' : ''} />
+                <span className="text-xs uppercase tracking-widest">{pullDistance > 60 ? 'Release to Sync' : 'Pull to Refresh'}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
 
         {/* Global Hidden MikroTik Login Form */}
         {activeSub && role === 'user' && (
