@@ -149,25 +149,22 @@ export class SubscriptionsService {
   }
 
   async findActive(userId: string): Promise<Subscription | null> {
-    const sub = await this.subRepo.findOne({
-      where: { user: { id: userId }, status: SubscriptionStatus.ACTIVE },
+    const all = await this.subRepo.find({
+      where: { user: { id: userId } },
       relations: ['package', 'router', 'user', 'deviceSessions'],
       order: { createdAt: 'DESC' },
     });
-    return sub || null;
+    return all.find(sub => sub.status?.toString().toLowerCase() === 'active') || null;
   }
 
   async findRecent(userId: string): Promise<any | null> {
     // Priority 1: Specifically Active and not expired
-    const active = await this.subRepo.findOne({
-      where: {
-        user: { id: userId },
-        status: SubscriptionStatus.ACTIVE,
-        // If expiresAt is set, it must be in the future. If null, it's "Ready to Start".
-      },
+    const all = await this.subRepo.find({
+      where: { user: { id: userId } },
       relations: ['package', 'router', 'user', 'deviceSessions'],
       order: { createdAt: 'DESC' },
     });
+    const active = all.find(sub => sub.status?.toString().toLowerCase() === 'active');
 
     if (
       active &&
@@ -177,16 +174,12 @@ export class SubscriptionsService {
     }
 
     // Priority 2: Absolute most recent regardless of status
-    const recent = await this.subRepo.findOne({
-      where: { user: { id: userId } },
-      relations: ['package', 'router', 'user', 'deviceSessions'],
-      order: { createdAt: 'DESC' },
-    });
+    const recent = all[0];
 
     if (!recent) return null;
 
     const isActive =
-      recent.status === SubscriptionStatus.ACTIVE &&
+      recent.status?.toString().toLowerCase() === 'active' &&
       (!recent.expiresAt || new Date(recent.expiresAt) > new Date());
     return { ...recent, isActive };
   }
@@ -204,8 +197,9 @@ export class SubscriptionsService {
 
     // Filter for "Actionable" subs: Active & Not Expired, or Pending
     const filtered = all.filter((sub) => {
-      if (sub.status === SubscriptionStatus.PENDING) return true;
-      if (sub.status === SubscriptionStatus.ACTIVE) {
+      const status = sub.status?.toString().toLowerCase();
+      if (status === 'pending') return true;
+      if (status === 'active') {
         if (!sub.expiresAt) return true; // Ready to start
         return new Date(sub.expiresAt) > new Date(); // Running
       }
