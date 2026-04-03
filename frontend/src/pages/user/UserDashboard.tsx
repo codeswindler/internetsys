@@ -194,8 +194,8 @@ export default function UserDashboard() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-4">
-                               <div className="bg-slate-950/80 rounded-2xl px-6 py-3 border border-white/5 flex items-center gap-6 shadow-inner">
+                            <div className="flex flex-col w-full gap-3 mt-2">
+                               <div className="bg-slate-950/80 rounded-2xl px-6 py-3 border border-white/5 flex items-center justify-between gap-6 shadow-inner w-full">
                                   <div className="flex items-center gap-3">
                                     <div className="p-2 bg-cyan-500/10 rounded-lg"><Download size={14} className="text-cyan-400" /></div>
                                     <span className="text-sm font-black text-white font-mono">{traffic.downloadSpeed}</span>
@@ -206,6 +206,16 @@ export default function UserDashboard() {
                                     <span className="text-sm font-black text-white font-mono">{traffic.uploadSpeed}</span>
                                   </div>
                                </div>
+                               <button 
+                                 onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
+                                 disabled={startMutation.isPending}
+                                 className="bg-slate-900 border border-cyan-500/20 hover:bg-[#0c1a1f] hover:border-cyan-400/40 rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn shadow-lg"
+                               >
+                                 {startMutation.isPending ? <RefreshCw size={16} className="text-cyan-400 animate-spin" /> : <Wifi size={16} className="text-cyan-400 group-hover/btn:animate-pulse" />}
+                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em]">
+                                   {startMutation.isPending ? 'Connecting...' : 'Connect This Device'}
+                                 </span>
+                               </button>
                             </div>
                           </>
                         ) : (
