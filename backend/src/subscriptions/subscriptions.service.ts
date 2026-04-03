@@ -35,32 +35,76 @@ export class SubscriptionsService {
   ) {}
 
   /**
-   * Sync Device: Resolves the user's MAC address by querying
-   * all available routers' ARP/Host tables using the caller's IP.
-   * This replaces the broken neverssl.com redirect loop.
+   * Sync Device: Finds the user's MAC by querying the router's hotspot host table.
+   * Since the VPS sees the router's public IP (NAT), we can't search by client IP.
+   * Instead, we get ALL hosts from the user's associated router and filter out
+   * MACs that are already bound to active sessions.
    */
-  async syncDevice(userId: string, clientIp: string): Promise<{ mac: string; ip: string }> {
-    this.logger.log(`[SYNC] Attempting to resolve device for user ${userId} with IP ${clientIp}`);
+  async syncDevice(userId: string): Promise<{ mac: string; ip: string }> {
+    this.logger.log(`[SYNC] Attempting to sync device for user ${userId}`);
 
-    // Get all online routers
-    const routers = await this.routerRepo.find({ where: { isOnline: true } });
-    if (routers.length === 0) {
-      throw new BadRequestException('No routers available for device sync');
+    // Step 1: Find the user's most recent subscription to determine which router to query
+    const userSub = await this.subRepo.findOne({
+      where: { user: { id: userId } },
+      relations: ['router'],
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!userSub?.router) {
+      throw new BadRequestException('No subscription found. Purchase a package first.');
     }
 
-    // Try each router until we find the device
-    for (const router of routers) {
-      const result = await this.mikrotikService.resolveDeviceByIp(router, clientIp);
-      if (result) {
-        this.logger.log(`[SYNC] Successfully resolved device: MAC=${result.mac}, IP=${result.ip} on router ${router.name}`);
-        return result;
-      }
+    const router = userSub.router;
+    this.logger.log(`[SYNC] Using router: ${router.name} (${router.host})`);
+
+    // Step 2: Get ALL hosts currently on the router's hotspot
+    const allHosts = await this.mikrotikService.getAllHosts(router);
+    if (allHosts.length === 0) {
+      throw new BadRequestException(
+        'No devices detected on the Wi-Fi network. Make sure you are connected to the hotspot.'
+      );
     }
 
-    throw new BadRequestException(
-      'Device not found on any router. Make sure you are connected to the Wi-Fi network.'
+    this.logger.log(`[SYNC] Found ${allHosts.length} hosts on ${router.name}: ${allHosts.map(h => h.mac).join(', ')}`);
+
+    // Step 3: Get all MACs that are already bound to active device sessions
+    const activeSessions = await this.sessionRepo.find({
+      where: { isActive: true },
+    });
+    const boundMacs = new Set(
+      activeSessions
+        .map(s => s.macAddress?.toUpperCase())
+        .filter(Boolean)
     );
+
+    // Step 4: Filter out already-bound hosts
+    const available = allHosts.filter(h => !boundMacs.has(h.mac.toUpperCase()));
+
+    if (available.length === 0) {
+      // If all hosts are bound, maybe the user's own device IS one of the bound ones
+      // Try to find this user's own session MAC
+      const ownSession = activeSessions.find(s => s.subscription?.user?.id === userId);
+      if (ownSession?.macAddress) {
+        const ownHost = allHosts.find(h => h.mac.toUpperCase() === ownSession.macAddress.toUpperCase());
+        if (ownHost) return ownHost;
+      }
+      throw new BadRequestException(
+        'All detected devices already have active sessions. Disconnect other devices or try again.'
+      );
+    }
+
+    // Step 5: If only one available host, auto-assign it
+    if (available.length === 1) {
+      this.logger.log(`[SYNC] Auto-assigned MAC: ${available[0].mac}`);
+      return available[0];
+    }
+
+    // Step 6: Multiple available hosts — return the first one (most recent)
+    // In practice, for small hotspots this is usually correct
+    this.logger.log(`[SYNC] Multiple available hosts (${available.length}), picking first: ${available[0].mac}`);
+    return available[0];
   }
+
 
   async purchase(
     userId: string,

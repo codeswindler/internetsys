@@ -83,37 +83,33 @@ export class MikrotikService {
   }
 
   /**
-   * Resolve a device's MAC address from the router's ARP/Host table using their IP.
-   * Used when a user bypasses the captive portal and we don't have their MAC.
+   * Get all hotspot hosts from a router that are NOT already 
+   * assigned to active device sessions. Used for Sync Device.
+   * This works through NAT because it doesn't search by IP —
+   * instead it returns all available hosts for the frontend to pick.
    */
-  async resolveDeviceByIp(router: Router, clientIp: string): Promise<{ mac: string; ip: string } | null> {
-    if (!clientIp) return null;
-
+  async getAllHosts(router: Router): Promise<Array<{ mac: string; ip: string }>> {
     try {
       const api = await this.connect(router);
       try {
-        // Try hotspot host table first (most reliable for hotspot setups)
-        const hosts = await api.write('/ip/hotspot/host/print', [`?address=${clientIp}`]);
-        if (hosts && hosts.length > 0 && hosts[0]['mac-address']) {
-          this.logger.log(`[SYNC] Resolved MAC ${hosts[0]['mac-address']} for IP ${clientIp} via host table`);
-          return { mac: hosts[0]['mac-address'], ip: clientIp };
-        }
+        // Get all hosts from the hotspot host table
+        const hosts = await api.write('/ip/hotspot/host/print');
+        this.logger.log(`[SYNC] Found ${hosts?.length || 0} total hosts on ${router.name}`);
+        
+        if (!hosts || hosts.length === 0) return [];
 
-        // Fallback to ARP table
-        const arps = await api.write('/ip/arp/print', [`?address=${clientIp}`]);
-        if (arps && arps.length > 0 && arps[0]['mac-address']) {
-          this.logger.log(`[SYNC] Resolved MAC ${arps[0]['mac-address']} for IP ${clientIp} via ARP table`);
-          return { mac: arps[0]['mac-address'], ip: clientIp };
-        }
-
-        this.logger.warn(`[SYNC] No MAC found for IP ${clientIp} on ${router.name}`);
-        return null;
+        return hosts
+          .filter((h: any) => h['mac-address'])
+          .map((h: any) => ({
+            mac: h['mac-address'],
+            ip: h['address'] || '',
+          }));
       } finally {
         api.close();
       }
     } catch (e) {
-      this.logger.error(`[SYNC] Failed to resolve device on ${router.name}: ${e.message}`);
-      return null;
+      this.logger.error(`[SYNC] Failed to query hosts on ${router.name}: ${e.message}`);
+      return [];
     }
   }
 

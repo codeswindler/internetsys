@@ -29,14 +29,9 @@ export class SubscriptionsController {
 
   @Post('sync-device')
   @HttpCode(200)
-  async syncDevice(
-    @Request() req: any,
-    @Ip() clientIp: string,
-    @Body() body: { ip?: string },
-  ) {
-    const finalIp = body.ip || clientIp;
-    this.logger.log(`[SYNC] Sync device request from user ${req.user.id}, IP: ${finalIp}`);
-    return this.subscriptionsService.syncDevice(req.user.id, finalIp);
+  async syncDevice(@Request() req: any) {
+    this.logger.log(`[SYNC] Sync device request from user ${req.user.id}`);
+    return this.subscriptionsService.syncDevice(req.user.id);
   }
 
   @Post('purchase')
