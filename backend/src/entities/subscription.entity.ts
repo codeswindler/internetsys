@@ -5,10 +5,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
 } from 'typeorm';
+
 import { User } from './user.entity';
 import { Package } from './package.entity';
 import { Router } from './router.entity';
+import { DeviceSession } from './device-session.entity';
+
 
 export enum SubscriptionStatus {
   PENDING = 'pending',
@@ -68,6 +72,9 @@ export class Subscription {
 
   @Column({ nullable: true })
   paymentRef: string;
+
+  @OneToMany(() => DeviceSession, (session) => session.subscription)
+  deviceSessions: DeviceSession[];
 
   @CreateDateColumn()
   createdAt: Date;

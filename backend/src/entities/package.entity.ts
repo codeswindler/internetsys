@@ -53,6 +53,9 @@ export class Package {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: 'int', default: 1, comment: 'Maximum concurrent devices' })
+  maxDevices: number;
+
   @OneToMany(() => Subscription, (subscription) => subscription.package)
   subscriptions: Subscription[];
 

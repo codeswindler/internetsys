@@ -5,6 +5,7 @@ import { Subscription, SubscriptionStatus, PaymentMethod } from '../entities/sub
 import { Package, DurationType } from '../entities/package.entity';
 import { User } from '../entities/user.entity';
 import { Router } from '../entities/router.entity';
+import { DeviceSession } from '../entities/device-session.entity';
 import { MikrotikService } from '../routers/mikrotik.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { TransactionMethod } from '../entities/transaction.entity';
@@ -18,9 +19,11 @@ export class SubscriptionsService {
     @InjectRepository(Package) private pkgRepo: Repository<Package>,
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Router) private routerRepo: Repository<Router>,
+    @InjectRepository(DeviceSession) private sessionRepo: Repository<DeviceSession>,
     private mikrotikService: MikrotikService,
     private transactionsService: TransactionsService,
   ) {}
+
 
   async purchase(userId: string, packageId: string, routerId: string): Promise<Subscription> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
@@ -108,11 +111,27 @@ export class SubscriptionsService {
   async findActive(userId: string): Promise<Subscription | null> {
     const sub = await this.subRepo.findOne({
       where: { user: { id: userId }, status: SubscriptionStatus.ACTIVE },
-      relations: ['package', 'router', 'user'],
+      relations: ['package', 'router', 'user', 'deviceSessions'],
       order: { createdAt: 'DESC' },
     });
     return sub || null;
   }
+
+  async findRecent(userId: string): Promise<any | null> {
+    // Get the absolute most recent subscription for the banner
+    const sub = await this.subRepo.findOne({
+      where: { user: { id: userId } },
+      relations: ['package', 'router', 'user', 'deviceSessions'],
+      order: { createdAt: 'DESC' },
+    });
+    
+    if (!sub) return null;
+    
+    // Check if it's "effectively" active (not expired yet)
+    const isActive = sub.status === SubscriptionStatus.ACTIVE;
+    return { ...sub, isActive };
+  }
+
 
   async findAll(): Promise<Subscription[]> {
     return this.subRepo.find({
@@ -276,40 +295,56 @@ export class SubscriptionsService {
   async startSession(id: string, mac?: string, ip?: string, userAgent?: string): Promise<Subscription> {
     const sub = await this.subRepo.findOne({
       where: { id },
-      relations: ['user', 'package', 'router'],
+      relations: ['user', 'package', 'router', 'deviceSessions'],
     });
 
     if (!sub) throw new NotFoundException('Subscription not found');
     
     // Capture and Save Device Model if missing
-    if (userAgent && !sub.user.deviceModel) {
-      sub.user.deviceModel = this.parseUserAgent(userAgent);
-      await this.userRepo.save(sub.user);
-    }
+    const model = userAgent ? this.parseUserAgent(userAgent) : 'Unknown Device';
+    
     if (sub.status !== SubscriptionStatus.ACTIVE) {
       throw new BadRequestException(`Subscription is in ${sub.status} state, cannot start`);
     }
 
-    // Fallback to saved user metadata if not provided
-    let finalMac = mac || sub.user.lastMac;
-    const finalIp = ip || sub.user.lastIp;
+    // MULTI-DEVICE LOGIC
+    if (mac) {
+      const existingSession = sub.deviceSessions?.find(s => s.macAddress === mac);
+      
+      if (!existingSession) {
+        // Check Limit
+        const activeDeviceCount = sub.deviceSessions?.filter(s => s.isActive).length || 0;
+        const maxAllowed = sub.package.maxDevices || 1;
 
-    // IF MAC is STILL missing, try looking it up on the router using the IP
-    if (!finalMac && finalIp) {
-      try {
-        // 1. Try primary router
-        const foundMac = await this.mikrotikService.findMacByIp(sub.router, finalIp);
-        if (foundMac) {
-          finalMac = foundMac;
-          sub.user.lastMac = foundMac;
-          await this.userRepo.save(sub.user);
+        if (activeDeviceCount >= maxAllowed) {
+          // Deactivate oldest session if we want to allow "rolling" logins, 
+          // or block if we want "hard" limits. User said "limit", but usually "rolling" is better UX.
+          // Let's go WITH HARD LIMIT FOR NOW per user request "limit number of devices".
+          throw new BadRequestException(`DEVICE LIMIT REACHED: This package only supports ${maxAllowed} device(s). Please disconnect another device first.`);
         }
-      } catch (e) {
-        this.logger.warn(`MAC lookup failed: ${e.message}`);
+
+        // Create new session
+        const newSession = this.sessionRepo.create({
+          subscription: sub,
+          macAddress: mac,
+          ipAddress: ip,
+          deviceModel: model,
+          isActive: true
+        });
+        await this.sessionRepo.save(newSession);
+      } else {
+        // Update existing session
+        existingSession.ipAddress = ip || existingSession.ipAddress;
+        existingSession.deviceModel = model;
+        existingSession.isActive = true;
+        await this.sessionRepo.save(existingSession);
       }
     }
 
-    // 2. ALWAYS attempt login on MikroTik to ensure the user is active on the router
+    // 2. ALWAYS attempt login on MikroTik
+    const finalMac = mac || sub.user.lastMac;
+    const finalIp = ip || sub.user.lastIp;
+
     if (finalMac || finalIp) {
       try {
         await this.mikrotikService.loginUser(
@@ -320,20 +355,16 @@ export class SubscriptionsService {
           finalMac,
           sub.package.bandwidthProfile
         );
-        this.logger.log(`[DIAGNOSTIC] Router Login triggered for sub ${sub.id}`);
       } catch (e) {
         this.logger.error(`Router Login Failed: ${e.message}`);
       }
     }
 
-    // 3. Mark session as STARTED and handle "stuck" sessions
-    if (!sub.startedAt && (finalMac || finalIp)) {
+    // 3. Mark subscription as STARTED if first time
+    if (!sub.startedAt) {
       sub.startedAt = new Date();
-      sub.status = SubscriptionStatus.ACTIVE;
-    }
-
-    // Timer Force-Patch: Ensure expiresAt is ALWAYS calculated if missing
-    if (sub.startedAt && !sub.expiresAt) {
+      
+      // Calculate expiry
       const duration = sub.package.durationValue;
       const type = sub.package.durationType; 
       let expiresAt = new Date(sub.startedAt);
@@ -341,24 +372,11 @@ export class SubscriptionsService {
       else if (type === 'hours') expiresAt.setHours(expiresAt.getHours() + duration);
       else if (type === 'days') expiresAt.setDate(expiresAt.getDate() + duration);
       sub.expiresAt = expiresAt;
-      this.logger.log(`[TIMER PATCH] Expiration calculated for session ${sub.id}: ${sub.expiresAt}`);
     }
 
-    if (finalMac || finalIp) {
-      await this.subRepo.save(sub);
-      this.logger.log(`[CERTIFICATION] Session ${sub.id} finalized. Status: ${sub.status}`);
-      
-      // Optional background check
-      setTimeout(async () => {
-        try {
-          const stats = await this.mikrotikService.getUserTraffic(sub.router, sub.mikrotikUsername, finalIp, finalMac);
-          this.logger.log(`[TRAFFIC] Initial check for ${sub.id}: In=${stats?.bytesIn}, Out=${stats?.bytesOut}`);
-        } catch (e) {}
-      }, 5000);
-    }
-
-    return sub;
+    return this.subRepo.save(sub);
   }
+
 
   async getTrafficStats(userId: string): Promise<any> {
     const sub = await this.subRepo.findOne({

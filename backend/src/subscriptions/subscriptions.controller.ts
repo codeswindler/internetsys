@@ -32,6 +32,12 @@ export class SubscriptionsController {
     return this.subscriptionsService.findActive(req.user.id);
   }
 
+  @Get('recent')
+  findRecent(@Request() req: any) {
+    return this.subscriptionsService.findRecent(req.user.id);
+  }
+
+
   @Get('my/traffic')
   myTraffic(@Request() req: any) {
     return this.subscriptionsService.getTrafficStats(req.user.id);

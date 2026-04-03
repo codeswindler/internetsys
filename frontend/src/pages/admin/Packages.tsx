@@ -14,8 +14,9 @@ export default function Packages() {
   
   const [formData, setFormData] = useState({ 
     name: '', durationType: 'hours', durationValue: 1, price: 0, bandwidthProfile: 'default', dataLimitMB: 0, isActive: true,
-    downloadSpeed: '', uploadSpeed: ''
+    downloadSpeed: '', uploadSpeed: '', maxDevices: 1
   });
+
 
   useEffect(() => {
     if (formData.bandwidthProfile) {
@@ -91,8 +92,10 @@ export default function Packages() {
       dataLimitMB: pkg.dataLimitMB,
       isActive: pkg.isActive,
       downloadSpeed: pkg.downloadSpeed || '',
-      uploadSpeed: pkg.uploadSpeed || ''
+      uploadSpeed: pkg.uploadSpeed || '',
+      maxDevices: pkg.maxDevices || 1
     });
+
     setShowModal(true);
   };
 
@@ -101,8 +104,9 @@ export default function Packages() {
     setEditingId(null);
     setFormData({ 
       name: '', durationType: 'hours', durationValue: 1, price: 0, bandwidthProfile: 'default', dataLimitMB: 0, isActive: true,
-      downloadSpeed: '', uploadSpeed: ''
+      downloadSpeed: '', uploadSpeed: '', maxDevices: 1
     });
+
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -150,12 +154,17 @@ export default function Packages() {
                 <span className="text-slate-500">Data Limit</span>
                 <span className="font-semibold text-white">{pkg.dataLimitMB === 0 ? 'Unlimited' : `${pkg.dataLimitMB} MB`}</span>
               </div>
+               <div className="flex justify-between items-center">
+                <span className="text-slate-500">Devices</span>
+                <span className="font-semibold text-white">{pkg.maxDevices || 1} Device(s)</span>
+              </div>
               <div className="flex justify-between items-center border-t border-white/5 pt-1.5 mt-1.5">
                 <span className="text-slate-500">Speed</span>
                 <span className="font-bold text-cyan-400 text-[10px]">
                   {pkg.downloadSpeed ? `${pkg.downloadSpeed} ↓` : 'N/A'} {pkg.uploadSpeed ? `/ ${pkg.uploadSpeed} ↑` : ''}
                 </span>
               </div>
+
             </div>
 
             <div className="mt-auto pt-3 border-t border-white/5 flex justify-between items-center">
@@ -242,6 +251,13 @@ export default function Packages() {
                       </div>
                     </div>
                   </div>
+
+                  <div>
+                     <label className="block text-sm font-medium text-slate-300 mb-2">Max Devices (Concurrent)</label>
+                     <input className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium" type="number" min="1" value={formData.maxDevices} onChange={e => setFormData({...formData, maxDevices: parseInt(e.target.value)})} required />
+                     <p className="text-[10px] text-slate-500 mt-1">Number of unique devices that can use this plan at the same time.</p>
+                  </div>
+
 
                   <div className="p-4 bg-cyan-500/5 border border-cyan-500/10 rounded-xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 -mr-4 -mt-4 w-20 h-20 bg-cyan-500/10 blur-2xl pointer-events-none rounded-full"></div>

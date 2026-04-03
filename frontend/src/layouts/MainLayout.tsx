@@ -56,9 +56,6 @@ export default function MainLayout({ role }: LayoutProps) {
       });
       setIsRedeemModalOpen(false);
       setVoucherCode('');
-       useEffect(() => {
-    console.log('🚀 PulseLynk Connectivity Engine V5.0 Loaded');
-  }, []);
       // Auto-Fire Internet after redemption success
       setTimeout(() => fireInternet(), 1000);
     },
@@ -149,12 +146,12 @@ export default function MainLayout({ role }: LayoutProps) {
     fetchProfile();
   }, [token, API_URL]);
 
-  // Global Sync Sentinal: Monitor Active Subscription for Timer & Auto-Redirect
-  const { data: activeSub = null } = useQuery({
-    queryKey: ['active-subscription'],
+  // Global Sync Sentinal: Monitor Recent/Active Subscription for Banner & Auto-Redirect
+  const { data: recentSub = null } = useQuery({
+    queryKey: ['recent-subscription'],
     queryFn: async () => {
       if (role !== 'user' || !token) return null;
-      const res = await axios.get(`${API_URL}/subscriptions/active`, {
+      const res = await axios.get(`${API_URL}/subscriptions/recent`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
@@ -163,23 +160,26 @@ export default function MainLayout({ role }: LayoutProps) {
     enabled: role === 'user' && !!token,
   });
 
+  // Alias for backward compatibility in the JSX
+  const activeSub = recentSub;
+
   const fireInternet = (customUser?: string, customPass?: string) => {
     if (!activeSub && !customUser) {
        console.log('No active sub to fire');
        return;
     }
     
-    // Satisfy the phone's OS that we are now UNBLOCKED
-    // We use HTTP first (pulselynk.co.ke) to avoid SSL-intercept errors
-    window.open('http://pulselynk.co.ke', '_blank');
-    
     // Trigger the hidden MikroTik login form
+    if (formRef.current) {
+      console.log('FIRING INTERNET FORM...');
+      formRef.current.submit();
+    }
+
+    // Satisfy the phone's OS that we are now UNBLOCKED and redirect to trigger portal dismissal
+    // We use a small delay to ensure the POST request from the form goes out first
     setTimeout(() => {
-      if (formRef.current) {
-        console.log('FIRING INTERNET FORM...');
-        formRef.current.submit();
-      }
-    }, 500);
+      window.location.href = 'https://www.google.com/generate_204';
+    }, 1500);
   };
 
   // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
@@ -207,13 +207,14 @@ export default function MainLayout({ role }: LayoutProps) {
 
   // Auto-Fire Sentinel: Keep the user connected if they have an active sub
   useEffect(() => {
-    if (activeSub && role === 'user' && !activeSub.startedAt) {
+    if (activeSub?.isActive && role === 'user' && !activeSub.startedAt) {
       // If we have an active sub but it hasn't technically "started" (meaning we just bought it),
       // we fire the internet immediately to trigger the router login.
       console.log("AUTO-FIRING NEW SUBSCRIPTION...");
-      fireInternet();
+      setTimeout(() => fireInternet(), 2000);
     }
-  }, [activeSub?.id, role]);
+  }, [activeSub?.id, activeSub?.isActive, role]);
+
 
   const { data: unreadTotal = 0 } = useQuery({
     queryKey: ['admin-unread-total'],
@@ -346,22 +347,14 @@ export default function MainLayout({ role }: LayoutProps) {
               PulseLynk
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={toggleTheme}
-              className="p-2 mr-1 rounded-lg bg-white/5 text-slate-400 hover:text-cyan-400 hover:bg-white/10 transition-all border border-white/5"
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            >
-              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
             <button 
               className="md:hidden text-slate-400 hover:text-white"
               onClick={() => setIsMenuOpen(false)}
             >
               <X size={20} />
             </button>
-          </div>
         </div>
+
         
         <nav className="flex-1 p-4 flex flex-col gap-2 overflow-y-auto">
           {links.map((link) => {
@@ -430,17 +423,26 @@ export default function MainLayout({ role }: LayoutProps) {
         )}
 
         <div className="p-4 border-t border-white/5 space-y-2">
-          {/* Desktop User Profile Button */}
-          <button 
-            onClick={() => setIsProfileModalOpen(true)}
-            className="hidden md:flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-all overflow-hidden"
-          >
-            {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8 flex-shrink-0")}
-            <div className="flex flex-col truncate">
-              <span className="font-bold text-sm truncate">{currentUser?.name || currentUser?.username || 'Profile'}</span>
-              <span className="text-[10px] text-cyan-400/80 uppercase tracking-wider font-bold">{role}</span>
-            </div>
-          </button>
+          <div className="flex items-center gap-2 w-full">
+            <button 
+              onClick={() => setIsProfileModalOpen(true)}
+              className="hidden md:flex items-center gap-3 px-4 py-3 flex-1 text-left rounded-lg text-slate-300 hover:bg-white/5 hover:text-white transition-all overflow-hidden"
+            >
+              {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8 flex-shrink-0")}
+              <div className="flex flex-col truncate">
+                <span className="font-bold text-sm truncate">{currentUser?.name || currentUser?.username || 'Profile'}</span>
+                <span className="text-[10px] text-cyan-400/80 uppercase tracking-wider font-bold">{role}</span>
+              </div>
+            </button>
+
+            <button 
+              onClick={toggleTheme}
+              className="p-3 rounded-lg bg-white/5 text-slate-400 hover:text-cyan-400 hover:bg-white/10 transition-all border border-white/5"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+          </div>
           
           <button 
             onClick={handleLogout}

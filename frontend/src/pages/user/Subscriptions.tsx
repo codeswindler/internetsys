@@ -46,14 +46,17 @@ export default function Subscriptions() {
   });
 
   // 2. Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
-  const { data: activeSub = null } = useQuery({
-    queryKey: ['active-subscription'],
+  const { data: recentSub = null } = useQuery({
+    queryKey: ['recent-subscription'],
     queryFn: async () => {
-      const res = await api.get('/subscriptions/active');
+      const res = await api.get('/subscriptions/recent');
       return res.data;
     },
     refetchInterval: 10000,
   });
+
+  const activeSub = recentSub;
+
 
   const startMutation = useMutation({
     mutationFn: (id: string) => api.post(`/subscriptions/${id}/start`, { 
@@ -158,28 +161,50 @@ export default function Subscriptions() {
                   <span>Location: <span className="text-slate-200 font-bold">{activeSub.router.name}</span></span>
                 </div>
 
-                <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-slate-700/30">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400">
-                      <Smartphone size={20} />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Device Model</div>
-                      <div className="text-slate-200 font-mono text-xs font-bold">
-                        {activeSub.user?.deviceModel || activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') || 'DETECTING...'}
+                <div className="flex flex-wrap gap-4 mt-2">
+                  {activeSub.deviceSessions && activeSub.deviceSessions.length > 0 ? (
+                    activeSub.deviceSessions.map((session: any) => (
+                      <div key={session.id} className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/80 backdrop-blur-md p-4 rounded-xl border border-cyan-500/20 shadow-lg group/card hover:border-cyan-400 transition-all flex-1 min-w-[200px]">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover/card:scale-110 transition-transform">
+                            <Smartphone size={20} />
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Device ID</div>
+                            <div className="text-slate-200 font-mono text-xs font-bold truncate max-w-[120px]">
+                              {session.deviceModel || 'Unknown Device'}
+                            </div>
+                            <div className="text-[9px] text-slate-500 font-mono truncate max-w-[120px]">{session.macAddress}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${session.isActive ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
+                          <div className="text-[11px] font-bold text-slate-400">
+                            {session.isActive ? 'Verified' : 'Inactive'}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-slate-700/30 w-full">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center text-slate-500">
+                          <Smartphone size={20} />
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Device Model</div>
+                          <div className="text-slate-200 font-mono text-xs font-bold">
+                            READY TO CONNECT
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="h-6 w-px bg-slate-700 hidden md:block"></div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500 animate-pulse'}`} />
-                    <div className="text-xs font-bold text-slate-400">
-                      {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified Identity' : 'Identity Sync Required'}
-                    </div>
-                  </div>
+                  )}
                 </div>
+
               </div>
 
               <div className="bg-black/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 w-full md:w-auto min-w-[300px]">

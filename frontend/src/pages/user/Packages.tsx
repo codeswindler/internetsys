@@ -58,11 +58,14 @@ export default function Packages() {
   }, [routers]);
 
   // Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
-  const { data: activeSub = null } = useQuery({
-    queryKey: ['active-subscription'],
-    queryFn: () => api.get('/subscriptions/active').then(res => res.data),
+  const { data: recentSub = null } = useQuery({
+    queryKey: ['recent-subscription'],
+    queryFn: () => api.get('/subscriptions/recent').then(res => res.data),
     refetchInterval: 10000,
   });
+
+  const activeSub = recentSub;
+
 
   // Poll for real-time traffic
   useEffect(() => {
@@ -216,34 +219,55 @@ export default function Packages() {
                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">Active Session</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
               </div>
-              <h3 className="text-2xl font-black text-white">{activeSub.package.name}</h3>
-              <div className="flex flex-col gap-1">
-                <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
+              <h3 className="text-2xl font-black text-white">{activeSub.package?.name}</h3>
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router?.name}</span></p>
 
-
-                  <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700/50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400">
-                      <Smartphone size={20} />
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ID</div>
-                      <div className="text-slate-100 font-black font-mono">
-                        {activeSub.user?.deviceModel || activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') || 'DETECTING...'}
+                <div className="flex flex-wrap gap-4">
+                  {activeSub.deviceSessions && activeSub.deviceSessions.length > 0 ? (
+                    activeSub.deviceSessions.map((session: any) => (
+                      <div key={session.id} className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/80 backdrop-blur-md p-4 rounded-2xl border border-cyan-500/20 shadow-lg group/card hover:border-cyan-400 transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover/card:scale-110 transition-transform">
+                            <Smartphone size={20} />
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Device ID</div>
+                            <div className="text-slate-100 font-black font-mono text-xs">
+                              {session.deviceModel || 'Unknown Device'}
+                            </div>
+                            <div className="text-[9px] text-slate-500 font-mono truncate max-w-[120px]">{session.macAddress}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${session.isActive ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600'}`} />
+                          <div className="text-[11px] font-bold text-slate-300">
+                            {session.isActive ? 'Verified' : 'Inactive'}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-700 flex items-center justify-center text-slate-500">
+                          <Smartphone size={20} />
+                        </div>
+                        <div>
+                          <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Device ID</div>
+                          <div className="text-slate-100 font-black font-mono">
+                            READY TO CONNECT
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="h-8 w-px bg-slate-700 hidden md:block"></div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full animate-pulse ${activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.5)]' : 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.5)]'}`} />
-                    <div className="text-sm font-bold text-slate-300">
-                      {activeSub.user?.lastMac || localStorage.getItem('hotspot_mac') ? 'Verified' : 'Identity Required'}
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
+
             </div>
           </div>
 
@@ -365,6 +389,11 @@ export default function Packages() {
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 {pkg.downloadSpeed ? `${pkg.downloadSpeed} Download Speed` : 'High-speed connectivity'}
               </li>
+              <li className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
+                Supports {pkg.maxDevices || 1} Device(s)
+              </li>
+
               {pkg.uploadSpeed && (
                 <li className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
