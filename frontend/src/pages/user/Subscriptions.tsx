@@ -34,8 +34,11 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 export default function Subscriptions() {
   const queryClient = useQueryClient();
   const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string) => void }>();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isFixing, setIsFixing] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isLaunching, setIsLaunching] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
@@ -77,7 +80,6 @@ export default function Subscriptions() {
       });
 
       // The "Fluid Magic" Redirect: Satisfies the phone's OS that we are now UNBLOCKED
-      // We use HTTP first (pulselynk.co.ke) to avoid SSL-intercept errors
       setTimeout(() => {
         window.location.href = 'http://pulselynk.co.ke';
       }, 3000);
@@ -141,146 +143,172 @@ export default function Subscriptions() {
 
   return (
     <div className="max-w-4xl mx-auto pb-20 px-4">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-main mb-2">My Connection</h2>
-        <p className="text-muted">Manage your active Wi-Fi sessions and device identity.</p>
+      <div className="mb-12">
+        <h2 className="text-4xl font-black text-main mb-2 tracking-tight uppercase">My Connection</h2>
+        <p className="text-muted font-bold opacity-60">Manage your active Wi-Fi sessions and device identity.</p>
       </div>
 
       {allActiveSubs.length > 0 && (
-        <div className="mb-12 space-y-6">
-          <h3 className="text-sm font-bold tracking-widest text-cyan-400 uppercase mb-4 flex items-center gap-2">
-            <Activity size={16} className="animate-pulse" />
-            Current Active Sessions ({allActiveSubs.length})
-          </h3>
-          
-          {allActiveSubs.map((sub: any) => (
-            <div key={sub.id} className="glass-panel p-6 border-cyan-500/30 bg-panel shadow-lg shadow-cyan-900/10 animate-fade-in relative overflow-hidden group">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${sub.startedAt ? 'bg-emerald-500/20 text-emerald-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
-                      {sub.startedAt ? 'Online Now' : 'READY TO START'}
-                    </span>
-                    {sub.startedAt && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>}
-                  </div>
-                  <h4 className="text-3xl font-black text-main mb-2">{sub.package.name}</h4>
-                  <div className="flex items-center gap-2 text-muted mb-4">
-                    <RouterIcon size={16} /> 
-                    <span>Authorized for: <span className="text-main font-bold">{sub.router.name}</span></span>
+        <div className="mb-16 space-y-10">
+          <div className="flex items-center gap-3 px-2 mb-2">
+            <Activity size={18} className="text-cyan-400 animate-pulse" />
+            <h3 className="text-sm font-black text-main uppercase tracking-[0.25em]">CURRENT ACTIVE SESSIONS ({allActiveSubs.length})</h3>
+          </div>
+
+          {allActiveSubs.map((sub: any) => {
+            const isLive = sub.startedAt && new Date(sub.expiresAt) > new Date();
+            
+            return (
+              <div key={sub.id} className="relative group animate-fade-in">
+                {/* ── 🚀 AMAZING CONNECTION CARD (Matches Screenshot 2) ── */}
+                <div className="glass-panel p-6 md:p-10 border-cyan-500/20 bg-slate-900/40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.15)] rounded-[2.5rem]">
+                  
+                  {/* Status Banner Row (Screenshot 2 Match) */}
+                  <div className="flex flex-col lg:flex-row items-center justify-between mb-8 gap-4 px-2">
+                    <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-10">
+                      <h3 className="text-4xl font-black text-white tracking-tight leading-none capitalize">{sub.package?.name}</h3>
+                      <div className="flex items-center gap-2 text-xs font-bold text-muted uppercase tracking-widest opacity-60">
+                        <RouterIcon size={14} className="text-cyan-500" />
+                        Location: <span className="text-white">{sub.router?.name || 'Pulselynk'}</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-4">
-                    {sub.deviceSessions && sub.deviceSessions.length > 0 ? (
-                      sub.deviceSessions.map((session: any) => (
-                        <div key={session.id} className="flex items-center gap-3 bg-panel p-3 rounded-xl border border-border-color shadow-sm">
-                          <Smartphone size={16} className="text-cyan-400" />
-                          <div>
-                            <div className="text-[10px] text-main font-bold font-mono">
-                              {session.deviceModel || 'Connected Device'}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+                    
+                    {/* Left: Device Detail Box (Screenshot Match) */}
+                    <div className="lg:col-span-4 h-full">
+                      <div className="bg-slate-950/40 border border-white/5 rounded-3xl p-6 h-full flex flex-col justify-center gap-6 backdrop-blur-md shadow-2xl group-hover:border-cyan-500/20 transition-colors">
+                        <div className="flex items-center gap-5">
+                          <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center text-cyan-400 border border-white/10 shrink-0">
+                            {sub.deviceSessions?.[0]?.deviceModel?.toLowerCase().includes('iphone') ? <Smartphone size={28} /> : 
+                             sub.deviceSessions?.[0]?.deviceModel?.toLowerCase().includes('windows') ? <Monitor size={28} /> : 
+                             <Laptop size={28} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[9px] font-black text-muted uppercase tracking-[0.25em] mb-1 truncate">DEVICE MODEL</p>
+                            <h4 className="text-xs font-bold text-slate-300 tracking-wide leading-relaxed truncate">
+                              {sub.deviceSessions?.[0]?.deviceModel || 'Unknown Device'}
+                            </h4>
+                            <div className="flex items-center gap-2 mt-2">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                              <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest leading-none truncate">Verified Identity</span>
                             </div>
-                            <div className="text-[8px] text-muted font-mono">{session.macAddress}</div>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <div className="flex items-center gap-3 bg-panel p-3 rounded-xl border border-border-color shadow-sm border-dashed">
-                        <Smartphone size={16} className="text-muted" />
-                        <div className="text-[10px] text-muted font-bold">READY TO CONNECT</div>
                       </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
 
-                <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
-                  {sub.startedAt ? (
-                    <div className="flex flex-col items-center md:items-end gap-2">
-                      <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="block" />
-                      
-                      {sub.id === activeSub?.id && (
-                        <div className="flex items-center gap-4 bg-muted/5 px-4 py-2 rounded-xl border border-border-color">
-                           <div className="flex items-center gap-2 text-cyan-400">
-                             <Download size={14} />
-                             <span className="text-xs font-mono font-bold">{traffic.downloadSpeed}</span>
-                           </div>
-                           <div className="flex items-center gap-2 text-blue-400">
-                             <Upload size={14} />
-                             <span className="text-xs font-mono font-bold">{traffic.uploadSpeed}</span>
-                           </div>
+                    {/* Right: Live Connectivity Box (Screenshot 2 Match) */}
+                    <div className="lg:col-span-8 space-y-4">
+                      {isLive ? (
+                        <>
+                          <div className="w-full bg-[#0c1a1f] border border-cyan-500/20 rounded-2xl py-6 px-10 flex items-center justify-between group-hover:bg-[#0e2126] transition-all duration-700 relative overflow-hidden shadow-inner">
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
+                            <div className="flex items-center gap-4 relative z-10">
+                              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                              <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">SURFING LIVE</span>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                localStorage.removeItem('hotspot_mac');
+                                localStorage.removeItem('hotspot_ip');
+                                startMutation.mutate(sub.id);
+                                toast.success('Repaired device identity!', { icon: '🔧' });
+                              }}
+                              className="text-[10px] font-black text-cyan-400 uppercase tracking-widest hover:text-white transition-all underline underline-offset-4 relative z-10"
+                            >
+                              FIX IDENTITY
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-950/40 rounded-2xl p-5 border border-white/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-slate-950/60 transition-colors">
+                              <Download size={20} className="text-cyan-400 mb-1" />
+                              <span className="text-base font-black text-white">{traffic.downloadSpeed}</span>
+                              <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">DOWNLOAD</span>
+                            </div>
+                            <div className="bg-slate-950/40 rounded-2xl p-5 border border-white/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-slate-950/60 transition-colors">
+                              <Upload size={20} className="text-emerald-400 mb-1" />
+                              <span className="text-base font-black text-white">{traffic.uploadSpeed}</span>
+                              <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">UPLOAD</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="w-full bg-slate-950/40 border border-white/5 rounded-2xl p-10 flex flex-col items-center justify-center gap-4 group-hover:border-cyan-500/20 transition-all text-center">
+                           <Play size={40} className="text-slate-700 mb-2 opacity-30" />
+                           <h4 className="text-2xl font-black text-slate-500 tracking-[0.2em] mb-2 uppercase">TIMER READY</h4>
+                           <p className="text-[10px] text-muted font-bold uppercase tracking-widest mb-4">Queued and verified</p>
+                           <button 
+                             onClick={() => startMutation.mutate(sub.id)}
+                             disabled={startMutation.isPending || !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date())}
+                             className={`btn-primary px-10 py-4 text-xs font-black tracking-widest uppercase shadow-lg transition-all transform hover:scale-105 ${
+                               !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) 
+                               ? 'opacity-30 cursor-not-allowed grayscale' 
+                               : 'shadow-cyan-900/20 hover:shadow-cyan-400/20'
+                             }`}
+                           >
+                            {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : 
+                             !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) ? 'LOCKED' : 'START BROWSING'}
+                           </button>
                         </div>
                       )}
+                      
+                      <div className="flex justify-between items-center px-4 pt-2">
+                        <div className="flex items-center gap-4">
+                           <div className="flex items-center gap-2">
+                             <Clock size={14} className="text-slate-500" />
+                             <span className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">REMAINING TIME</span>
+                           </div>
+                           <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="badge" />
+                        </div>
+                        <div className="bg-cyan-500/10 px-5 py-2 rounded-full border border-cyan-500/20 flex items-center gap-3">
+                           <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                           <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">STATUS: CONNECTED</span>
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <button 
-                      onClick={() => startMutation.mutate(sub.id)}
-                      disabled={startMutation.isPending || !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date())}
-                      className={`btn-primary w-full md:w-56 py-4 text-sm font-black tracking-widest uppercase shadow-lg transform hover:scale-105 transition-all flex items-center justify-center gap-3 ${
-                        !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) 
-                        ? 'opacity-50 cursor-not-allowed grayscale shadow-none' 
-                        : 'shadow-cyan-900/40'
-                      }`}
-                    >
-                      {startMutation.isPending ? (
-                        <RefreshCw className="animate-spin" size={18} />
-                      ) : (
-                        !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) ? (
-                          <><Lock size={18} /> Locked</>
-                        ) : (
-                          <><Play size={18} /> Start Browsing</>
-                        )
-                      )}
-                    </button>
-                  )}
-                  
-                  <button 
-                    onClick={() => {
-                        localStorage.removeItem('hotspot_mac');
-                        localStorage.removeItem('hotspot_ip');
-                        startMutation.mutate(sub.id);
-                        toast.success('Repaired device identity!', { icon: '🔧' });
-                    }}
-                    className="text-[10px] font-bold text-muted hover:text-cyan-400 flex items-center gap-1.5 transition-colors"
-                  >
-                    <RefreshCw size={12} /> Fix Connection
-                  </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       <div>
-        <h3 className="text-sm font-bold tracking-widest text-muted uppercase mb-4 flex items-center gap-2">
-          <History size={16} /> Past Sessions
+        <h3 className="text-sm font-black tracking-widest text-muted uppercase mb-6 flex items-center gap-3 opacity-50">
+          <History size={18} /> PAST SESSION HISTORY
         </h3>
 
         {pastSubs.length === 0 ? (
-          <div className="glass-panel p-8 text-center text-slate-500 border-dashed">
+          <div className="glass-panel p-12 text-center text-slate-500 border-dashed bg-slate-900/20">
             No previous sessions found. Your history will appear here.
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-6">
             {pastSubs.map((sub: any) => (
               <div 
                 key={sub.id}
-                className="glass-panel p-5 hover:border-slate-600 transition-all cursor-pointer group"
+                className="glass-panel p-6 bg-slate-900/40 border-white/5 hover:border-cyan-500/20 transition-all cursor-pointer group hover:shadow-[0_0_30px_rgba(34,211,238,0.05)]"
                 onClick={() => setExpandedId(expandedId === sub.id ? null : sub.id)}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-slate-700 transition-all">
-                      <History size={24} />
+                  <div className="flex items-center gap-6">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 group-hover:bg-slate-700 group-hover:text-cyan-400 transition-all border border-white/5 shadow-inner">
+                      <History size={28} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-main text-lg">{sub.package.name}</h4>
-                      <p className="text-xs text-muted flex items-center gap-2">
-                        <MapPin size={12} /> {sub.router.name} • {new Date(sub.createdAt).toLocaleDateString()}
+                      <h4 className="font-black text-main text-xl tracking-tight leading-none mb-1">{sub.package?.name}</h4>
+                      <p className="text-[10px] font-bold text-muted uppercase tracking-widest flex items-center gap-2 opacity-60">
+                        <MapPin size={12} /> {sub.router?.name} • {new Date(sub.createdAt).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-main font-bold mb-1">KES {sub.amountPaid}</div>
-                    <div className={`text-[10px] font-bold px-2 py-1 bg-panel border rounded uppercase tracking-wider ${sub.status?.toString().toLowerCase() === 'expired' ? 'text-orange-400 border-orange-500/20' : 'text-emerald-400 border-emerald-500/20'}`}>
+                    <div className="text-white font-black text-xl tracking-tighter mb-1">KES {sub.amountPaid}</div>
+                    <div className={`text-[9px] font-black px-3 py-1 bg-slate-950/60 border rounded-full uppercase tracking-[0.2em] ${sub.status?.toString().toLowerCase() === 'expired' ? 'text-orange-400 border-orange-500/20' : 'text-emerald-400 border-emerald-500/20'}`}>
                       {sub.status}
                     </div>
                   </div>

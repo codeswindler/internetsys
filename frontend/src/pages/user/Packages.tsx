@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone, Lock, Laptop, Monitor, Globe, Cpu, ChevronRight } from 'lucide-react';
+import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone, Lock, Laptop, Monitor, Globe, Cpu, ChevronRight, Play } from 'lucide-react';
 import { useRef } from 'react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
@@ -210,148 +210,146 @@ export default function Packages() {
 
 
 
-      {/* ── 🚀 LIVE SESSION HERO ── */}
-      {liveSession && (
-        <div className="mb-12">
-          <div className="flex items-center gap-3 px-2 mb-6">
-            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
-            <h2 className="text-sm font-black text-main uppercase tracking-[0.25em]">Session Live</h2>
-          </div>
-
-          <div className="glass-panel p-1 md:p-1 overflow-hidden relative group">
-            {/* Animated Background Glow */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-3xl blur-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-1000 animate-pulse" />
+      {allActiveSubs.length > 0 && (
+        <div className="mb-12 space-y-8">
+          {allActiveSubs.map((sub: any) => {
+            const isLive = sub.startedAt && new Date(sub.expiresAt) > new Date();
             
-            <div className="relative glass-panel bg-slate-900/80 border-cyan-500/40 p-6 md:p-10 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-10">
-              
-              {/* Left Column: Plan & Device info */}
-              <div className="flex flex-col md:flex-row items-center gap-8 flex-1 w-full">
-                {/* Visual Icon */}
-                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center relative shadow-2xl shrink-0">
-                  <div className="absolute inset-0 bg-cyan-400/10 rounded-3xl animate-ping opacity-20" />
-                  <Zap size={40} className="text-cyan-400 fill-cyan-400/20" />
-                </div>
-
-                <div className="flex-1 text-center md:text-left space-y-4">
-                  <div>
-                    <h3 className="text-3xl font-black text-white tracking-tight mb-1">{liveSession.package?.name}</h3>
-                    <div className="flex items-center justify-center md:justify-start gap-4 text-xs font-bold text-muted uppercase tracking-widest">
-                      <span className="flex items-center gap-2"><MapPin size={14} className="text-cyan-500" /> {liveSession.router?.name}</span>
-                      <span className="text-slate-700">|</span>
-                      <span className="flex items-center gap-2 font-mono"><Globe size={14} className="text-blue-500" /> {liveSession.mikrotikUsername}</span>
-                    </div>
-                  </div>
-
-                  {/* Device Specs Badges */}
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-2">
-                    {liveSession.deviceSessions?.[0] && (
-                      <>
-                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl shadow-lg">
-                          {liveSession.deviceSessions[0].deviceModel?.toLowerCase().includes('iphone') ? <Smartphone size={14} className="text-purple-400" /> : 
-                           liveSession.deviceSessions[0].deviceModel?.toLowerCase().includes('windows') ? <Monitor size={14} className="text-blue-400" /> : 
-                           <Laptop size={14} className="text-cyan-400" />}
-                          <span className="text-[10px] font-black text-white/90 uppercase">{liveSession.deviceSessions[0].deviceModel || 'Connected'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl shadow-lg">
-                          <Cpu size={14} className="text-emerald-400" />
-                          <span className="text-[10px] font-mono text-white/70">{liveSession.deviceSessions[0].macAddress}</span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Middle Column: Countdown */}
-              <div className="flex flex-col items-center gap-2 px-10 border-x border-white/5 min-w-48 shrink-0">
-                <CountdownBadge expiresAt={liveSession.expiresAt} startedAt={liveSession.startedAt} variant="block" />
-                <p className="text-[10px] text-muted font-black tracking-widest uppercase opacity-70">Remaining Time</p>
-              </div>
-
-              {/* Right Column: 1-Click Repair */}
-              <div className="flex flex-col gap-3 w-full md:w-auto shrink-0">
-                <button 
-                  onClick={() => fireInternet()}
-                  className="btn-primary w-full md:w-56 py-4 text-xs font-black tracking-widest uppercase shadow-[0_0_30px_rgba(34,211,238,0.3)] transform hover:-translate-y-1 transition-all flex items-center justify-center gap-3 relative overflow-hidden group"
-                >
-                  <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
-                  <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-700" />
-                  RE-AUTHORIZE
-                </button>
-                <button 
-                   onClick={() => navigate('/user/subscriptions')}
-                   className="flex items-center justify-center gap-2 text-[10px] font-black text-muted uppercase tracking-widest hover:text-cyan-400 transition-colors py-2"
-                >
-                  Manage Session <ChevronRight size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── 📋 QUEUED PLANS ── */}
-      {pendingPlans.length > 0 && (
-        <div className="mb-12">
-          <div className="flex items-center gap-3 px-2 mb-6">
-            <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-            <h2 className="text-xs font-bold text-muted uppercase tracking-widest">
-              {liveSession ? 'Queued / Standby Plans' : 'Your Active Hotspot Plans'}
-            </h2>
-          </div>
-
-          <div className="grid gap-6">
-            {pendingPlans.map((sub: any) => (
-              <div 
-                key={sub.id}
-                className="glass-panel p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 group relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.1)] bg-slate-900 border-white/5"
-              >
-                <div className="flex items-center gap-6 flex-1 w-full">
-                  <div className={`w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center transition-all duration-500 ${!isAnyLive ? 'group-hover:bg-cyan-500/10 group-hover:border-cyan-500/30' : ''}`}>
-                    <Zap size={28} className={`text-muted transition-all duration-500 ${!isAnyLive ? 'group-hover:text-cyan-400 group-hover:scale-110' : ''}`} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-main mb-1 truncate">{sub.package?.name}</h3>
-                    <div className="flex items-center gap-4 text-[10px] font-bold text-muted/60 uppercase tracking-widest">
-                      <span className="flex items-center gap-1.5"><MapPin size={12} /> {sub.router?.name}</span>
-                      <span className="text-[10px] font-black text-cyan-400/80">READY TO START</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startMutation.mutate(sub.id);
-                    }}
-                    disabled={startMutation.isPending || isAnyLive}
-                    className={`btn-primary w-full md:w-48 py-4 text-xs font-black tracking-widest uppercase shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-3 ${
-                      isAnyLive 
-                      ? 'opacity-40 cursor-not-allowed grayscale shadow-none filter saturate-0' 
-                      : 'shadow-cyan-900/40 hover:shadow-cyan-400/20'
-                    }`}
-                  >
-                    {startMutation.isPending ? (
-                      <RefreshCw size={18} className="animate-spin" />
-                    ) : (
-                      isAnyLive ? (
-                        <>LOCKED <Lock size={16} /></>
-                      ) : (
-                        <>START BROWSING <ArrowRight size={16} /></>
-                      )
-                    )}
-                  </button>
+            return (
+              <div key={sub.id} className="relative group animate-fade-in">
+                {/* ── 🚀 AMAZING CONNECTION CARD (Matches Screenshots) ── */}
+                <div className="glass-panel p-6 md:p-10 border-cyan-500/20 bg-slate-900/40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.15)] rounded-[2.5rem]">
                   
-                  {isAnyLive && (
-                    <div className="text-[10px] font-black text-muted uppercase tracking-widest opacity-60">
-                      Wait for current plan to end
+                  {/* Floating Activity Icon (Screenshot Match) */}
+                  {isLive && (
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 hidden lg:flex items-center justify-center w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-2xl">
+                      <Activity size={32} className="animate-pulse" />
                     </div>
                   )}
+
+                  <div className={`flex flex-col lg:flex-row items-center gap-10 ${isLive ? 'lg:pl-20' : ''}`}>
+                    
+                    {/* Left Column: Plan Title & Location */}
+                    <div className="flex-1 text-center lg:text-left">
+                      <div className="flex flex-col items-center lg:items-start gap-1 mb-4">
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-cyan-400 opacity-70">
+                          {isLive ? 'ACTIVE SESSION' : 'READY TO START'}
+                        </span>
+                        <h3 className="text-4xl font-black text-white tracking-tight leading-none capitalize">{sub.package?.name}</h3>
+                        <p className="text-sm font-bold text-muted mt-2 flex items-center gap-2 opacity-60">
+                          Connected to <span className="text-cyan-400 uppercase tracking-widest text-[11px]">{sub.router?.name || 'Pulselynk'}</span>
+                        </p>
+                      </div>
+
+                      {/* Nested Device Info Box (Screenshot Match) */}
+                      <div className="bg-slate-950/40 border border-white/5 rounded-3xl p-5 mt-6 flex items-center gap-5 backdrop-blur-md shadow-2xl group-hover:border-cyan-500/20 transition-colors">
+                        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-cyan-400 border border-white/10">
+                          <Smartphone size={24} />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[9px] font-black text-muted uppercase tracking-[0.2em] mb-1">
+                            {sub.deviceSessions?.[0]?.deviceType || 'DEVICE MODEL'}
+                          </p>
+                          <h4 className="text-xs font-bold text-slate-300 tracking-wide uppercase leading-relaxed">
+                            {sub.deviceSessions?.[0]?.deviceModel || 'Unknown Device'}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">{sub.startedAt ? 'Verified Identity' : 'Verified'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle Column: Status Flow (Screenshot Match) */}
+                    <div className="flex flex-col items-center gap-6 min-w-[280px]">
+                      {isLive ? (
+                        <div className="w-full flex flex-col items-center gap-4">
+                          {/* Live Banner (Screenshot 2 Match) */}
+                          <div className="w-full bg-emerald-500/5 border border-emerald-500/20 rounded-2xl py-5 px-8 flex items-center justify-between group-hover:bg-emerald-500/10 transition-all duration-700 relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
+                            <div className="flex items-center gap-3">
+                              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                              <span className="text-xs font-black text-emerald-400 uppercase tracking-[0.2em]">SURFING LIVE</span>
+                            </div>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); fireInternet(); }}
+                              className="text-[9px] font-black text-cyan-400 uppercase tracking-widest hover:text-white transition-colors underline underline-offset-4"
+                            >
+                              FIX IDENTITY
+                            </button>
+                          </div>
+                          
+                          {/* Speed Bar (Screenshot Match) */}
+                          <div className="bg-slate-950/60 rounded-full px-6 py-2.5 flex items-center gap-6 border border-white/5 shadow-inner">
+                            <div className="flex items-center gap-2">
+                              <Download size={14} className="text-blue-400" />
+                              <span className="text-[11px] font-black text-white tracking-widest">{traffic.downloadSpeed}</span>
+                              <span className="text-[9px] font-bold text-muted uppercase tracking-tighter ml-1">Download</span>
+                            </div>
+                            <div className="w-px h-3 bg-white/10" />
+                            <div className="flex items-center gap-2">
+                              <Upload size={14} className="text-emerald-400" />
+                              <span className="text-[11px] font-black text-white tracking-widest">{traffic.uploadSpeed}</span>
+                              <span className="text-[9px] font-bold text-muted uppercase tracking-tighter ml-1">Upload</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+                          {/* Waiting State (Screenshot 1 Match) */}
+                          <div className="text-center">
+                            <div className="flex items-center justify-center gap-3 mb-1">
+                              <Play size={24} className="text-cyan-400 fill-cyan-400/20" />
+                              <span className="text-[9px] font-bold text-muted uppercase tracking-[0.25em]">TIMER PAUSED</span>
+                            </div>
+                            <h4 className="text-3xl font-black text-cyan-400 tracking-[0.2em] mb-1">WAITING</h4>
+                            <p className="text-[10px] text-muted font-bold uppercase tracking-widest opacity-60">TIME REMAINING</p>
+                          </div>
+                          <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="block" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Column: Main Actions */}
+                    <div className="flex flex-col gap-3 w-full lg:w-auto shrink-0">
+                      {!isLive && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startMutation.mutate(sub.id);
+                          }}
+                          disabled={startMutation.isPending || isAnyLive}
+                          className={`btn-primary w-full lg:w-56 py-4 text-xs font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 ${
+                            isAnyLive 
+                            ? 'opacity-30 cursor-not-allowed grayscale shadow-none filter saturate-0' 
+                            : 'shadow-cyan-900/40 hover:shadow-cyan-400/40'
+                          }`}
+                        >
+                          {startMutation.isPending ? (
+                            <RefreshCw size={18} className="animate-spin" />
+                          ) : (
+                            isAnyLive ? (
+                              <>QUEUE LOCKED <Lock size={16} /></>
+                            ) : (
+                              <>START BROWSING <ArrowRight size={16} /></>
+                            )
+                          )}
+                        </button>
+                      )}
+                      
+                      <button 
+                         onClick={() => navigate('/user/subscriptions')}
+                         className="flex items-center justify-center gap-2 text-[10px] font-black text-muted uppercase tracking-widest hover:text-cyan-400 transition-colors py-2 group/link"
+                      >
+                        Manage Connection <ChevronRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       )}
 
