@@ -630,7 +630,7 @@ export default function MainLayout({ role }: LayoutProps) {
         )}
 
         <div className="animate-fade-in max-w-7xl mx-auto">
-          <Outlet context={{ fireInternet }} />
+          <Outlet context={{ fireInternet, currentUser }} />
         </div>
         <BackToTop />
         {role === 'user' && <SupportChat />}

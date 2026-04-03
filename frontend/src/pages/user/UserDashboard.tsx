@@ -10,7 +10,10 @@ export default function UserDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
-  const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string) => void }>();
+  const { fireInternet, currentUser } = useOutletContext<{ 
+    fireInternet: (u?: string, p?: string) => void,
+    currentUser: any 
+  }>();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
 
@@ -95,7 +98,7 @@ export default function UserDashboard() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
           <div>
             <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-4">
-              Welcome Back, <span className="text-cyan-400">Surfer</span>
+              Welcome Back, <span className="text-cyan-400">{currentUser?.name?.split(' ')[0] || currentUser?.username || 'Surfer'}</span>
             </h1>
             <p className="text-slate-400 text-lg max-w-xl font-medium">
               Your high-speed internet portal is ready. Manage your connections and browse without limits.

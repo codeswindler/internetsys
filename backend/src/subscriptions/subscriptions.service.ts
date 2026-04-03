@@ -187,30 +187,30 @@ export class SubscriptionsService {
   async findAllActive(userId: string): Promise<Subscription[]> {
     this.logger.log(`[DIAGNOSTIC] findAllActive for ${userId} - Starting RELIABLE Query...`);
     
-    // Simplify to the absolute basics that we know works in findMy
     const all = await this.subRepo.find({
       where: { user: { id: userId } },
-      relations: ['package', 'router'],
+      relations: ['package', 'router', 'deviceSessions'],
       order: { createdAt: 'DESC' },
     });
 
-    this.logger.log(
-      `[DIAGNOSTIC] findAllActive Result: Found ${all.length} raw subs in DB.`,
-    );
+    this.logger.log(`[DIAGNOSTIC] Found ${all.length} raw subs for user ${userId}.`);
 
-    // Filter for "Actionable" subs: Inclusion is based on STATUS, not TIME.
     const filtered = all.filter((sub) => {
-      const status = sub.status?.toString().toLowerCase();
-      // Expanded status list to be extremely forgiving
+      const status = sub.status?.toString().toLowerCase().trim();
+      
+      // Even more robust check: If it's physically active or explicitly allocated/pending
       const isActionable = ['active', 'pending', 'paid', 'verified', 'processing', 'allocated'].includes(status);
-      this.logger.log(`[DIAGNOSTIC] Sub ${sub.id} (${status}) -> Actionable: ${isActionable}`);
+      
+      const isExpired = sub.expiresAt && new Date(sub.expiresAt) < new Date();
+      
+      // If it's active but expired, we still return it so the UI can show "EXPIRED" properly in the active section if needed,
+      // but primarily we want to ensure 'active' and 'allocated' are NEVER hidden.
+      this.logger.log(`[DIAGNOSTIC] Sub ${sub.id} | Status: ${status} | Expired: ${isExpired} | Actionable: ${isActionable}`);
+      
       return isActionable;
     });
 
-    this.logger.log(
-      `[DIAGNOSTIC] Final Actionable Count: ${filtered.length}`,
-    );
-
+    this.logger.log(`[DIAGNOSTIC] Final Actionable Count: ${filtered.length}`);
     return filtered;
   }
 
