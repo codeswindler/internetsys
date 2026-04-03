@@ -10,7 +10,7 @@ export default function AuthLayout() {
     if (role === 'admin' || role === 'superadmin') {
       return <Navigate to="/admin/dashboard" replace />;
     }
-    return <Navigate to="/user/packages" replace />;
+    return <Navigate to="/user/dashboard" replace />;
   }
 
   return (

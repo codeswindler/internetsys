@@ -41,7 +41,7 @@ export default function Register() {
       localStorage.setItem('role', 'user');
       
       toast.success('Registration successful! Welcome aboard.');
-      navigate('/user/packages');
+      navigate('/user/dashboard');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Registration failed');
     } finally {

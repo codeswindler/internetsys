@@ -147,11 +147,11 @@ export default function MainLayout({ role }: LayoutProps) {
   }, [token, API_URL]);
 
   // Global Sync Sentinal: Monitor Recent/Active Subscription for Banner & Auto-Redirect
-  const { data: allActiveSubs = [] } = useQuery({
+  const { data: allSubsData = [] } = useQuery({
     queryKey: ['active-all-subscriptions'],
     queryFn: async () => {
       if (role !== 'user' || !token) return [];
-      const res = await axios.get(`${API_URL}/subscriptions/active-all`, {
+      const res = await axios.get(`${API_URL}/subscriptions/my`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
@@ -161,11 +161,17 @@ export default function MainLayout({ role }: LayoutProps) {
   });
 
   // Pick the most relevant one for the quick-actions banner
+  const allActiveSubs = allSubsData.filter((s: any) => 
+    ['active', 'pending', 'paid', 'verified', 'allocated'].includes(s.status?.toLowerCase())
+  );
+
   // Pick the most relevant one for the quick-actions banner:
-  // Priority: 1. Running (Active + startedAt), 2. Ready (Active but no startedAt), 3. Pending
+  // Priority: 1. Running (Active + startedAt + not expired), 2. Ready (Active but no startedAt or expired)
   const activeSub = ([...allActiveSubs].sort((a: any, b: any) => {
-    if (a.startedAt && !b.startedAt) return -1;
-    if (!a.startedAt && b.startedAt) return 1;
+    const aLive = a.startedAt && a.expiresAt && new Date(a.expiresAt) > new Date();
+    const bLive = b.startedAt && b.expiresAt && new Date(b.expiresAt) > new Date();
+    if (aLive && !bLive) return -1;
+    if (!aLive && bLive) return 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   })[0]) || null;
 
