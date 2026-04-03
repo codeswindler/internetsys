@@ -105,6 +105,15 @@ export class SubscriptionsService {
     });
   }
 
+  async findActive(userId: string): Promise<Subscription | null> {
+    const sub = await this.subRepo.findOne({
+      where: { user: { id: userId }, status: SubscriptionStatus.ACTIVE },
+      relations: ['package', 'router', 'user'],
+      order: { createdAt: 'DESC' },
+    });
+    return sub || null;
+  }
+
   async findAll(): Promise<Subscription[]> {
     return this.subRepo.find({
       relations: ['package', 'router', 'user'],
