@@ -44,13 +44,15 @@ export default function Packages() {
     refetchInterval: 10000,
   });
 
-  // Auto-select router if we caught it in the URL
+  // Auto-select router silently
   useEffect(() => {
-    const savedRouterId = localStorage.getItem('hotspot_router_id');
-    if (savedRouterId && routers) {
-      // Find the router in our list that matches the ID or name
-      const match = routers.find((r: any) => r.id === savedRouterId || r.name === savedRouterId);
-      if (match) setRouterId(match.id);
+    if (routers && routers.length > 0) {
+      const savedRouterId = localStorage.getItem('hotspot_router_id');
+      const match = savedRouterId
+        ? routers.find((r: any) => r.id === savedRouterId || r.name === savedRouterId)
+        : null;
+      
+      setRouterId(match ? match.id : routers[0].id);
     }
   }, [routers]);
 
@@ -398,22 +400,7 @@ export default function Packages() {
             <p className="text-slate-400 mb-6 font-medium">Total: KES {selectedPkg.price}</p>
             
             <form onSubmit={handleSubscribe} className="flex flex-col gap-5">
-              <div className="bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-                <label className="block text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
-                  <MapPin size={16} className="text-purple-400"/> Select Hotspot Location
-                </label>
-                <select 
-                  className="w-full bg-[rgba(15,23,42,0.8)] border border-[rgba(255,255,255,0.1)] rounded-lg p-3 text-white focus:border-cyan-400 transition-colors"
-                  value={routerId} 
-                  onChange={e => setRouterId(e.target.value)} 
-                  required
-                >
-                  <option value="" disabled>Where are you browsing from?</option>
-                  {routers?.map((r: any) => (
-                    <option key={r.id} value={r.id}>{r.name} (Online)</option>
-                  ))}
-                </select>
-              </div>
+
 
               <div className="bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
                 <label className="block text-sm font-semibold text-slate-300 mb-3">Payment Method</label>
