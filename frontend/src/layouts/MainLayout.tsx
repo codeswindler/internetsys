@@ -455,22 +455,22 @@ export default function MainLayout({ role }: LayoutProps) {
           <div className="flex items-center gap-2">
              <button 
                onClick={() => setIsRedeemModalOpen(true)}
-               className="p-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all"
+               className="p-1.5 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all"
                title="Redeem Voucher"
              >
-               <Ticket size={24} />
+               <Ticket size={18} />
              </button>
 
              {role === 'user' && (
                <div 
                  onClick={() => navigate(activeSub ? '/user/subscriptions' : '/user/packages')}
-                 className={`flex items-center gap-2 border px-3 py-1.5 rounded-full cursor-pointer transition-all font-bold ${
+                 className={`flex items-center gap-1.5 border px-2.5 py-1 rounded-full cursor-pointer transition-all font-bold ${
                    activeSub 
                    ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan hover:bg-cyan-500/20' 
                    : 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 animate-bounce shadow-lg shadow-amber-900/10 text-amber-400'
                  }`}
                >
-                 <Zap size={14} className={activeSub ? 'text-cyan-400 fill-cyan-400' : 'text-amber-400 fill-amber-400'} />
+                 <Zap size={12} className={activeSub ? 'text-cyan-400 fill-cyan-400' : 'text-amber-400 fill-amber-400'} />
                  <span className="text-[10px] font-black uppercase tracking-tighter">
                    {activeSub ? (new Date(activeSub.expiresAt).getTime() < Date.now() ? 'RENEW NOW' : 'ACTIVE') : 'BUY NEW PACKAGE'}
                  </span>
@@ -510,7 +510,7 @@ export default function MainLayout({ role }: LayoutProps) {
             <div className="glass-panel w-full max-w-md animate-fade-in bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl overflow-hidden">
                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r from-cyan-900/20 to-transparent">
                   <div className="flex items-center gap-3">
-                    <Ticket className="text-cyan-400" size={24} />
+                    <Ticket className="text-cyan-400" size={20} />
                     <h3 className="text-xl font-bold text-white">Redeem Voucher</h3>
                   </div>
                   <button onClick={() => setIsRedeemModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
