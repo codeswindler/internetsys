@@ -59,12 +59,13 @@ export default function Packages() {
   }, [routers]);
 
   // Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
-  const { data: allActiveSubs = [] } = useQuery({
+  const { data: activeSubsData, isLoading: activeSubsLoading } = useQuery({
     queryKey: ['active-all-subscriptions'],
     queryFn: () => api.get('/subscriptions/active-all').then(res => res.data),
     refetchInterval: 10000,
   });
 
+  const allActiveSubs = Array.isArray(activeSubsData) ? activeSubsData : [];
   const liveSession = allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date());
   const pendingPlans = allActiveSubs.filter((s: any) => !s.startedAt || new Date(s.expiresAt) <= new Date());
   const isAnyLive = !!liveSession;
@@ -200,7 +201,7 @@ export default function Packages() {
     }
   };
 
-  if (pkgsLoading || routersLoading || subsLoading) return <div className="p-8 text-center text-slate-400">Loading availability...</div>;
+  if (pkgsLoading || routersLoading || subsLoading || activeSubsLoading) return <div className="p-8 text-center text-slate-400">Loading availability...</div>;
 
   return (
     <div>
@@ -209,122 +210,23 @@ export default function Packages() {
         <p className="text-muted">Select a plan to start browsing the internet instantly.</p>
       </div>
 
-
-
-
-      {allActiveSubs.length > 0 && (
-        <div className="mb-12 space-y-4">
-          <div className="flex items-center gap-3 px-2 mb-2">
-            <Activity size={18} className="text-cyan-400 animate-pulse" />
-            <h3 className="text-[10px] font-black text-main uppercase tracking-[0.25em]">ACTIVE CONNECTION DASHBOARD ({allActiveSubs.length})</h3>
+      {isAnyLive && (
+        <div className="mb-8 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+             <Activity className="text-cyan-400 animate-pulse" size={20} />
+             <div>
+                <p className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Connection Detected</p>
+                <p className="text-sm font-bold text-white uppercase">{liveSession?.package?.name || 'Session Live'}</p>
+             </div>
           </div>
-
-          {allActiveSubs.map((sub: any) => {
-            const isLive = sub.startedAt && new Date(sub.expiresAt) > new Date();
-            
-            return (
-              <div key={sub.id} className="relative group animate-fade-in">
-                {/* ── 🚀 AMAZING HORIZONTAL DASHBOARD BAR (Screenshot 2 Match) ── */}
-                <div className="glass-panel p-6 md:px-10 md:py-8 border-cyan-500/20 bg-slate-900/40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.1)] rounded-[1.5rem]">
-                  
-                  {/* Subtle Shimmer (Screenshot Match) */}
-                  {isLive && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
-                  )}
-
-                  <div className="flex flex-col lg:flex-row items-center justify-between gap-8 relative z-10">
-                    
-                    {/* Left Section: Icon & Info (Screenshot Match) */}
-                    <div className="flex items-center gap-8 w-full lg:w-auto">
-                      {/* Waveform Icon Box */}
-                      <div className={`w-20 h-20 rounded-2xl flex items-center justify-center border transition-all duration-700 ${isLive ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' : 'bg-slate-900/60 border-white/5 text-slate-700'}`}>
-                        <Activity size={32} className={isLive ? 'animate-pulse' : ''} />
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${isLive ? 'text-cyan-400' : 'text-slate-500'}`}>
-                            {isLive ? 'ACTIVE SESSION' : 'TIMER PAUSED'}
-                          </span>
-                          {isLive && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
-                        </div>
-                        <h3 className="text-4xl font-black text-white tracking-tighter uppercase leading-none">{sub.package?.name}</h3>
-                        <div className="flex flex-col gap-1 items-start">
-                           <p className="text-xs font-bold text-muted opacity-60 flex items-center gap-2">
-                             Connected to <span className="text-white uppercase tracking-widest text-[10px]">{sub.router?.name || 'Pulselynk'}</span>
-                           </p>
-                           <div className="flex items-center gap-1.5 pt-1">
-                             <div className="w-1 h-1 rounded-full bg-cyan-500/40" />
-                             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                               DEVICE ID: <span className="text-slate-400 uppercase tracking-widest text-[9px]">{sub.deviceSessions?.[0]?.macAddress?.substring(0, 12) || 'DETECTING...'}</span>
-                             </span>
-                           </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Right Section: Timer & Stats (Screenshot Match) */}
-                    <div className="flex flex-col items-center lg:items-end gap-3 w-full lg:w-auto">
-                      {isLive ? (
-                        <>
-                          <div className="flex flex-col items-center lg:items-end">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">TIME REMAINING</span>
-                            <div className="text-5xl lg:text-6xl font-black font-mono text-orange-400 tracking-tighter tabular-nums drop-shadow-[0_0_15px_rgba(251,146,60,0.1)]">
-                               <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="block" />
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                             <div className="bg-slate-950/60 rounded-full px-4 py-1.5 border border-white/5 flex items-center gap-4">
-                                <div className="flex items-center gap-2">
-                                  <Download size={12} className="text-cyan-500" />
-                                  <span className="text-[10px] font-bold text-white font-mono">{traffic.downloadSpeed}</span>
-                                </div>
-                                <div className="w-px h-3 bg-white/10" />
-                                <div className="flex items-center gap-2">
-                                  <Upload size={12} className="text-emerald-500" />
-                                  <span className="text-[10px] font-bold text-white font-mono">{traffic.uploadSpeed}</span>
-                                </div>
-                             </div>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex flex-col items-center lg:items-end gap-4">
-                          <div className="text-center lg:text-right">
-                             <p className="text-[10px] text-muted font-bold uppercase tracking-widest opacity-60">TIME REMAINING</p>
-                             <h4 className="text-3xl font-black text-cyan-400 tracking-[0.2em]">WAITING</h4>
-                           </div>
-                           <button 
-                            onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
-                            disabled={startMutation.isPending || isAnyLive}
-                            className={`btn-primary w-full lg:w-56 py-4 text-xs font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 ${
-                              isAnyLive 
-                              ? 'opacity-30 cursor-not-allowed grayscale shadow-none' 
-                              : 'shadow-cyan-900/40 hover:shadow-cyan-400/40'
-                            }`}
-                           >
-                            {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : 
-                             isAnyLive ? <><Lock size={18} /> LOCKED</> : 
-                             'START BROWSING NOW'}
-                           </button>
-                        </div>
-                      )}
-                      
-                      <div 
-                        onClick={() => navigate('/user/subscriptions')}
-                        className="text-[10px] font-bold text-slate-500 hover:text-cyan-400 uppercase tracking-widest cursor-pointer group/link flex items-center gap-2 transition-all mt-2"
-                      >
-                         Manage Connection <ChevronRight size={14} className="group-hover/link:translate-x-1 transition-transform" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          <button 
+            onClick={() => navigate('/user/dashboard')}
+            className="px-4 py-2 bg-cyan-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-cyan-500/20"
+          >
+            Manage Session
+          </button>
         </div>
       )}
-
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {packages?.map((pkg: any) => (

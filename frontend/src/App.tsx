@@ -17,6 +17,7 @@ import AdminTransactions from './pages/admin/Transactions';
 import AdminSupport from './pages/admin/Support';
 import UserPackages from './pages/user/Packages';
 import UserSubscriptions from './pages/user/Subscriptions';
+import UserDashboard from './pages/user/UserDashboard';
 
 function App() {
   return (
@@ -44,9 +45,10 @@ function App() {
 
       {/* User Routes */}
       <Route path="/user" element={<MainLayout role="user" />}>
+        <Route path="dashboard" element={<UserDashboard />} />
         <Route path="packages" element={<UserPackages />} />
         <Route path="subscriptions" element={<UserSubscriptions />} />
-        <Route index element={<Navigate to="/user/packages" replace />} />
+        <Route index element={<Navigate to="/user/dashboard" replace />} />
       </Route>
     </Routes>
   );

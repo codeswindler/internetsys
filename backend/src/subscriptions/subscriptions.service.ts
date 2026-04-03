@@ -185,25 +185,32 @@ export class SubscriptionsService {
   }
 
   async findAllActive(userId: string): Promise<Subscription[]> {
+    this.logger.log(`[DIAGNOSTIC] findAllActive for ${userId} - Starting RELIABLE Query...`);
+    
+    // Simplify to the absolute basics that we know works in findMy
     const all = await this.subRepo.find({
       where: { user: { id: userId } },
-      relations: ['package', 'router', 'user', 'deviceSessions'],
+      relations: ['package', 'router'],
       order: { createdAt: 'DESC' },
     });
 
     this.logger.log(
-      `[DIAGNOSTIC] findAllActive for ${userId}: Found ${all.length} total subs.`,
+      `[DIAGNOSTIC] findAllActive Result: Found ${all.length} raw subs in DB.`,
     );
 
     // Filter for "Actionable" subs: Inclusion is based on STATUS, not TIME.
     const filtered = all.filter((sub) => {
       const status = sub.status?.toString().toLowerCase();
-      return status === 'pending' || status === 'active';
+      // Expanded status list to be extremely forgiving
+      const isActionable = ['active', 'pending', 'paid', 'verified', 'processing'].includes(status);
+      this.logger.log(`[DIAGNOSTIC] Sub ${sub.id} (${status}) -> Actionable: ${isActionable}`);
+      return isActionable;
     });
 
     this.logger.log(
-      `[DIAGNOSTIC] findAllActive for ${userId}: ${filtered.length} actionable found.`,
+      `[DIAGNOSTIC] Final Actionable Count: ${filtered.length}`,
     );
+
     return filtered;
   }
 

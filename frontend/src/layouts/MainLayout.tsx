@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock, ArrowRight } from 'lucide-react';
+import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock, ArrowRight, Activity, ChevronRight } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -283,7 +283,7 @@ export default function MainLayout({ role }: LayoutProps) {
   // Simple auth check
   if (!token) return <Navigate to="/login" replace />;
   if (role === 'admin' && userRole !== 'admin' && userRole !== 'superadmin') {
-    return <Navigate to="/user/packages" replace />;
+    return <Navigate to="/user/dashboard" replace />;
   }
 
   const handleLogout = () => {
@@ -310,6 +310,7 @@ export default function MainLayout({ role }: LayoutProps) {
   ];
 
   const userLinks: SidebarLink[] = [
+    { name: 'Dashboard', path: '/user/dashboard', icon: <Activity size={20} /> },
     { name: 'Browse Packages', path: '/user/packages', icon: <Package size={20} /> },
     { name: 'My Subscriptions', path: '/user/subscriptions', icon: <Wifi size={20} /> },
     { name: 'Redeem Voucher', path: '#', icon: <Ticket size={20} />, onClick: () => setIsRedeemModalOpen(true) },
@@ -505,7 +506,7 @@ export default function MainLayout({ role }: LayoutProps) {
 
               {role === 'user' && (
                 <div 
-                  onClick={() => navigate(activeSub ? '/user/subscriptions' : '/user/packages')}
+                  onClick={() => navigate('/user/dashboard')}
                   className={`flex items-center gap-1 border px-2 py-0.5 rounded-full cursor-pointer transition-all font-medium ${
                     activeSub 
                     ? (activeSub.startedAt ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan' : 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10')
