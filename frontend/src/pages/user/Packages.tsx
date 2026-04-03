@@ -145,7 +145,7 @@ export default function Packages() {
   });
 
   const redeemMutation = useMutation({
-    mutationFn: (data: { code: string; routerId: string }) => api.post('/vouchers/redeem', data).then(res => res.data),
+    mutationFn: (data: { code: string; routerId?: string }) => api.post('/vouchers/redeem', data).then(res => res.data),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
@@ -185,8 +185,8 @@ export default function Packages() {
   });
 
   const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!routerId) return toast.error('Please select an active hotspot location');
+    // e.preventDefault();
+    // if (!routerId) return toast.error('Please select an active hotspot location');
     
     if (paymentType === 'mpesa') {
       try {

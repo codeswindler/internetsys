@@ -89,9 +89,19 @@ export class SubscriptionsService {
         const ownHost = allHosts.find(h => h.mac.toUpperCase() === ownSession.macAddress.toUpperCase());
         if (ownHost) return ownHost;
       }
-      throw new BadRequestException(
-        'All detected devices already have active sessions. Disconnect other devices or try again.'
-      );
+
+      // If still no luck, return all active sessions for this user so they can disconnect
+      const myActiveSessions = activeSessions.filter(s => s.subscription?.user?.id === userId);
+      throw new BadRequestException({
+        message: 'All detected devices already have active sessions. Disconnect other devices or try again.',
+        error: 'DEVICE_LIMIT_REACHED',
+        connectedDevices: myActiveSessions.map(s => ({
+          id: s.id,
+          mac: s.macAddress,
+          model: s.deviceModel || 'Unknown Device',
+        })),
+        maxDevices: userSub.package.maxDevices,
+      });
     }
 
     // Step 5: If only one available host, auto-assign it
@@ -589,23 +599,20 @@ export class SubscriptionsService {
 
         if (activeDeviceCount >= maxAllowed) {
           const connectedDevices = sub.deviceSessions
-            .filter(s => s.isActive)
-            .map(s => ({
+            .filter((s) => s.isActive)
+            .map((s) => ({
               id: s.id,
               mac: s.macAddress,
               ip: s.ipAddress,
               model: s.deviceModel || 'Unknown Device',
               connectedAt: s.createdAt,
             }));
-
-          const err: any = new BadRequestException({
-            statusCode: 400,
+          throw new BadRequestException({
+            message: `You've reached your limit of ${maxAllowed} device(s). Disconnect one below to continue.`,
             error: 'DEVICE_LIMIT_REACHED',
-            message: `This package supports ${maxAllowed} device(s). Disconnect one to connect this device.`,
-            maxDevices: maxAllowed,
             connectedDevices,
+            maxDevices: maxAllowed,
           });
-          throw err;
         }
 
         // Create new session

@@ -127,6 +127,7 @@ export default function UserDashboard() {
           connectedDevices: data.connectedDevices || [],
           pendingSubId: subId,
         });
+        toast.error(data.message || 'Device limit reached', { id: 'limit-reached' });
       } else {
         toast.error(data?.message || 'Connection failed.');
       }
@@ -163,7 +164,18 @@ export default function UserDashboard() {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Sync failed. Are you on the Wi-Fi?', { id: 'syncing-toast' });
+      const data = err.response?.data;
+      if (data?.error === 'DEVICE_LIMIT_REACHED') {
+        setDeviceLimitModal({
+          open: true,
+          maxDevices: data.maxDevices || 1,
+          connectedDevices: data.connectedDevices || [],
+          pendingSubId: '', // Sync doesn't have a specific sub yet
+        });
+        toast.error(data.message || 'All device slots are full.', { id: 'limit-reached' });
+      } else {
+        toast.error(data?.message || 'Sync failed. Are you on the Wi-Fi?', { id: 'syncing-toast' });
+      }
     },
   });
 
