@@ -339,14 +339,17 @@ export default function MainLayout({ role }: LayoutProps) {
         ${isMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 flex items-center justify-between border-b border-white/5 md:border-b-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center font-bold text-white shadow-md">
+          <Link 
+            to={role === 'admin' ? '/admin/dashboard' : '/user/dashboard'} 
+            className="flex items-center gap-3 group px-2 py-1 -ml-2 rounded-lg hover:bg-white/5 transition-all"
+          >
+            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center font-bold text-white shadow-md group-hover:scale-110 transition-transform">
               PL
             </div>
             <span className="font-bold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">
               PulseLynk
             </span>
-          </div>
+          </Link>
 
           <div className="flex items-center gap-2">
             <button 
@@ -486,9 +489,12 @@ export default function MainLayout({ role }: LayoutProps) {
             >
               <Menu size={24} />
             </button>
-            <span className="font-bold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">
+            <Link 
+              to={role === 'admin' ? '/admin/dashboard' : '/user/dashboard'}
+              className="font-bold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300"
+            >
               PulseLynk
-            </span>
+            </Link>
           </div>
 
           {/* Icons Stack: Right aligned on both views */}

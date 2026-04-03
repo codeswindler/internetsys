@@ -202,7 +202,7 @@ export class SubscriptionsService {
     const filtered = all.filter((sub) => {
       const status = sub.status?.toString().toLowerCase();
       // Expanded status list to be extremely forgiving
-      const isActionable = ['active', 'pending', 'paid', 'verified', 'processing'].includes(status);
+      const isActionable = ['active', 'pending', 'paid', 'verified', 'processing', 'allocated'].includes(status);
       this.logger.log(`[DIAGNOSTIC] Sub ${sub.id} (${status}) -> Actionable: ${isActionable}`);
       return isActionable;
     });

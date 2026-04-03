@@ -48,7 +48,7 @@ export default function Login() {
       if (profileRes.data.role === 'admin' || profileRes.data.role === 'superadmin') {
         navigate('/admin/dashboard');
       } else {
-        navigate('/user/packages');
+        navigate('/user/dashboard');
       }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Access denied');
