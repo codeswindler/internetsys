@@ -20,7 +20,10 @@ import {
   ChevronDown,
   ChevronUp,
   Download,
-  Upload
+  Upload,
+  Laptop,
+  Monitor,
+  Cpu,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRef, useEffect } from 'react';

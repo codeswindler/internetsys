@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone, Lock } from 'lucide-react';
+import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone, Lock, Laptop, Monitor, Globe, Cpu, ChevronRight } from 'lucide-react';
 import { useRef } from 'react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
@@ -11,6 +11,7 @@ export default function Packages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
+  const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string) => void }>();
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [routerId, setRouterId] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);
@@ -64,7 +65,10 @@ export default function Packages() {
     refetchInterval: 10000,
   });
 
-  const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
+  const liveSession = allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date());
+  const pendingPlans = allActiveSubs.filter((s: any) => !s.startedAt || new Date(s.expiresAt) <= new Date());
+  const isAnyLive = !!liveSession;
+  const activeSub = liveSession || (pendingPlans.length > 0 ? pendingPlans[0] : null);
 
 
 
@@ -206,74 +210,148 @@ export default function Packages() {
 
 
 
-      {allActiveSubs.length > 0 && (
-        <div className="mb-12 space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="text-[10px] font-black tracking-[0.2em] text-cyan-400 uppercase">Your Active Plans ({allActiveSubs.length})</h3>
+      {/* ── 🚀 LIVE SESSION HERO ── */}
+      {liveSession && (
+        <div className="mb-12">
+          <div className="flex items-center gap-3 px-2 mb-6">
+            <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
+            <h2 className="text-sm font-black text-main uppercase tracking-[0.25em]">Session Live</h2>
           </div>
-          
-          {allActiveSubs.map((sub: any) => (
-            <div 
-              key={sub.id}
-              onClick={() => navigate('/user/subscriptions')}
-              className="glass-panel p-6 border-cyan-500/30 bg-panel flex flex-col md:flex-row justify-between items-center gap-6 cursor-pointer hover:border-cyan-400/50 transition-all group animate-fade-in"
-            >
-              <div className="flex items-center gap-5">
-                <div className="p-4 bg-cyan-500/20 text-cyan-400 rounded-2xl group-hover:scale-110 transition-transform">
-                  <Activity className={sub.startedAt ? "animate-pulse" : ""} size={32} />
+
+          <div className="glass-panel p-1 md:p-1 overflow-hidden relative group">
+            {/* Animated Background Glow */}
+            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-purple-500/20 rounded-3xl blur-2xl opacity-50 group-hover:opacity-100 transition-opacity duration-1000 animate-pulse" />
+            
+            <div className="relative glass-panel bg-slate-900/80 border-cyan-500/40 p-6 md:p-10 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-10">
+              
+              {/* Left Column: Plan & Device info */}
+              <div className="flex flex-col md:flex-row items-center gap-8 flex-1 w-full">
+                {/* Visual Icon */}
+                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 flex items-center justify-center relative shadow-2xl shrink-0">
+                  <div className="absolute inset-0 bg-cyan-400/10 rounded-3xl animate-ping opacity-20" />
+                  <Zap size={40} className="text-cyan-400 fill-cyan-400/20" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">
-                      {sub.startedAt ? 'Session Live' : 'READY TO START'}
-                    </span>
-                    {sub.startedAt && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>}
+
+                <div className="flex-1 text-center md:text-left space-y-4">
+                  <div>
+                    <h3 className="text-3xl font-black text-white tracking-tight mb-1">{liveSession.package?.name}</h3>
+                    <div className="flex items-center justify-center md:justify-start gap-4 text-xs font-bold text-muted uppercase tracking-widest">
+                      <span className="flex items-center gap-2"><MapPin size={14} className="text-cyan-500" /> {liveSession.router?.name}</span>
+                      <span className="text-slate-700">|</span>
+                      <span className="flex items-center gap-2 font-mono"><Globe size={14} className="text-blue-500" /> {liveSession.mikrotikUsername}</span>
+                    </div>
                   </div>
-                  <h3 className="text-2xl font-black text-main">{sub.package?.name}</h3>
-                  <p className="text-xs text-muted font-bold">Authorized for <span className="text-cyan-400">{sub.router?.name}</span></p>
+
+                  {/* Device Specs Badges */}
+                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-2">
+                    {liveSession.deviceSessions?.[0] && (
+                      <>
+                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl shadow-lg">
+                          {liveSession.deviceSessions[0].deviceModel?.toLowerCase().includes('iphone') ? <Smartphone size={14} className="text-purple-400" /> : 
+                           liveSession.deviceSessions[0].deviceModel?.toLowerCase().includes('windows') ? <Monitor size={14} className="text-blue-400" /> : 
+                           <Laptop size={14} className="text-cyan-400" />}
+                          <span className="text-[10px] font-black text-white/90 uppercase">{liveSession.deviceSessions[0].deviceModel || 'Connected'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl shadow-lg">
+                          <Cpu size={14} className="text-emerald-400" />
+                          <span className="text-[10px] font-mono text-white/70">{liveSession.deviceSessions[0].macAddress}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
-                {sub.startedAt ? (
-                  <div className="flex flex-col items-center md:items-end gap-2 text-right">
-                    <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="block" />
-                    <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Time Remaining</p>
+              {/* Middle Column: Countdown */}
+              <div className="flex flex-col items-center gap-2 px-10 border-x border-white/5 min-w-48 shrink-0">
+                <CountdownBadge expiresAt={liveSession.expiresAt} startedAt={liveSession.startedAt} variant="block" />
+                <p className="text-[10px] text-muted font-black tracking-widest uppercase opacity-70">Remaining Time</p>
+              </div>
+
+              {/* Right Column: 1-Click Repair */}
+              <div className="flex flex-col gap-3 w-full md:w-auto shrink-0">
+                <button 
+                  onClick={() => fireInternet()}
+                  className="btn-primary w-full md:w-56 py-4 text-xs font-black tracking-widest uppercase shadow-[0_0_30px_rgba(34,211,238,0.3)] transform hover:-translate-y-1 transition-all flex items-center justify-center gap-3 relative overflow-hidden group"
+                >
+                  <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500" />
+                  <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-700" />
+                  RE-AUTHORIZE
+                </button>
+                <button 
+                   onClick={() => navigate('/user/subscriptions')}
+                   className="flex items-center justify-center gap-2 text-[10px] font-black text-muted uppercase tracking-widest hover:text-cyan-400 transition-colors py-2"
+                >
+                  Manage Session <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 📋 QUEUED PLANS ── */}
+      {pendingPlans.length > 0 && (
+        <div className="mb-12">
+          <div className="flex items-center gap-3 px-2 mb-6">
+            <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+            <h2 className="text-xs font-bold text-muted uppercase tracking-widest">
+              {liveSession ? 'Queued / Standby Plans' : 'Your Active Hotspot Plans'}
+            </h2>
+          </div>
+
+          <div className="grid gap-6">
+            {pendingPlans.map((sub: any) => (
+              <div 
+                key={sub.id}
+                className="glass-panel p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 group relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.1)] bg-slate-900 border-white/5"
+              >
+                <div className="flex items-center gap-6 flex-1 w-full">
+                  <div className={`w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center transition-all duration-500 ${!isAnyLive ? 'group-hover:bg-cyan-500/10 group-hover:border-cyan-500/30' : ''}`}>
+                    <Zap size={28} className={`text-muted transition-all duration-500 ${!isAnyLive ? 'group-hover:text-cyan-400 group-hover:scale-110' : ''}`} />
                   </div>
-                ) : (
+                  <div>
+                    <h3 className="text-xl font-bold text-main mb-1 truncate">{sub.package?.name}</h3>
+                    <div className="flex items-center gap-4 text-[10px] font-bold text-muted/60 uppercase tracking-widest">
+                      <span className="flex items-center gap-1.5"><MapPin size={12} /> {sub.router?.name}</span>
+                      <span className="text-[10px] font-black text-cyan-400/80">READY TO START</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
                       startMutation.mutate(sub.id);
                     }}
-                    disabled={startMutation.isPending || !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date())}
-                    className={`btn-primary w-full md:w-48 py-4 text-sm font-black tracking-widest uppercase shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-3 ${
-                      !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) 
-                      ? 'opacity-50 cursor-not-allowed grayscale shadow-none' 
-                      : 'shadow-cyan-900/40'
+                    disabled={startMutation.isPending || isAnyLive}
+                    className={`btn-primary w-full md:w-48 py-4 text-xs font-black tracking-widest uppercase shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-3 ${
+                      isAnyLive 
+                      ? 'opacity-40 cursor-not-allowed grayscale shadow-none filter saturate-0' 
+                      : 'shadow-cyan-900/40 hover:shadow-cyan-400/20'
                     }`}
                   >
                     {startMutation.isPending ? (
                       <RefreshCw size={18} className="animate-spin" />
                     ) : (
-                      !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) ? (
-                        <>LOCKED <Lock size={18} /></>
+                      isAnyLive ? (
+                        <>LOCKED <Lock size={16} /></>
                       ) : (
-                        <>START BROWSING <ArrowRight size={18} /></>
+                        <>START BROWSING <ArrowRight size={16} /></>
                       )
                     )}
                   </button>
-                )}
-                
-                <div className="flex items-center gap-2 text-cyan-400 text-[10px] font-bold group-hover:gap-3 transition-all">
-                  {!!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) && !sub.startedAt
-                    ? 'Wait for current plan to end' 
-                    : <>Manage Connection <ArrowRight size={12} /></>
-                  }
+                  
+                  {isAnyLive && (
+                    <div className="text-[10px] font-black text-muted uppercase tracking-widest opacity-60">
+                      Wait for current plan to end
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
