@@ -20,13 +20,25 @@ export default function UserDashboard() {
   // Unified Query Key: Centralizes the ACTIVE timer/status
   const { data: activeSubsData, isLoading: activeSubsLoading } = useQuery({
     queryKey: ['active-all-subscriptions'],
-    queryFn: () => api.get('/subscriptions/active-all').then(res => res.data),
+    queryFn: () => api.get('/subscriptions/my').then(res => res.data),
     refetchInterval: 5000,
   });
 
-  const allActiveSubs = Array.isArray(activeSubsData) ? activeSubsData : [];
-  const liveSession = allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date());
-  const pendingPlans = allActiveSubs.filter((s: any) => !s.startedAt || new Date(s.expiresAt) <= new Date());
+  const subHistory = Array.isArray(activeSubsData) ? activeSubsData : [];
+  
+  // Filter for ONLY actionable types: active, pending, or allocated
+  const allActiveSubs = subHistory.filter((s: any) => 
+    ['active', 'pending', 'paid', 'verified', 'allocated'].includes(s.status?.toLowerCase())
+  );
+
+  const liveSession = allActiveSubs.find((s: any) => 
+    s.startedAt && s.expiresAt && new Date(s.expiresAt) > new Date()
+  );
+  
+  const pendingPlans = allActiveSubs.filter((s: any) => 
+    !s.startedAt || !s.expiresAt || new Date(s.expiresAt) <= new Date()
+  );
+
   const isAnyLive = !!liveSession;
   const activeSub = liveSession || (pendingPlans.length > 0 ? pendingPlans[0] : null);
 
