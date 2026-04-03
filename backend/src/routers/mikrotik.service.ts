@@ -62,10 +62,6 @@ export class MikrotikService {
     }
   }
 
-  public normalizeMac(mac?: string): string | undefined {
-    if (!mac) return undefined;
-    return mac.toUpperCase().replace(/-/g, ':');
-  }
 
   async verifyHostPresence(router: Router, mac?: string, ip?: string): Promise<boolean> {
     if (!mac && !ip) return false;
