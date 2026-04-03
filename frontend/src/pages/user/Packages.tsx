@@ -199,35 +199,7 @@ export default function Packages() {
         <p className="text-slate-400">Select a plan to start browsing the internet instantly.</p>
       </div>
 
-      {/* Global Voucher Redemption */}
-      <div className="mb-8 p-6 bg-cyan-900/10 border border-cyan-500/20 rounded-2xl animate-fade-in relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-cyan-500/10 blur-3xl rounded-full pointer-events-none"></div>
-        <h3 className="text-lg font-bold text-white mb-3">Have a Voucher Code?</h3>
-        <form 
-          className="flex flex-col sm:flex-row gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!voucherCode) return toast.error('Enter voucher code');
-            if (!routerId) return toast.error('Router not selected. Please connect to Hotspot first.');
-            redeemMutation.mutate({ code: voucherCode, routerId });
-          }}
-        >
-          <input 
-            className="flex-1 text-center sm:text-left tracking-widest uppercase font-mono text-lg bg-[rgba(15,23,42,0.8)] border-[rgba(255,255,255,0.1)] focus:border-cyan-400 rounded-lg p-3 text-white"
-            value={voucherCode} 
-            onChange={e => setVoucherCode(e.target.value.toUpperCase())} 
-            placeholder="ENTER VOUCHER CODE" 
-            required 
-          />
-          <button 
-            type="submit" 
-            disabled={redeemMutation.isPending}
-            className="btn-primary py-3 px-8 shadow-lg shadow-cyan-500/20 whitespace-nowrap"
-          >
-            {redeemMutation.isPending ? 'Redeeming...' : 'Redeem & Connect'}
-          </button>
-        </form>
-      </div>
+
 
       {activeSub && (
         <div 
@@ -247,21 +219,7 @@ export default function Packages() {
               <h3 className="text-2xl font-black text-white">{activeSub.package.name}</h3>
               <div className="flex flex-col gap-1">
                 <p className="text-xs text-slate-500">Connected to <span className="font-bold text-slate-300">{activeSub.router.name}</span></p>
-                  {/* Hidden MikroTik Login Form */}
-                  {activeSub && (
-                    <form 
-                      ref={formRef}
-                      method="post" 
-                      action={`http://${activeSub.router.localGateway || '10.5.50.1'}/login`}
-                      className="hidden"
-                      target="ghost-frame"
-                    >
-                      <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
-                      <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
-                      <input type="hidden" name="dst" value="https://google.com" />
-                    </form>
-                  )}
-                  <iframe name="ghost-frame" className="hidden" />
+
 
                   <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-800/50 backdrop-blur-sm p-4 rounded-2xl border border-slate-700/50">
                   <div className="flex items-center gap-3">

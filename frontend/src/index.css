@@ -228,8 +228,8 @@ th {
 /* Mobile Specific Zoom Out */
 @media (max-width: 768px) {
   html, body {
-    zoom: 0.85;
-    min-height: 120vh;
+    /* Standardized robust scrolling for mobile captive portals */
+    min-height: 100%;
   }
 }
 

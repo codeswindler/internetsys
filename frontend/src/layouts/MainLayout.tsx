@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { useTheme } from '../context/ThemeContext';
@@ -31,6 +32,40 @@ export default function MainLayout({ role }: LayoutProps) {
   const [isPulling, setIsPulling] = useState(false);
   const startY = useRef(0);
   const mainRef = useRef<HTMLElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // Voucher Redemption State
+  const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
+  const [voucherCode, setVoucherCode] = useState('');
+
+  const redeemMutation = useMutation({
+    mutationFn: async (data: { code: string; routerId: string }) => {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_URL}/vouchers/redeem`, data, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
+      const pkgName = data?.package?.name || 'Package';
+      toast.success(`Voucher Redeemed! Activated: ${pkgName}`, {
+        icon: '🎉',
+        duration: 5000
+      });
+      setIsRedeemModalOpen(false);
+      setVoucherCode('');
+      
+      // Auto-Fire Internet after redemption success
+      setTimeout(() => fireInternet(), 1000);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Voucher redemption failed');
+    }
+  });
+
+
 
   const handleTouchStart = (e: React.TouchEvent) => {
     // Only START pulling if we are precisely at the top of the content
@@ -112,6 +147,39 @@ export default function MainLayout({ role }: LayoutProps) {
     fetchProfile();
   }, [token, API_URL]);
 
+  // Global Sync Sentinal: Monitor Active Subscription for Timer & Auto-Redirect
+  const { data: activeSub = null } = useQuery({
+    queryKey: ['active-subscription'],
+    queryFn: async () => {
+      if (role !== 'user' || !token) return null;
+      const res = await axios.get(`${API_URL}/subscriptions/active`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    },
+    refetchInterval: 10000,
+    enabled: role === 'user' && !!token,
+  });
+
+  const fireInternet = (customUser?: string, customPass?: string) => {
+    if (!activeSub && !customUser) {
+       console.log('No active sub to fire');
+       return;
+    }
+    
+    // Satisfy the phone's OS that we are now UNBLOCKED
+    // We use HTTP first (pulselynk.co.ke) to avoid SSL-intercept errors
+    window.open('http://pulselynk.co.ke', '_blank');
+    
+    // Trigger the hidden MikroTik login form
+    setTimeout(() => {
+      if (formRef.current) {
+        console.log('FIRING INTERNET FORM...');
+        formRef.current.submit();
+      }
+    }, 500);
+  };
+
   // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -134,6 +202,16 @@ export default function MainLayout({ role }: LayoutProps) {
       }
     }
   }, [location.search, token, API_URL]);
+
+  // Auto-Fire Sentinel: Keep the user connected if they have an active sub
+  useEffect(() => {
+    if (activeSub && role === 'user' && !activeSub.startedAt) {
+      // If we have an active sub but it hasn't technically "started" (meaning we just bought it),
+      // we fire the internet immediately to trigger the router login.
+      console.log("AUTO-FIRING NEW SUBSCRIPTION...");
+      fireInternet();
+    }
+  }, [activeSub?.id, role]);
 
   const { data: unreadTotal = 0 } = useQuery({
     queryKey: ['admin-unread-total'],
@@ -197,31 +275,7 @@ export default function MainLayout({ role }: LayoutProps) {
   prevUnreadRef.current = unreadTotal;
   }, [unreadTotal, role, theme]);
 
-  // Global Sync Sentinal: Monitor Active Subscription for Timer & Auto-Redirect
-  const { data: activeSub = null } = useQuery({
-    queryKey: ['active-subscription'],
-    queryFn: async () => {
-      if (role !== 'user' || !token) return null;
-      const res = await axios.get(`${API_URL}/subscriptions/active`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      return res.data;
-    },
-    refetchInterval: 10000,
-    enabled: role === 'user' && !!token,
-  });
 
-  // Auto-Redirect Sentinel: Detect Expiration and Nudge User
-  useEffect(() => {
-    if (role === 'user' && activeSub) {
-      const isExpired = activeSub.expiresAt && new Date(activeSub.expiresAt).getTime() < Date.now();
-      
-      if (isExpired && location.pathname.startsWith('/user') && location.pathname !== '/user/packages') {
-        toast('Your plan has ended. Redirecting to packages...', { icon: '⌛' });
-        setTimeout(() => navigate('/user/packages'), 2000);
-      }
-    }
-  }, [activeSub, location.pathname, navigate, role]);
 
 
   // Simple auth check
@@ -258,7 +312,7 @@ export default function MainLayout({ role }: LayoutProps) {
   }, [location.pathname]);
 
   return (
-    <div className="flex h-[118vh] md:h-screen overflow-hidden bg-[var(--bg-main)]">
+    <div className="flex min-h-screen md:h-screen overflow-hidden bg-[var(--bg-main)]">
       {/* Mobile Backdrop */}
       {isMenuOpen && (
         <div 
@@ -398,29 +452,108 @@ export default function MainLayout({ role }: LayoutProps) {
              PulseLynk
           </span>
           
-          <div className="flex items-center gap-3">
-             {role === 'user' && activeSub && (
+          <div className="flex items-center gap-2">
+             <button 
+               onClick={() => setIsRedeemModalOpen(true)}
+               className="p-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all"
+               title="Redeem Voucher"
+             >
+               <Ticket size={24} />
+             </button>
+
+             {role === 'user' && (
                <div 
-                 onClick={() => navigate('/user/packages')}
-                 className="flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1.5 rounded-full animate-pulse-cyan cursor-pointer hover:bg-cyan-500/20 transition-all font-bold"
+                 onClick={() => navigate(activeSub ? '/user/subscriptions' : '/user/packages')}
+                 className={`flex items-center gap-2 border px-3 py-1.5 rounded-full cursor-pointer transition-all font-bold ${
+                   activeSub 
+                   ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan hover:bg-cyan-500/20' 
+                   : 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 animate-bounce shadow-lg shadow-amber-900/10 text-amber-400'
+                 }`}
                >
-                 <Zap size={14} className="text-cyan-400 fill-cyan-400" />
-                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-tighter">
-                   {new Date(activeSub.expiresAt).getTime() < Date.now() ? 'RENEW NOW' : 'ACTIVE'}
+                 <Zap size={14} className={activeSub ? 'text-cyan-400 fill-cyan-400' : 'text-amber-400 fill-amber-400'} />
+                 <span className="text-[10px] font-black uppercase tracking-tighter">
+                   {activeSub ? (new Date(activeSub.expiresAt).getTime() < Date.now() ? 'RENEW NOW' : 'ACTIVE') : 'BUY NEW PACKAGE'}
                  </span>
                </div>
              )}
              <button 
                onClick={() => setIsProfileModalOpen(true)}
-               className="flex-shrink-0 focus:outline-none transition-transform active:scale-95"
+               className="flex-shrink-0 focus:outline-none transition-transform active:scale-95 ml-1"
              >
                {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
              </button>
            </div>
         </header>
 
+        {/* Global Hidden MikroTik Login Form */}
+        {activeSub && role === 'user' && (
+          <form 
+            ref={formRef}
+            method="post" 
+            action={`http://${activeSub.router.localGateway || '10.5.50.1'}/login`}
+            className="hidden"
+            target="ghost-frame"
+          >
+            <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
+            <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
+            <input type="hidden" name="dst" value="https://google.com" />
+          </form>
+        )}
+        <iframe name="ghost-frame" className="hidden" />
+
+        {/* Redeem Voucher Modal */}
+        {isRedeemModalOpen && createPortal(
+          <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[10001] flex items-center justify-center p-4"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setIsRedeemModalOpen(false); }}
+          >
+            <div className="glass-panel w-full max-w-md animate-fade-in bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl overflow-hidden">
+               <div className="p-6 border-b border-white/10 flex justify-between items-center bg-gradient-to-r from-cyan-900/20 to-transparent">
+                  <div className="flex items-center gap-3">
+                    <Ticket className="text-cyan-400" size={24} />
+                    <h3 className="text-xl font-bold text-white">Redeem Voucher</h3>
+                  </div>
+                  <button onClick={() => setIsRedeemModalOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                    <X size={20} />
+                  </button>
+               </div>
+               <div className="p-8 flex flex-col gap-6">
+                  <p className="text-sm text-slate-400">Enter your 6-digit voucher code below to instantly activate your internet plan.</p>
+                  <form 
+                    className="flex flex-col gap-4"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const rid = localStorage.getItem('hotspot_router_id') || activeSub?.router?.id;
+                      if (!rid) return toast.error('HOTSPOT ERROR: Please disconnect and reconnect to the WiFi to detect your location.');
+                      redeemMutation.mutate({ code: voucherCode, routerId: rid });
+                    }}
+                  >
+                    <input 
+                      autoFocus
+                      className="w-full text-center tracking-[0.4em] uppercase font-mono text-3xl bg-black/40 border-slate-700 focus:border-cyan-500 rounded-xl p-4 text-cyan-400 shadow-inner"
+                      value={voucherCode} 
+                      onChange={e => setVoucherCode(e.target.value.toUpperCase())} 
+                      placeholder="XXXXXX" 
+                      maxLength={10}
+                      required 
+                    />
+                    <button 
+                      type="submit" 
+                      disabled={redeemMutation.isPending}
+                      className="btn-primary w-full py-4 text-lg font-bold shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2"
+                    >
+                      {redeemMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : <Zap size={20} />}
+                      {redeemMutation.isPending ? 'Validating...' : 'Activate Now'}
+                    </button>
+                  </form>
+               </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
         <div className="animate-fade-in max-w-7xl mx-auto">
-          <Outlet />
+          <Outlet context={{ fireInternet }} />
         </div>
         <BackToTop />
         {role === 'user' && <SupportChat />}

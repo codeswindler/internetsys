@@ -24,12 +24,12 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRef, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
-
 export default function Subscriptions() {
   const queryClient = useQueryClient();
-  const formRef = useRef<HTMLFormElement>(null);
+  const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string) => void }>();
   const [isFixing, setIsFixing] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -188,7 +188,6 @@ export default function Subscriptions() {
                     <>
                       {/* Hidden MikroTik Login Form */}
                       <form 
-                        ref={formRef}
                         method="post" 
                         action={`http://${activeSub.router.localGateway || '10.5.50.1'}/login`}
                         className="hidden"
@@ -224,14 +223,13 @@ export default function Subscriptions() {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  localStorage.removeItem('hotspot_mac');
-                                  localStorage.removeItem('hotspot_ip');
-                                  startMutation.mutate(activeSub.id);
+                                  fireInternet();
+                                  toast.success('Connection request sent!', { icon: '🔥' });
                                 }}
-                                className="text-[10px] text-slate-500 hover:text-cyan-400 font-bold uppercase transition-colors"
+                                className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-lg border border-cyan-500/30 text-[10px] font-black uppercase transition-all"
                                 title="Click if no internet"
                               >
-                                FIX IDENTITY
+                                RESUME SESSION
                               </button>
                             </div>
                           ) : (
@@ -239,9 +237,7 @@ export default function Subscriptions() {
                               onClick={() => {
                                 startMutation.mutate(activeSub.id, {
                                   onSuccess: () => {
-                                    setTimeout(() => {
-                                      if (formRef.current) formRef.current.submit();
-                                    }, 500);
+                                    setTimeout(() => fireInternet(), 500);
                                   }
                                 });
                               }}
