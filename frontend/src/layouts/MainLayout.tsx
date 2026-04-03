@@ -203,7 +203,7 @@ export default function MainLayout({ role }: LayoutProps) {
     if (role === 'user' && activeSub) {
       const isExpired = activeSub.expiresAt && new Date(activeSub.expiresAt).getTime() < Date.now();
       
-      if (isExpired && location.pathname.includes('/user/subscriptions')) {
+      if (isExpired && location.pathname.startsWith('/user') && location.pathname !== '/user/packages') {
         toast('Your plan has ended. Redirecting to packages...', { icon: '⌛' });
         setTimeout(() => navigate('/user/packages'), 2000);
       }

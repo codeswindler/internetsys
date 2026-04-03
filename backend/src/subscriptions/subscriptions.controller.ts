@@ -33,6 +33,12 @@ export class SubscriptionsController {
     return this.subscriptionsService.getTrafficStats(req.user.id);
   }
 
+  @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Get(':id/traffic')
+  trafficForSub(@Param('id') subId: string) {
+    return this.subscriptionsService.getTrafficForSub(subId);
+  }
+
   @Post(':id/start')
   start(@Param('id') id: string, @Body() body: { mac?: string, ip?: string }, @Ip() clientIp: string, @Request() req: any) {
     this.logger.log(`[DIAGNOSTIC] START REQUEST RECEIVED for sub ${id}. MAC: ${body.mac}, IP: ${body.ip}, ClientIP: ${clientIp}`);

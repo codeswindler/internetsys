@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Router as RouterIcon, Clock, XCircle, RefreshCw, CheckCircle, PackagePlus, Loader2 } from 'lucide-react';
+import { Router as RouterIcon, Clock, XCircle, RefreshCw, CheckCircle, PackagePlus, Loader2, Download, Upload } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import { ConfirmModal } from '../../components/ConfirmModal';
@@ -13,6 +13,29 @@ const STATUS_STYLES: Record<string, string> = {
   expired: 'badge-danger',
   cancelled: 'bg-slate-700/50 text-slate-400 border border-slate-600',
 };
+
+function TrafficIndicator({ subId }: { subId: string }) {
+  const { data: traffic } = useQuery({
+    queryKey: ['traffic', subId],
+    queryFn: () => api.get(`/subscriptions/${subId}/traffic`).then(res => res.data),
+    refetchInterval: 5000,
+  });
+
+  if (!traffic) return <span className="text-xs text-slate-600">—</span>;
+
+  return (
+    <div className="flex flex-col gap-1 text-[10px] font-mono whitespace-nowrap">
+      <div className="flex items-center gap-1.5 text-cyan-400">
+        <Download size={10} />
+        <b>{traffic.downloadSpeed}</b>
+      </div>
+      <div className="flex items-center gap-1.5 text-blue-400">
+        <Upload size={10} />
+        <b>{traffic.uploadSpeed}</b>
+      </div>
+    </div>
+  );
+}
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
@@ -116,6 +139,7 @@ export default function Subscriptions() {
                 <th className="p-4 font-semibold">Router</th>
                 <th className="p-4 font-semibold">Status</th>
                 <th className="p-4 font-semibold">Countdown</th>
+                <th className="p-4 font-semibold">Speed</th>
                 <th className="p-4 font-semibold">Dates</th>
                 <th className="p-4 font-semibold text-right">Actions</th>
               </tr>
@@ -160,7 +184,16 @@ export default function Subscriptions() {
                   {/* Countdown */}
                   <td className="p-4">
                     {s.status === 'active' && s.expiresAt ? (
-                      <CountdownBadge expiresAt={s.expiresAt} variant="inline" />
+                      <CountdownBadge expiresAt={s.expiresAt} startedAt={s.startedAt} variant="inline" />
+                    ) : (
+                      <span className="text-xs text-slate-600">—</span>
+                    )}
+                  </td>
+
+                  {/* Speed */}
+                  <td className="p-4">
+                    {s.status === 'active' ? (
+                      <TrafficIndicator subId={s.id} />
                     ) : (
                       <span className="text-xs text-slate-600">—</span>
                     )}

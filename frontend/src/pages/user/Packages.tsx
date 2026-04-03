@@ -262,7 +262,7 @@ export default function Packages() {
           <div className="flex flex-col items-center md:items-end gap-3 w-full md:w-auto">
             {activeSub.startedAt ? (
               <div className="flex flex-col items-center md:items-end gap-2 text-right">
-                <CountdownBadge expiresAt={activeSub.expiresAt} variant="block" />
+                <CountdownBadge expiresAt={activeSub.expiresAt} startedAt={activeSub.startedAt} variant="block" />
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Time Remaining</p>
                 
                 {/* Traffic Speedometer - Only active when internet is running */}

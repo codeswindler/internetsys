@@ -356,4 +356,25 @@ export class SubscriptionsService {
       return null;
     }
   }
+
+  async getTrafficForSub(subId: string): Promise<any> {
+    const sub = await this.subRepo.findOne({
+      where: { id: subId, status: 'active' as any },
+      relations: ['router', 'user'],
+    });
+
+    if (!sub || !sub.router.isOnline) return null;
+
+    try {
+      const stats = await this.mikrotikService.getUserTraffic(
+        sub.router, 
+        sub.mikrotikUsername, 
+        sub.user.lastIp, 
+        sub.user.lastMac
+      );
+      return stats;
+    } catch (e) {
+      return null;
+    }
+  }
 }
