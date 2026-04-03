@@ -405,12 +405,12 @@ export default function MainLayout({ role }: LayoutProps) {
         </nav>
 
         {role === 'user' && activeSub && (
-          <div className="p-4 mx-4 mb-2 glass-panel border-cyan-500/30 bg-cyan-500/5">
+          <div className="p-4 mx-4 mb-2 glass-panel border-cyan-500/30 bg-panel">
             <div className="flex items-center gap-2 mb-1">
               <Zap size={14} className="text-cyan-400 fill-cyan-400 animate-pulse" />
               <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Session</span>
             </div>
-            <div className="text-xs text-slate-300 font-medium truncate mb-2">
+            <div className="text-xs text-main font-medium truncate mb-2">
               {activeSub.package?.name || 'Hotspot Plan'}
             </div>
             <button 
@@ -421,6 +421,7 @@ export default function MainLayout({ role }: LayoutProps) {
             </button>
           </div>
         )}
+
 
         <div className="p-4 border-t border-white/5 space-y-2">
           <div className="flex items-center gap-2 w-full">
@@ -438,11 +439,12 @@ export default function MainLayout({ role }: LayoutProps) {
 
             <button 
               onClick={toggleTheme}
-              className="p-3 rounded-lg bg-white/5 text-slate-400 hover:text-cyan-400 hover:bg-white/10 transition-all border border-white/5"
+              className="p-3 rounded-lg bg-panel text-muted hover:text-cyan-400 hover:bg-panel-hover transition-all border border-border-color"
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
+
           </div>
           
           <button 

@@ -367,10 +367,11 @@ export default function Packages() {
             <div className="absolute inset-0 bg-gradient-to-br from-[rgba(14,165,233,0.05)] to-transparent pointer-events-none"></div>
             
             <div className="flex justify-between items-start mb-4 relative z-10">
-              <h3 className="text-2xl font-bold text-white tracking-tight">{pkg.name}</h3>
-              <div className="p-2 bg-[rgba(14,165,233,0.1)] text-cyan-400 rounded-lg group-hover:scale-110 transition-transform">
+              <h3 className="text-2xl font-bold text-main tracking-tight">{pkg.name}</h3>
+              <div className="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg group-hover:scale-110 transition-transform">
                 <Wifi size={24} />
               </div>
+
             </div>
             
             <p className="text-4xl font-black text-cyan-400 mb-6 relative z-10">
@@ -378,7 +379,7 @@ export default function Packages() {
               {pkg.price}
             </p>
 
-            <ul className="text-sm text-slate-300 mb-8 space-y-3 relative z-10">
+            <ul className="text-sm text-muted mb-8 space-y-3 relative z-10">
               <li className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 Valid for {pkg.durationValue} {pkg.durationType}
@@ -387,11 +388,11 @@ export default function Packages() {
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 {pkg.dataLimitMB === 0 ? 'Unlimited Data' : `Up to ${pkg.dataLimitMB} MB Data Limit`}
               </li>
-              <li className="flex items-center gap-2 text-muted">
+              <li className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 {pkg.downloadSpeed ? `${pkg.downloadSpeed} Download Speed` : 'High-speed connectivity'}
               </li>
-              <li className="flex items-center gap-2 text-muted">
+              <li className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 Supports {pkg.maxDevices || 1} Device(s)
               </li>
@@ -405,6 +406,7 @@ export default function Packages() {
               )}
             </ul>
 
+
             <button className="btn-primary w-full mt-auto relative z-10 shadow-lg shadow-cyan-500/20">
               Select Plan
             </button>
@@ -414,9 +416,10 @@ export default function Packages() {
 
       {selectedPkg && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedPkg(null); }}>
-          <div className="glass-panel p-8 w-full max-w-lg animate-fade-in relative z-50 bg-[#0f172a] shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h3 className="text-2xl font-bold mb-2 text-white">Purchase {selectedPkg.name}</h3>
-            <p className="text-slate-400 mb-6 font-medium">Total: KES {selectedPkg.price}</p>
+          <div className="glass-panel p-8 w-full max-w-lg animate-fade-in relative z-50 bg-panel shadow-2xl overflow-y-auto max-h-[90vh]">
+            <h3 className="text-2xl font-bold mb-2 text-main">Purchase {selectedPkg.name}</h3>
+            <p className="text-muted mb-6 font-medium">Total: KES {selectedPkg.price}</p>
+
             
             <form onSubmit={handleSubscribe} className="flex flex-col gap-5">
 
