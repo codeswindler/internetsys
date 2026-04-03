@@ -70,6 +70,7 @@ export class SubscriptionsService {
     // Step 3: Get all MACs that are already bound to active device sessions
     const activeSessions = await this.sessionRepo.find({
       where: { isActive: true },
+      relations: ['subscription', 'subscription.user'],
     });
     const boundMacs = new Set(
       activeSessions
