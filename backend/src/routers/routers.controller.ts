@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Delete,
+  UseGuards,
+} from '@nestjs/common';
 import { RoutersService } from './routers.service';
 import { Router } from '../entities/router.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -63,7 +72,13 @@ export class RoutersController {
   }
 
   @Post('profiles/sync')
-  syncProfile(@Body() body: { name: string; rateLimit: string; routerIds?: string[] }) {
-    return this.routersService.createProfileOnAll(body.name, body.rateLimit, body.routerIds);
+  syncProfile(
+    @Body() body: { name: string; rateLimit: string; routerIds?: string[] },
+  ) {
+    return this.routersService.createProfileOnAll(
+      body.name,
+      body.rateLimit,
+      body.routerIds,
+    );
   }
 }

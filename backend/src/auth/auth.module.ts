@@ -15,13 +15,14 @@ import { SeederService } from './seeder.service';
     PassportModule,
     JwtModule.registerAsync({
       useFactory: () => ({
-        secret: process.env.JWT_SECRET || 'super-secret-key-change-in-production',
+        secret:
+          process.env.JWT_SECRET || 'super-secret-key-change-in-production',
         signOptions: { expiresIn: '1d' },
       }),
     }),
   ],
   providers: [AuthService, JwtStrategy, SeederService],
   controllers: [AuthController],
-  exports: [AuthService]
+  exports: [AuthService],
 })
 export class AuthModule {}

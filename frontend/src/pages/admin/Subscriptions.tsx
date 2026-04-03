@@ -111,7 +111,7 @@ export default function Subscriptions() {
       </div>
     );
 
-  const activeCount = subs?.filter((s: any) => s.status === 'active').length ?? 0;
+  const activeCount = subs?.filter((s: any) => s.status?.toString().toLowerCase() === 'active').length ?? 0;
 
   return (
     <div>
@@ -135,7 +135,7 @@ export default function Subscriptions() {
                 }`}
               >
                 {f}
-                {f === 'pending' && (subs?.filter((s:any) => s.status === 'pending').length || 0) > 0 && (
+                {f === 'pending' && (subs?.filter((s:any) => s.status?.toString().toLowerCase() === 'pending').length || 0) > 0 && (
                   <span className="ml-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full inline-block animate-pulse" />
                 )}
               </button>
@@ -167,12 +167,12 @@ export default function Subscriptions() {
             </thead>
             <tbody>
               {subs
-                ?.filter((s: any) => statusFilter === 'all' || s.status === statusFilter)
+                ?.filter((s: any) => statusFilter === 'all' || s.status?.toString().toLowerCase() === statusFilter)
                 ?.map((s: any) => (
                 <tr
                   key={s.id}
                   className={`border-b border-[rgba(255,255,255,0.04)] last:border-0 hover:bg-[rgba(255,255,255,0.02)] transition-colors align-top
-                    ${s.status === 'cancelled' || s.status === 'expired' ? 'opacity-60' : ''}`}
+                    ${s.status?.toString().toLowerCase() === 'cancelled' || s.status?.toString().toLowerCase() === 'expired' ? 'opacity-60' : ''}`}
                 >
                   {/* User */}
                   <td className="p-4">
@@ -199,14 +199,14 @@ export default function Subscriptions() {
 
                   {/* Status */}
                   <td className="p-4">
-                    <span className={`badge text-[11px] ${STATUS_STYLES[s.status] ?? 'badge-danger'}`}>
+                    <span className={`badge text-[11px] ${STATUS_STYLES[s.status?.toString().toLowerCase()] ?? 'badge-danger'}`}>
                       {s.status}
                     </span>
                   </td>
 
                   {/* Countdown */}
                   <td className="p-4">
-                    {s.status === 'active' && s.expiresAt ? (
+                    {s.status?.toString().toLowerCase() === 'active' && s.expiresAt ? (
                       <CountdownBadge expiresAt={s.expiresAt} startedAt={s.startedAt} variant="inline" />
                     ) : (
                       <span className="text-xs text-slate-600">—</span>
@@ -215,7 +215,7 @@ export default function Subscriptions() {
 
                   {/* Speed */}
                   <td className="p-4">
-                    {s.status === 'active' ? (
+                    {s.status?.toString().toLowerCase() === 'active' ? (
                       <TrafficIndicator subId={s.id} />
                     ) : (
                       <span className="text-xs text-slate-600">—</span>
@@ -235,7 +235,7 @@ export default function Subscriptions() {
                   {/* Actions */}
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {s.status === 'pending' && (
+                      {s.status?.toString().toLowerCase() === 'pending' && (
                         <button
                           className="flex items-center gap-1 text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 rounded-lg transition-colors"
                           onClick={() => setConfirmState({
@@ -250,7 +250,7 @@ export default function Subscriptions() {
                         </button>
                       )}
 
-                      {s.status === 'active' && (
+                      {s.status?.toString().toLowerCase() === 'active' && (
                         <button
                           className="flex items-center gap-1 text-xs font-bold text-red-400 hover:bg-red-500/10 border border-red-500/30 hover:border-red-500/60 px-3 py-1.5 rounded-lg transition-colors"
                           onClick={() => setConfirmState({
@@ -265,7 +265,7 @@ export default function Subscriptions() {
                         </button>
                       )}
 
-                      {s.status === 'cancelled' && (
+                      {s.status?.toString().toLowerCase() === 'cancelled' && (
                         <button
                           className="flex items-center gap-1 text-xs font-bold text-cyan-400 hover:bg-cyan-500/10 border border-cyan-500/30 hover:border-cyan-500/60 px-3 py-1.5 rounded-lg transition-colors"
                           onClick={() => reactivateMutation.mutate(s.id)}

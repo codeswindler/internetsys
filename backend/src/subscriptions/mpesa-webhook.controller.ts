@@ -14,17 +14,17 @@ export class MpesaWebhookController {
 
     try {
       const result = body.Body?.stkCallback;
-      if (!result) return 'OK'; // Ignore malformed requests silently 
+      if (!result) return 'OK'; // Ignore malformed requests silently
 
       if (result.ResultCode === 0) {
         // Success
-        // CheckoutRequestID can be mapped to a subId if we stored it in the DB, 
+        // CheckoutRequestID can be mapped to a subId if we stored it in the DB,
         // but Safaricom also returns the AccountReference inside Item if we passed it there.
         // Actually Daraja Daraja returns AccountReference? No, it returns MpesaReceiptNumber.
         // To properly map, we should store CheckoutRequestID against the Subscription before returning stkPush response.
-        
+
         // As a fallback/hack for now if DB schema isn't changed:
-        // Safaricom sends Phone number in CallbackMetadata. 
+        // Safaricom sends Phone number in CallbackMetadata.
         // We can just find the most recent 'pending' subscription for this phone number and activate it.
         const meta = result.CallbackMetadata?.Item;
         let phoneStr = '';
@@ -32,21 +32,28 @@ export class MpesaWebhookController {
         if (meta) {
           meta.forEach((item: any) => {
             if (item.Name === 'PhoneNumber') phoneStr = item.Value?.toString();
-            if (item.Name === 'MpesaReceiptNumber') receipt = item.Value?.toString();
+            if (item.Name === 'MpesaReceiptNumber')
+              receipt = item.Value?.toString();
           });
         }
 
         if (phoneStr) {
           // Attempt to auto-activate the most recent pending sub for this phone
-          await this.subscriptionsService.activatePendingByPhone(phoneStr, PaymentMethod.MPESA, receipt);
+          await this.subscriptionsService.activatePendingByPhone(
+            phoneStr,
+            PaymentMethod.MPESA,
+            receipt,
+          );
         }
       } else {
-        this.logger.log(`STK Push failed for Checkout ID ${result.CheckoutRequestID}: ${result.ResultDesc}`);
+        this.logger.log(
+          `STK Push failed for Checkout ID ${result.CheckoutRequestID}: ${result.ResultDesc}`,
+        );
       }
     } catch (e: any) {
       this.logger.error('Failed to process MPESA webhook: ' + e.message);
     }
-    
+
     return { ResultCode: 0, ResultDesc: 'Success' };
   }
 }

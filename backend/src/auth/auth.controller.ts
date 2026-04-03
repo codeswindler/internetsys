@@ -1,4 +1,15 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Request, Param, Ip } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Get,
+  UseGuards,
+  Request,
+  Param,
+  Ip,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RolesGuard } from './roles.guard';
 import { Roles } from './roles.decorator';
@@ -19,13 +30,19 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Post('user/login')
   userLogin(@Body() body: any) {
-    const identifier = body.identifier || body.phone || body.email || body.username;
+    const identifier =
+      body.identifier || body.phone || body.email || body.username;
     return this.authService.userLogin(identifier, body.password);
   }
 
   @Post('user/register')
   userRegister(@Body() body: any) {
-    return this.authService.userRegister(body.name, body.phone, body.password, body.username);
+    return this.authService.userRegister(
+      body.name,
+      body.phone,
+      body.password,
+      body.username,
+    );
   }
 
   // Setup initial admin for testing
@@ -45,14 +62,22 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   updateProfileLegacy(@Request() req: any, @Body() body: any) {
     // Some clients use POST to update profile, alias to put
-    return this.authService.updateProfile(req.user.id, req.user.role || 'user', body);
+    return this.authService.updateProfile(
+      req.user.id,
+      req.user.role || 'user',
+      body,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
-  @Post('profile/update') 
+  @Post('profile/update')
   @HttpCode(HttpStatus.OK)
   updateProfileAlias(@Request() req: any, @Body() body: any) {
-    return this.authService.updateProfile(req.user.id, req.user.role || 'user', body);
+    return this.authService.updateProfile(
+      req.user.id,
+      req.user.role || 'user',
+      body,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -66,7 +91,12 @@ export class AuthController {
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
   @Post('admin/users')
   adminCreateUser(@Body() body: any) {
-    return this.authService.adminCreateUser(body.name, body.phone, body.password, body.username);
+    return this.authService.adminCreateUser(
+      body.name,
+      body.phone,
+      body.password,
+      body.username,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -94,13 +124,21 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('profile')
   updateProfilePost(@Request() req: any, @Body() body: any) {
-    return this.authService.updateProfile(req.user.id, req.user.role || 'user', body);
+    return this.authService.updateProfile(
+      req.user.id,
+      req.user.role || 'user',
+      body,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('heartbeat')
   @HttpCode(HttpStatus.OK)
-  heartbeat(@Request() req: any, @Body() body: { mac?: string, ip?: string }, @Ip() clientIp: string) {
+  heartbeat(
+    @Request() req: any,
+    @Body() body: { mac?: string; ip?: string },
+    @Ip() clientIp: string,
+  ) {
     if (req.user.role && req.user.role !== 'user') return { success: true };
     const finalIp = body.ip || clientIp;
     return this.authService.heartbeat(req.user.id, body.mac, finalIp);

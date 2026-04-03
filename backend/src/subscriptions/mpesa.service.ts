@@ -4,31 +4,53 @@ import axios from 'axios';
 @Injectable()
 export class MpesaService {
   private readonly logger = new Logger(MpesaService.name);
-  
+
   // Credentials from Environment
-  private get consumerKey() { return process.env.MPESA_CONSUMER_KEY; }
-  private get consumerSecret() { return process.env.MPESA_CONSUMER_SECRET; }
-  private get passkey() { return process.env.MPESA_PASSKEY; }
-  private get shortcode() { return process.env.MPESA_SHORTCODE; }
-  private get callbackUrl() { return process.env.MPESA_CALLBACK_URL; }
-  
+  private get consumerKey() {
+    return process.env.MPESA_CONSUMER_KEY;
+  }
+  private get consumerSecret() {
+    return process.env.MPESA_CONSUMER_SECRET;
+  }
+  private get passkey() {
+    return process.env.MPESA_PASSKEY;
+  }
+  private get shortcode() {
+    return process.env.MPESA_SHORTCODE;
+  }
+  private get callbackUrl() {
+    return process.env.MPESA_CALLBACK_URL;
+  }
+
   // For production, change to api.safaricom.co.ke
   private readonly baseUrl = 'https://sandbox.safaricom.co.ke';
 
   async getAccessToken(): Promise<string> {
-    const credentials = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`).toString('base64');
-    const response = await axios.get(`${this.baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
-      headers: {
-        Authorization: `Basic ${credentials}`,
+    const credentials = Buffer.from(
+      `${this.consumerKey}:${this.consumerSecret}`,
+    ).toString('base64');
+    const response = await axios.get(
+      `${this.baseUrl}/oauth/v1/generate?grant_type=client_credentials`,
+      {
+        headers: {
+          Authorization: `Basic ${credentials}`,
+        },
       },
-    });
+    );
     return response.data.access_token;
   }
 
-  async stkPush(phone: string, amount: number, accountReference: string, transactionDesc: string): Promise<any> {
+  async stkPush(
+    phone: string,
+    amount: number,
+    accountReference: string,
+    transactionDesc: string,
+  ): Promise<any> {
     const accessToken = await this.getAccessToken();
     const timestamp = this.getTimestamp();
-    const password = Buffer.from(`${this.shortcode}${this.passkey}${timestamp}`).toString('base64');
+    const password = Buffer.from(
+      `${this.shortcode}${this.passkey}${timestamp}`,
+    ).toString('base64');
 
     // Format phone number: must start with 254
     let formattedPhone = phone.replace(/\s+/g, '');
@@ -52,13 +74,19 @@ export class MpesaService {
       TransactionDesc: transactionDesc,
     };
 
-    this.logger.log(`Initiating STK Push to ${formattedPhone} for KES ${amount}`);
+    this.logger.log(
+      `Initiating STK Push to ${formattedPhone} for KES ${amount}`,
+    );
 
-    const response = await axios.post(`${this.baseUrl}/mpesa/stkpush/v1/processrequest`, payload, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const response = await axios.post(
+      `${this.baseUrl}/mpesa/stkpush/v1/processrequest`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    });
+    );
 
     return response.data;
   }

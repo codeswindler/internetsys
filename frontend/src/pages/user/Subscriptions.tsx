@@ -277,7 +277,7 @@ export default function Subscriptions() {
                   </div>
                   <div className="text-right">
                     <div className="text-main font-bold mb-1">KES {sub.amountPaid}</div>
-                    <div className="text-[10px] text-muted font-bold px-2 py-1 bg-panel border border-border-color rounded uppercase tracking-wider">
+                    <div className={`text-[10px] font-bold px-2 py-1 bg-panel border rounded uppercase tracking-wider ${sub.status?.toString().toLowerCase() === 'expired' ? 'text-orange-400 border-orange-500/20' : 'text-emerald-400 border-emerald-500/20'}`}>
                       {sub.status}
                     </div>
                   </div>

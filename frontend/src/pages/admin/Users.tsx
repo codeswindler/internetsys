@@ -41,13 +41,13 @@ interface CustomerUser {
 function getActiveSubs(user: CustomerUser): Subscription[] {
   return (
     user.subscriptions
-      ?.filter(s => s.status === 'active' && s.expiresAt && new Date(s.expiresAt).getTime() > Date.now())
+      ?.filter(s => s.status?.toString().toLowerCase() === 'active' && s.expiresAt && new Date(s.expiresAt).getTime() > Date.now())
       .sort((a, b) => new Date(b.startedAt!).getTime() - new Date(a.startedAt!).getTime())
   ) ?? [];
 }
 
 function getInactiveSubs(user: CustomerUser): Subscription[] {
-  return user.subscriptions?.filter(s => s.status === 'cancelled' || s.status === 'expired') ?? [];
+  return user.subscriptions?.filter(s => s.status?.toString().toLowerCase() === 'cancelled' || s.status?.toString().toLowerCase() === 'expired') ?? [];
 }
 
 // ─── Active Plans Popup ───────────────────────────────────────────────────────
@@ -135,13 +135,13 @@ function ActivePlansPopup({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <p className="font-bold text-slate-300 text-sm">{s.package.name}</p>
-                          <span className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded border ${s.status === 'expired' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600'}`}>{s.status}</span>
+                          <span className={`text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded border ${s.status?.toString().toLowerCase() === 'expired' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600'}`}>{s.status}</span>
                         </div>
                         <p className="text-xs text-slate-500 flex items-center gap-1">
                           <RouterIcon size={11} /> {s.router.name}
                         </p>
                       </div>
-                      {s.status === 'cancelled' && (
+                      {s.status?.toString().toLowerCase() === 'cancelled' && (
                         <button
                           onClick={() => onReactivate(s.id, s.status)}
                           disabled={reactivatePending}

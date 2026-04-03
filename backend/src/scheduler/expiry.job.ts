@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
-import { Subscription, SubscriptionStatus } from '../entities/subscription.entity';
+import {
+  Subscription,
+  SubscriptionStatus,
+} from '../entities/subscription.entity';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Injectable()
@@ -18,7 +21,7 @@ export class ExpiryJob {
   @Cron(CronExpression.EVERY_MINUTE)
   async handleExpiry() {
     this.logger.debug('Running subscription expiry check...');
-    
+
     // Find all active subscriptions where expiresAt is in the past
     const expiredSubs = await this.subRepo.find({
       where: {

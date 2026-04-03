@@ -18,16 +18,18 @@ export class RouterHealthJob {
   @Cron('0 */5 * * * *') // Every 5 minutes
   async checkHealth() {
     this.logger.debug('Running router health check...');
-    
+
     const routers = await this.routerRepo.find();
     for (const router of routers) {
       const result = await this.mikrotikService.testConnection(router);
       const isOnline = result.success;
-      
+
       if (router.isOnline !== isOnline) {
-        this.logger.log(`Router ${router.host} state changed from ${router.isOnline} to ${isOnline}`);
+        this.logger.log(
+          `Router ${router.host} state changed from ${router.isOnline} to ${isOnline}`,
+        );
       }
-      
+
       router.isOnline = isOnline;
       router.lastCheckedAt = new Date();
       await this.routerRepo.save(router);

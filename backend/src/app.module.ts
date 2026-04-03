@@ -21,7 +21,6 @@ import { Transaction } from './entities/transaction.entity';
 import { SupportMessage } from './entities/support-message.entity';
 import { DeviceSession } from './entities/device-session.entity';
 
-
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -32,7 +31,17 @@ import { DeviceSession } from './entities/device-session.entity';
       username: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'pulselynk',
-      entities: [Admin, User, Router, Package, Subscription, Voucher, Transaction, SupportMessage, DeviceSession],
+      entities: [
+        Admin,
+        User,
+        Router,
+        Package,
+        Subscription,
+        Voucher,
+        Transaction,
+        SupportMessage,
+        DeviceSession,
+      ],
 
       synchronize: true, // Auto-create tables in development
     }),

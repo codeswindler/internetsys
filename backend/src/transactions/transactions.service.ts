@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Transaction, TransactionMethod, TransactionStatus } from '../entities/transaction.entity';
+import {
+  Transaction,
+  TransactionMethod,
+  TransactionStatus,
+} from '../entities/transaction.entity';
 import { User } from '../entities/user.entity';
 import { Package } from '../entities/package.entity';
 
@@ -32,7 +36,7 @@ export class TransactionsService {
       status: data.status || TransactionStatus.COMPLETED,
       notes: data.notes,
     });
-    
+
     return this.transactionRepo.save(tx);
   }
 

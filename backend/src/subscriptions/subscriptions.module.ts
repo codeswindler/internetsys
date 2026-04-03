@@ -15,7 +15,13 @@ import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Subscription, Package, User, Router, DeviceSession]),
+    TypeOrmModule.forFeature([
+      Subscription,
+      Package,
+      User,
+      Router,
+      DeviceSession,
+    ]),
 
     RoutersModule, // To use MikrotikService
     TransactionsModule,

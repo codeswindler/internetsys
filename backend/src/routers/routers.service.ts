@@ -20,7 +20,7 @@ export class RoutersService {
     const router = this.routerRepo.create(createDto);
     router.isOnline = false;
     router.lastCheckedAt = new Date();
-    
+
     // Save immediately so the user isn't blocked by a hanging timeout
     const savedRouter = await this.routerRepo.save(router);
 
@@ -57,14 +57,14 @@ export class RoutersService {
     const result = await this.mikrotikService.testConnection(router);
     router.isOnline = result.success;
     router.lastCheckedAt = new Date();
-    
+
     const updatedRouter = await this.routerRepo.save(router);
-    
+
     // Sync VPN user if NATed
     if (updatedRouter.isNated) {
       this.vpnService.syncUser(updatedRouter).catch(() => {});
     }
-    
+
     return updatedRouter;
   }
 
@@ -76,18 +76,27 @@ export class RoutersService {
     await this.routerRepo.remove(router);
   }
 
-  async testConnection(id: string): Promise<{ success: boolean; message?: string }> {
+  async testConnection(
+    id: string,
+  ): Promise<{ success: boolean; message?: string }> {
     const router = await this.findOne(id);
     const connectionResult = await this.mikrotikService.testConnection(router);
     router.isOnline = connectionResult.success;
-    router.lastError = connectionResult.success ? null : (connectionResult.message || 'Unknown error');
+    router.lastError = connectionResult.success
+      ? null
+      : connectionResult.message || 'Unknown error';
     router.lastCheckedAt = new Date();
-    
+
     if (connectionResult.success) {
       try {
         const hProfiles = await this.mikrotikService.listProfiles(router);
         const pProfiles = await this.mikrotikService.listPppProfiles(router);
-        const all = [...new Set([...hProfiles.map(p => p.name), ...pProfiles.map(p => p.name)])].filter(Boolean);
+        const all = [
+          ...new Set([
+            ...hProfiles.map((p) => p.name),
+            ...pProfiles.map((p) => p.name),
+          ]),
+        ].filter(Boolean);
         router.profiles = all;
       } catch (e) {
         // Log but don't fail the connection test
@@ -111,12 +120,12 @@ export class RoutersService {
     for (const router of routers) {
       try {
         const hProfiles = await this.mikrotikService.listProfiles(router);
-        hProfiles.forEach(p => {
+        hProfiles.forEach((p) => {
           if (p.name) profileSet.add(p.name);
         });
 
         const pProfiles = await this.mikrotikService.listPppProfiles(router);
-        pProfiles.forEach(p => {
+        pProfiles.forEach((p) => {
           if (p.name) profileSet.add(p.name);
         });
       } catch (e) {
@@ -126,10 +135,16 @@ export class RoutersService {
     return Array.from(profileSet).sort();
   }
 
-  async createProfileOnAll(name: string, rateLimit: string, routerIds?: string[]): Promise<{ success: number; total: number; errors: string[] }> {
-    const allOnlineRouters = await this.routerRepo.find({ where: { isOnline: true } });
-    const targetRouterIds = routerIds || allOnlineRouters.map(r => r.id);
-    
+  async createProfileOnAll(
+    name: string,
+    rateLimit: string,
+    routerIds?: string[],
+  ): Promise<{ success: number; total: number; errors: string[] }> {
+    const allOnlineRouters = await this.routerRepo.find({
+      where: { isOnline: true },
+    });
+    const targetRouterIds = routerIds || allOnlineRouters.map((r) => r.id);
+
     let success = 0;
     const errors: string[] = [];
 
@@ -141,7 +156,7 @@ export class RoutersService {
           // Add/Update profile on this router
           await this.mikrotikService.addHotspotProfile(router, name, rateLimit);
           await this.mikrotikService.addPppProfile(router, name, rateLimit);
-          
+
           if (!router.profiles.includes(name)) {
             router.profiles.push(name);
             await this.routerRepo.save(router);
@@ -151,9 +166,9 @@ export class RoutersService {
           // Remove profile from this router
           await this.mikrotikService.removeHotspotProfile(router, name);
           await this.mikrotikService.removePppProfile(router, name);
-          
+
           if (router.profiles.includes(name)) {
-            router.profiles = router.profiles.filter(p => p !== name);
+            router.profiles = router.profiles.filter((p) => p !== name);
             await this.routerRepo.save(router);
           }
         }
@@ -167,8 +182,8 @@ export class RoutersService {
 
   async suggestVpnIp(): Promise<{ ip: string }> {
     const routers = await this.routerRepo.find();
-    const usedIps = routers.map(r => r.vpnIp).filter(Boolean);
-    
+    const usedIps = routers.map((r) => r.vpnIp).filter(Boolean);
+
     // Default range starts at 10.8.0.2
     for (let i = 2; i <= 254; i++) {
       const candidate = `10.8.0.${i}`;
@@ -176,13 +191,15 @@ export class RoutersService {
         return { ip: candidate };
       }
     }
-    
+
     return { ip: '' };
   }
 
   getVpnSettings(): { host: string } {
     return {
-      host: this.configService.get<string>('VPN_PUBLIC_HOST') || this.configService.get<string>('VPN_HOST', 'localhost'),
+      host:
+        this.configService.get<string>('VPN_PUBLIC_HOST') ||
+        this.configService.get<string>('VPN_HOST', 'localhost'),
     };
   }
 }

@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -19,8 +24,8 @@ export class AuthService {
       where: [
         { email: identifier },
         { username: identifier },
-        { phone: identifier }
-      ]
+        { phone: identifier },
+      ],
     });
     if (!admin) {
       throw new UnauthorizedException('Invalid credentials');
@@ -38,8 +43,8 @@ export class AuthService {
       where: [
         { phone: identifier },
         { email: identifier },
-        { username: identifier }
-      ]
+        { username: identifier },
+      ],
     });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -52,16 +57,24 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
     const payload = { sub: user.id, phone: user.phone, role: 'user' };
-    return { access_token: this.jwtService.sign(payload), user: { id: user.id, name: user.name, phone: user.phone } };
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: { id: user.id, name: user.name, phone: user.phone },
+    };
   }
 
-  async userRegister(name: string, phone: string, pass: string, username: string) {
+  async userRegister(
+    name: string,
+    phone: string,
+    pass: string,
+    username: string,
+  ) {
     const existingPhone = await this.userRepo.findOne({ where: { phone } });
     if (existingPhone) {
       throw new BadRequestException('Phone number already registered');
     }
     if (!username) throw new BadRequestException('Username is compulsory');
-    
+
     const existingUser = await this.userRepo.findOne({ where: { username } });
     if (existingUser) throw new BadRequestException('Username already taken');
     const passwordHash = await bcrypt.hash(pass, 10);
@@ -74,24 +87,39 @@ export class AuthService {
     const count = await this.adminRepo.count();
     if (count > 0) throw new BadRequestException('Admins already exist');
     const passwordHash = await bcrypt.hash(pass, 10);
-    const admin = this.adminRepo.create({ name: 'Super Admin', email, passwordHash, role: AdminRole.SUPERADMIN });
+    const admin = this.adminRepo.create({
+      name: 'Super Admin',
+      email,
+      passwordHash,
+      role: AdminRole.SUPERADMIN,
+    });
     await this.adminRepo.save(admin);
     return admin;
   }
 
   async getAllUsers() {
     return this.userRepo.find({
-      relations: ['subscriptions', 'subscriptions.package', 'subscriptions.router'],
+      relations: [
+        'subscriptions',
+        'subscriptions.package',
+        'subscriptions.router',
+      ],
       order: { createdAt: 'DESC' },
     });
   }
 
-  async adminCreateUser(name: string, phone: string, pass: string, username: string) {
+  async adminCreateUser(
+    name: string,
+    phone: string,
+    pass: string,
+    username: string,
+  ) {
     const existingPhone = await this.userRepo.findOne({ where: { phone } });
-    if (existingPhone) throw new BadRequestException('Phone number already registered');
-    
+    if (existingPhone)
+      throw new BadRequestException('Phone number already registered');
+
     if (!username) throw new BadRequestException('Username is compulsory');
-    
+
     const existingUser = await this.userRepo.findOne({ where: { username } });
     if (existingUser) throw new BadRequestException('Username already taken');
 
@@ -132,14 +160,18 @@ export class AuthService {
     if (role === 'user') {
       const user = await this.userRepo.findOne({ where: { id: userId } });
       if (!user) throw new NotFoundException('User not found');
-      
+
       // check duplicates for username/phone if changing
       if (data.username && data.username !== user.username) {
-        const exist = await this.userRepo.findOne({ where: { username: data.username } });
+        const exist = await this.userRepo.findOne({
+          where: { username: data.username },
+        });
         if (exist) throw new BadRequestException('Username already taken');
       }
       if (data.phone && data.phone !== user.phone) {
-        const exist = await this.userRepo.findOne({ where: { phone: data.phone } });
+        const exist = await this.userRepo.findOne({
+          where: { phone: data.phone },
+        });
         if (exist) throw new BadRequestException('Phone already used');
       }
 
@@ -157,13 +189,14 @@ export class AuthService {
       await this.userRepo.save(user);
       const { passwordHash: _, ...result } = user;
       return { ...result, role: 'user' };
-
     } else {
       const admin = await this.adminRepo.findOne({ where: { id: userId } });
       if (!admin) throw new NotFoundException('Admin not found');
 
       if (data.username && data.username !== admin.username) {
-        const exist = await this.adminRepo.findOne({ where: { username: data.username } });
+        const exist = await this.adminRepo.findOne({
+          where: { username: data.username },
+        });
         if (exist) throw new BadRequestException('Username already taken');
       }
 

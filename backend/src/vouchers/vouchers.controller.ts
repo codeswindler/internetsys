@@ -1,4 +1,11 @@
-import { Controller, Get, Post, Body, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { VouchersService } from './vouchers.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -27,8 +34,16 @@ export class VouchersController {
   }
 
   @Post('redeem')
-  redeem(@Request() req: any, @Body() body: { code: string; routerId: string }) {
+  redeem(
+    @Request() req: any,
+    @Body() body: { code: string; routerId: string },
+  ) {
     // Note: requires SubscriptionsService to be injected
-    return this.vouchersService.redeem(body.code, req.user, body.routerId, this.subscriptionsService);
+    return this.vouchersService.redeem(
+      body.code,
+      req.user,
+      body.routerId,
+      this.subscriptionsService,
+    );
   }
 }

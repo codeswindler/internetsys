@@ -13,7 +13,11 @@ export class DeviceSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Subscription, (subscription) => subscription.deviceSessions, { onDelete: 'CASCADE' })
+  @ManyToOne(
+    () => Subscription,
+    (subscription) => subscription.deviceSessions,
+    { onDelete: 'CASCADE' },
+  )
   subscription: Subscription;
 
   @Column()

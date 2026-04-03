@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SupportMessage, MessageSender } from '../entities/support-message.entity';
+import {
+  SupportMessage,
+  MessageSender,
+} from '../entities/support-message.entity';
 
 @Injectable()
 export class SupportService {
@@ -10,7 +13,11 @@ export class SupportService {
     private messageRepo: Repository<SupportMessage>,
   ) {}
 
-  async sendMessage(userId: string, content: string, sender: MessageSender): Promise<SupportMessage> {
+  async sendMessage(
+    userId: string,
+    content: string,
+    sender: MessageSender,
+  ): Promise<SupportMessage> {
     const message = this.messageRepo.create({
       userId,
       content,
@@ -26,10 +33,13 @@ export class SupportService {
       where: { userId },
       order: { createdAt: 'ASC' },
     });
-    
+
     // Mark as read by user
-    await this.messageRepo.update({ userId, sender: MessageSender.ADMIN }, { isReadByUser: true });
-    
+    await this.messageRepo.update(
+      { userId, sender: MessageSender.ADMIN },
+      { isReadByUser: true },
+    );
+
     return messages;
   }
 
@@ -49,13 +59,19 @@ export class SupportService {
         order: { createdAt: 'DESC' },
         relations: ['user'],
       });
-      
+
       const unreadCount = await this.messageRepo.count({
-        where: { userId: item.userId, sender: MessageSender.USER, isReadByAdmin: false },
+        where: {
+          userId: item.userId,
+          sender: MessageSender.USER,
+          isReadByAdmin: false,
+        },
       });
 
-      const userName = lastMsg?.user ? (lastMsg.user.username || lastMsg.user.name) : 'Unknown';
-      
+      const userName = lastMsg?.user
+        ? lastMsg.user.username || lastMsg.user.name
+        : 'Unknown';
+
       const conv: any = {
         userId: item.userId,
         userName,
@@ -65,8 +81,10 @@ export class SupportService {
       };
       conversations.push(conv);
     }
-    
-    return conversations.sort((a, b) => b.lastTime.getTime() - a.lastTime.getTime());
+
+    return conversations.sort(
+      (a, b) => b.lastTime.getTime() - a.lastTime.getTime(),
+    );
   }
 
   async getConversationDetail(userId: string): Promise<SupportMessage[]> {

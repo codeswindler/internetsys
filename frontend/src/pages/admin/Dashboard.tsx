@@ -15,7 +15,7 @@ export default function Dashboard() {
 
   if (subsLoading || routersLoading) return <div className="text-center p-8">Loading...</div>;
 
-  const activeSubs = subs?.filter((s: any) => s.status === 'active') || [];
+  const activeSubs = subs?.filter((s: any) => s.status?.toString().toLowerCase() === 'active') || [];
   const onlineRouters = routers?.filter((r: any) => r.isOnline) || [];
   const totalRevenue = subs?.reduce((acc: number, s: any) => acc + (Number(s.amountPaid) || 0), 0) || 0;
 
@@ -90,7 +90,7 @@ export default function Dashboard() {
                   <td className="p-3">{s.package.name}</td>
                   <td className="p-3">{s.router.name}</td>
                   <td className="p-3">
-                    <span className={`badge ${s.status === 'active' ? 'badge-success' : s.status === 'pending' ? 'badge-warning' : 'badge-danger'}`}>
+                    <span className={`badge ${s.status?.toString().toLowerCase() === 'active' ? 'badge-success' : s.status?.toString().toLowerCase() === 'pending' ? 'badge-warning' : 'badge-danger'}`}>
                       {s.status}
                     </span>
                   </td>

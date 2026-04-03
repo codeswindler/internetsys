@@ -7,10 +7,7 @@ import { Package } from '../entities/package.entity';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Voucher, Package]),
-    SubscriptionsModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Voucher, Package]), SubscriptionsModule],
   controllers: [VouchersController],
   providers: [VouchersService],
 })

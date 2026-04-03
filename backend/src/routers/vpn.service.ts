@@ -15,33 +15,44 @@ export class VpnService {
     const host = this.configService.get<string>('VPN_HOST', 'localhost');
     const port = this.configService.get<string>('VPN_PORT', '5555');
     this.apiUrl = `https://${host}:${port}/api`;
-    this.adminPassword = this.configService.get<string>('VPN_ADMIN_PASSWORD', '');
+    this.adminPassword = this.configService.get<string>(
+      'VPN_ADMIN_PASSWORD',
+      '',
+    );
   }
 
   private async callApi(method: string, params: any = {}) {
     if (!this.adminPassword) {
-      this.logger.warn('VPN_ADMIN_PASSWORD is not set. VPN automation will be skipped.');
+      this.logger.warn(
+        'VPN_ADMIN_PASSWORD is not set. VPN automation will be skipped.',
+      );
       return null;
     }
 
     try {
-      const response = await axios.post(this.apiUrl, {
-        jsonrpc: '2.0',
-        id: '1',
-        method: method,
-        params: {
-          HubName_str: this.virtualHub,
-          ...params,
+      const response = await axios.post(
+        this.apiUrl,
+        {
+          jsonrpc: '2.0',
+          id: '1',
+          method: method,
+          params: {
+            HubName_str: this.virtualHub,
+            ...params,
+          },
         },
-      }, {
-        headers: {
-          'X-VPNADMIN-PASSWORD': this.adminPassword,
+        {
+          headers: {
+            'X-VPNADMIN-PASSWORD': this.adminPassword,
+          },
+          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
         },
-        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-      });
+      );
 
       if (response.data.error) {
-        throw new Error(`SoftEther API Error: ${JSON.stringify(response.data.error)}`);
+        throw new Error(
+          `SoftEther API Error: ${JSON.stringify(response.data.error)}`,
+        );
       }
 
       return response.data.result;
@@ -54,7 +65,9 @@ export class VpnService {
   async syncUser(router: Router) {
     if (!router.isNated || !router.vpnUsername) return;
 
-    this.logger.log(`Syncing VPN user ${router.vpnUsername} for router ${router.name}`);
+    this.logger.log(
+      `Syncing VPN user ${router.vpnUsername} for router ${router.name}`,
+    );
 
     try {
       // Check if user exists
@@ -77,7 +90,7 @@ export class VpnService {
         Policy: {
           IPAddress_ip: router.vpnIp || '0.0.0.0',
           IPAddress_bool: !!router.vpnIp,
-        }
+        },
       };
 
       if (userExists) {

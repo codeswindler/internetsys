@@ -24,7 +24,9 @@ export class SeederService implements OnModuleInit {
         role: AdminRole.SUPERADMIN,
       });
       await this.adminRepo.save(superadmin);
-      this.logger.log('Default superadmin created: admin@netsync.com / admin123');
+      this.logger.log(
+        'Default superadmin created: admin@netsync.com / admin123',
+      );
     }
   }
 }

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { SupportService } from './support.service';
 import { MessageSender } from '../entities/support-message.entity';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -13,7 +21,11 @@ export class SupportController {
 
   @Post()
   async sendMessage(@Request() req, @Body('content') content: string) {
-    return this.supportService.sendMessage(req.user.id, content, MessageSender.USER);
+    return this.supportService.sendMessage(
+      req.user.id,
+      content,
+      MessageSender.USER,
+    );
   }
 
   @Get()
@@ -63,6 +75,10 @@ export class SupportController {
   @UseGuards(RolesGuard)
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
   async adminReply(@Body() body: { userId: string; content: string }) {
-    return this.supportService.sendMessage(body.userId, body.content, MessageSender.ADMIN);
+    return this.supportService.sendMessage(
+      body.userId,
+      body.content,
+      MessageSender.ADMIN,
+    );
   }
 }
