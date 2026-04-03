@@ -195,15 +195,10 @@ export class SubscriptionsService {
       `[DIAGNOSTIC] findAllActive for ${userId}: Found ${all.length} total subs.`,
     );
 
-    // Filter for "Actionable" subs: Active & Not Expired, or Pending
+    // Filter for "Actionable" subs: Inclusion is based on STATUS, not TIME.
     const filtered = all.filter((sub) => {
       const status = sub.status?.toString().toLowerCase();
-      if (status === 'pending') return true;
-      if (status === 'active') {
-        if (!sub.expiresAt) return true; // Ready to start
-        return new Date(sub.expiresAt) > new Date(); // Running
-      }
-      return false;
+      return status === 'pending' || status === 'active';
     });
 
     this.logger.log(
