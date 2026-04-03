@@ -38,6 +38,11 @@ export default function MainLayout({ role }: LayoutProps) {
   const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
   const [voucherCode, setVoucherCode] = useState('');
 
+  // Expiry Monitor State
+  const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
+  const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
+  const expiredRef = useRef<string | null>(null); // To avoid double-modals
+
   const redeemMutation = useMutation({
     mutationFn: async (data: { code: string; routerId: string }) => {
       const token = localStorage.getItem('token');
@@ -198,6 +203,41 @@ export default function MainLayout({ role }: LayoutProps) {
       window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
     }, 2500);
   };
+
+  // ── SESSION EXPIRY MONITOR ──
+  useEffect(() => {
+    if (!activeSub || !activeSub.expiresAt || !activeSub.startedAt) return;
+    
+    // Check if the current sub is valid and not expired
+    const checkExpiry = () => {
+      const expiresAt = new Date(activeSub.expiresAt).getTime();
+      const now = Date.now();
+      const remaining = expiresAt - now;
+
+      // 1. Final Expiry detection
+      if (remaining <= 0 && expiredRef.current !== activeSub.id) {
+        setIsExpiredModalOpen(true);
+        expiredRef.current = activeSub.id;
+        toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+      }
+
+      // 2. Pre-expiry warning (5 minutes)
+      if (remaining > 0 && remaining < 300000 && warnedRef.current !== activeSub.id) {
+        toast('Your session expires in less than 5 minutes!', {
+          icon: '⏳',
+          duration: 6000,
+          id: 'warning-toast'
+        });
+        warnedRef.current = activeSub.id;
+      }
+    };
+
+    // Run every 2 seconds for low resource usage but decent responsiveness
+    const interval = setInterval(checkExpiry, 2000);
+    checkExpiry();
+
+    return () => clearInterval(interval);
+  }, [activeSub?.id, activeSub?.expiresAt, activeSub?.startedAt]);
 
   // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
   useEffect(() => {
@@ -634,6 +674,41 @@ export default function MainLayout({ role }: LayoutProps) {
                     </button>
                   </form>
                </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {/* Session Expired Modal */}
+        {isExpiredModalOpen && createPortal(
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[10002] flex items-center justify-center p-4 animate-in fade-in duration-300">
+            <div className="glass-panel w-full max-w-sm bg-slate-950 border border-red-500/30 shadow-[0_0_50px_rgba(239,68,68,0.2)] rounded-[2.5rem] overflow-hidden p-8 text-center">
+              <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                <Clock size={40} className="text-red-500 animate-pulse" />
+              </div>
+              
+              <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Session Expired</h3>
+              <p className="text-slate-400 font-medium mb-8">Your internet access has been paused. Please renew your plan to stay connected.</p>
+              
+              <div className="space-y-3">
+                <button 
+                  onClick={() => {
+                    setIsExpiredModalOpen(false);
+                    navigate('/user/packages');
+                  }}
+                  className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-red-600/20 hover:scale-[1.02] transition-all active:scale-95 flex items-center justify-center gap-3"
+                >
+                  <Zap size={20} />
+                  Buy New Plan
+                </button>
+                
+                <button 
+                  onClick={() => setIsExpiredModalOpen(false)}
+                  className="w-full py-4 bg-slate-900 text-slate-500 font-bold uppercase tracking-widest rounded-2xl hover:text-slate-300 transition-all"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>,
           document.body
