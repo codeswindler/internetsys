@@ -149,6 +149,19 @@ export default function MainLayout({ role }: LayoutProps) {
     enabled: role === 'admin',
   });
 
+  const { data: pendingCount = 0 } = useQuery({
+    queryKey: ['admin-pending-count'],
+    queryFn: async () => {
+      if (role !== 'admin') return 0;
+      const res = await axios.get(`${API_URL}/subscriptions/pending-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    },
+    refetchInterval: 10000,
+    enabled: role === 'admin',
+  });
+
   const prevUnreadRef = useRef<number>(0);
   const initialToastDone = useRef<boolean>(false);
 
@@ -297,7 +310,8 @@ export default function MainLayout({ role }: LayoutProps) {
                   isActive 
                   ? 'bg-gradient-to-r from-cyan-500/10 to-transparent text-cyan-400 border-l-2 border-cyan-400 font-bold' 
                   : 'text-muted hover:bg-slate-500/5 hover:text-main'
-                } ${link.name === 'Support' && unreadTotal > 0 ? 'ring-1 ring-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.1)]' : ''}`}
+                } 
+                ${(link.name === 'Support' && unreadTotal > 0) || (link.name === 'Subscriptions' && pendingCount > 0) ? 'ring-1 ring-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.1)]' : ''}`}
               >
                 <div className="relative">
                   {link.icon}
@@ -307,11 +321,19 @@ export default function MainLayout({ role }: LayoutProps) {
                   {link.name === 'Support' && unreadTotal > 0 && (
                     <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-950" />
                   )}
+                  {link.name === 'Subscriptions' && role === 'admin' && pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-slate-950 animate-pulse" />
+                  )}
                 </div>
                 <span className="font-medium flex-1">{link.name}</span>
                 {link.name === 'Support' && unreadTotal > 0 && (
                   <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-red-500/20">
                     {unreadTotal}
+                  </span>
+                )}
+                {link.name === 'Subscriptions' && role === 'admin' && pendingCount > 0 && (
+                  <span className="bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-amber-500/20">
+                    {pendingCount}
                   </span>
                 )}
               </Link>

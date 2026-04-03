@@ -121,6 +121,10 @@ export class SubscriptionsService {
     });
   }
 
+  async countPending(): Promise<number> {
+    return this.subRepo.count({ where: { status: SubscriptionStatus.PENDING } });
+  }
+
   async activatePendingByPhone(phone: string, paymentMethod: PaymentMethod, paymentRef?: string): Promise<Subscription> {
     const phoneSuffix = phone.length > 9 ? phone.substring(phone.length - 9) : phone;
 

@@ -45,6 +45,7 @@ export default function Subscriptions() {
   // Allocate Package State
   const [showAllocateModal, setShowAllocateModal] = useState(false);
   const [allocateForm, setAllocateForm] = useState({ userId: '', packageId: '', routerId: '' });
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'expired' | 'cancelled'>('all');
 
   const { data: subs, isLoading } = useQuery({
     queryKey: ['admin_subscriptions'],
@@ -121,12 +122,32 @@ export default function Subscriptions() {
             {activeCount} active · {subs?.length ?? 0} total
           </p>
         </div>
-        <button
-          className="btn-primary flex items-center gap-2"
-          onClick={() => setShowAllocateModal(true)}
-        >
-          <PackagePlus size={18} /> Allocate Package
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-[rgba(0,0,0,0.2)] rounded-lg p-1 border border-white/5 mr-2">
+            {(['all', 'pending', 'active', 'expired'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                  statusFilter === f 
+                  ? 'bg-cyan-500/20 text-cyan-400 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {f}
+                {f === 'pending' && (subs?.filter((s:any) => s.status === 'pending').length || 0) > 0 && (
+                  <span className="ml-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full inline-block animate-pulse" />
+                )}
+              </button>
+            ))}
+          </div>
+          <button
+            className="btn-primary flex items-center gap-2"
+            onClick={() => setShowAllocateModal(true)}
+          >
+            <PackagePlus size={18} /> Allocate Package
+          </button>
+        </div>
       </div>
 
       <div className="glass-panel p-0 overflow-hidden">
@@ -145,7 +166,9 @@ export default function Subscriptions() {
               </tr>
             </thead>
             <tbody>
-              {subs?.map((s: any) => (
+              {subs
+                ?.filter((s: any) => statusFilter === 'all' || s.status === statusFilter)
+                ?.map((s: any) => (
                 <tr
                   key={s.id}
                   className={`border-b border-[rgba(255,255,255,0.04)] last:border-0 hover:bg-[rgba(255,255,255,0.02)] transition-colors align-top

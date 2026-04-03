@@ -83,6 +83,12 @@ export class SubscriptionsController {
     return this.subscriptionsService.findAll();
   }
 
+  @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Get('pending-count')
+  countPending() {
+    return this.subscriptionsService.countPending();
+  }
+
   @Post('stk-push')
   async stkPush(@Request() req: any, @Body() body: { subId: string, phone: string, amount: number }) {
     this.logger.log(`Triggering STK Push for sub ${body.subId} with phone ${body.phone}...`);
