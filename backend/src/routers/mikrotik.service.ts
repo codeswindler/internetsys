@@ -82,6 +82,41 @@ export class MikrotikService {
     }
   }
 
+  /**
+   * Resolve a device's MAC address from the router's ARP/Host table using their IP.
+   * Used when a user bypasses the captive portal and we don't have their MAC.
+   */
+  async resolveDeviceByIp(router: Router, clientIp: string): Promise<{ mac: string; ip: string } | null> {
+    if (!clientIp) return null;
+
+    try {
+      const api = await this.connect(router);
+      try {
+        // Try hotspot host table first (most reliable for hotspot setups)
+        const hosts = await api.write('/ip/hotspot/host/print', [`?address=${clientIp}`]);
+        if (hosts && hosts.length > 0 && hosts[0]['mac-address']) {
+          this.logger.log(`[SYNC] Resolved MAC ${hosts[0]['mac-address']} for IP ${clientIp} via host table`);
+          return { mac: hosts[0]['mac-address'], ip: clientIp };
+        }
+
+        // Fallback to ARP table
+        const arps = await api.write('/ip/arp/print', [`?address=${clientIp}`]);
+        if (arps && arps.length > 0 && arps[0]['mac-address']) {
+          this.logger.log(`[SYNC] Resolved MAC ${arps[0]['mac-address']} for IP ${clientIp} via ARP table`);
+          return { mac: arps[0]['mac-address'], ip: clientIp };
+        }
+
+        this.logger.warn(`[SYNC] No MAC found for IP ${clientIp} on ${router.name}`);
+        return null;
+      } finally {
+        api.close();
+      }
+    } catch (e) {
+      this.logger.error(`[SYNC] Failed to resolve device on ${router.name}: ${e.message}`);
+      return null;
+    }
+  }
+
   async testConnection(
     router: Router,
   ): Promise<{ success: boolean; message?: string }> {

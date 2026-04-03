@@ -8,6 +8,7 @@ import {
   Request,
   Ip,
   Logger,
+  HttpCode,
 } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { MpesaService } from './mpesa.service';
@@ -25,6 +26,18 @@ export class SubscriptionsController {
     private readonly subscriptionsService: SubscriptionsService,
     private readonly mpesaService: MpesaService,
   ) {}
+
+  @Post('sync-device')
+  @HttpCode(200)
+  async syncDevice(
+    @Request() req: any,
+    @Ip() clientIp: string,
+    @Body() body: { ip?: string },
+  ) {
+    const finalIp = body.ip || clientIp;
+    this.logger.log(`[SYNC] Sync device request from user ${req.user.id}, IP: ${finalIp}`);
+    return this.subscriptionsService.syncDevice(req.user.id, finalIp);
+  }
 
   @Post('purchase')
   purchase(

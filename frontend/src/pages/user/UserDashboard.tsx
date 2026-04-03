@@ -16,6 +16,7 @@ export default function UserDashboard() {
   }>();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
+  const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
   
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   useEffect(() => {
@@ -114,6 +115,24 @@ export default function UserDashboard() {
     },
   });
 
+  const syncMutation = useMutation({
+    mutationFn: () => {
+      const existingIp = localStorage.getItem('hotspot_ip');
+      return api.post('/subscriptions/sync-device', { ip: existingIp || undefined });
+    },
+    onSuccess: (res) => {
+      const { mac, ip } = res.data;
+      if (mac) localStorage.setItem('hotspot_mac', mac);
+      if (ip) localStorage.setItem('hotspot_ip', ip);
+      setIsSynced(true);
+      toast.success(`Device synced! MAC: ${mac}`, { id: 'syncing-toast', icon: '📱' });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Sync failed. Are you on the Wi-Fi?', { id: 'syncing-toast' });
+    },
+  });
+
   if (activeSubsLoading) return <div className="p-8 text-center text-slate-400">Loading your session...</div>;
 
   return (
@@ -194,7 +213,7 @@ export default function UserDashboard() {
                                  ID: <span className="text-slate-400">{sub.id.substring(0, 8)}</span>
                                </span>
                              </div>
-                             {(sub.deviceSessions?.[0]?.deviceModel || (localStorage.getItem('hotspot_mac') && localDeviceName)) ? (
+                             {(sub.deviceSessions?.[0]?.deviceModel || (isSynced && localDeviceName)) ? (
                                <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-slate-900/50 border border-slate-800 rounded-md max-w-fit">
                                  <Smartphone size={10} className="text-blue-500" />
                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
@@ -228,25 +247,29 @@ export default function UserDashboard() {
                                     <span className="text-sm font-black text-white font-mono">{traffic.uploadSpeed}</span>
                                   </div>
                                </div>
-                               <button 
-                                 onClick={(e) => { 
-                                   e.stopPropagation(); 
-                                   if (!localStorage.getItem('hotspot_mac')) {
-                                     window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
-                                   } else {
-                                     startMutation.mutate(sub.id); 
-                                   }
-                                 }}
-                                 disabled={startMutation.isPending}
-                                 className="bg-slate-900 border border-cyan-500/20 hover:bg-[#0c1a1f] hover:border-cyan-400/40 rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn shadow-lg"
-                               >
-                                 {startMutation.isPending ? <RefreshCw size={16} className="text-cyan-400 animate-spin" /> : 
-                                  (!localStorage.getItem('hotspot_mac') ? <Link size={16} className="text-orange-400 group-hover/btn:animate-pulse" /> : <Wifi size={16} className="text-cyan-400 group-hover/btn:animate-pulse" />)}
-                                 <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${!localStorage.getItem('hotspot_mac') ? 'text-orange-400' : 'text-cyan-400'}`}>
-                                   {startMutation.isPending ? 'Connecting...' : 
-                                    (!localStorage.getItem('hotspot_mac') ? 'Sync Device First' : 'Connect This Device')}
-                                 </span>
-                               </button>
+                               {!isSynced ? (
+                                 <button 
+                                   onClick={(e) => { e.stopPropagation(); syncMutation.mutate(); }}
+                                   disabled={syncMutation.isPending}
+                                   className="bg-slate-900 border border-orange-500/30 hover:bg-[#1a1206] hover:border-orange-400/50 rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn shadow-lg"
+                                 >
+                                   {syncMutation.isPending ? <RefreshCw size={16} className="text-orange-400 animate-spin" /> : <Link size={16} className="text-orange-400 group-hover/btn:animate-pulse" />}
+                                   <span className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">
+                                     {syncMutation.isPending ? 'Syncing...' : 'Sync Device First'}
+                                   </span>
+                                 </button>
+                               ) : (
+                                 <button 
+                                   onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
+                                   disabled={startMutation.isPending}
+                                   className="bg-slate-900 border border-cyan-500/20 hover:bg-[#0c1a1f] hover:border-cyan-400/40 rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn shadow-lg"
+                                 >
+                                   {startMutation.isPending ? <RefreshCw size={16} className="text-cyan-400 animate-spin" /> : <Wifi size={16} className="text-cyan-400 group-hover/btn:animate-pulse" />}
+                                   <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em]">
+                                     {startMutation.isPending ? 'Connecting...' : 'Connect This Device'}
+                                   </span>
+                                 </button>
+                               )}
                             </div>
                           </>
                         ) : (
@@ -255,27 +278,30 @@ export default function UserDashboard() {
                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mb-2">SESSION STATUS</p>
                                <h4 className="text-4xl font-black text-cyan-400 tracking-widest">READY</h4>
                              </div>
-                             <button 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (!localStorage.getItem('hotspot_mac')) {
-                                  window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
-                                } else {
-                                  startMutation.mutate(sub.id); 
-                                }
-                              }}
-                              disabled={startMutation.isPending || isAnyLive}
-                              className={`btn-primary w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
-                                isAnyLive 
-                                ? 'opacity-30 cursor-not-allowed grayscale' 
-                                : (!localStorage.getItem('hotspot_mac') ? 'shadow-orange-500/30' : 'shadow-cyan-500/30')
-                              }`}
-                              style={!localStorage.getItem('hotspot_mac') ? { background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' } : {}}
-                             >
-                              {startMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
-                               isAnyLive ? 'SESSION LOCKED' : 
-                               (!localStorage.getItem('hotspot_mac') ? 'SYNC DEVICE FIRST' : 'ACTIVATE INTERNET')}
-                             </button>
+                             {!isSynced ? (
+                               <button 
+                                onClick={(e) => { e.stopPropagation(); syncMutation.mutate(); }}
+                                disabled={syncMutation.isPending || isAnyLive}
+                                className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
+                                  isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-orange-500/30'
+                                }`}
+                                style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }}
+                               >
+                                {syncMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
+                                 isAnyLive ? 'SESSION LOCKED' : 'SYNC DEVICE FIRST'}
+                               </button>
+                             ) : (
+                               <button 
+                                onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
+                                disabled={startMutation.isPending || isAnyLive}
+                                className={`btn-primary w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
+                                  isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-cyan-500/30'
+                                }`}
+                               >
+                                {startMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
+                                 isAnyLive ? 'SESSION LOCKED' : 'ACTIVATE INTERNET'}
+                               </button>
+                             )}
                           </div>
                         )}
                         

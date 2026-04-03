@@ -34,6 +34,34 @@ export class SubscriptionsService {
     private transactionsService: TransactionsService,
   ) {}
 
+  /**
+   * Sync Device: Resolves the user's MAC address by querying
+   * all available routers' ARP/Host tables using the caller's IP.
+   * This replaces the broken neverssl.com redirect loop.
+   */
+  async syncDevice(userId: string, clientIp: string): Promise<{ mac: string; ip: string }> {
+    this.logger.log(`[SYNC] Attempting to resolve device for user ${userId} with IP ${clientIp}`);
+
+    // Get all online routers
+    const routers = await this.routerRepo.find({ where: { isOnline: true } });
+    if (routers.length === 0) {
+      throw new BadRequestException('No routers available for device sync');
+    }
+
+    // Try each router until we find the device
+    for (const router of routers) {
+      const result = await this.mikrotikService.resolveDeviceByIp(router, clientIp);
+      if (result) {
+        this.logger.log(`[SYNC] Successfully resolved device: MAC=${result.mac}, IP=${result.ip} on router ${router.name}`);
+        return result;
+      }
+    }
+
+    throw new BadRequestException(
+      'Device not found on any router. Make sure you are connected to the Wi-Fi network.'
+    );
+  }
+
   async purchase(
     userId: string,
     packageId: string,
