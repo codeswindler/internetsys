@@ -98,6 +98,15 @@ export class SubscriptionsController {
     );
   }
 
+  @Post('disconnect-device')
+  @HttpCode(200)
+  disconnectDevice(
+    @Request() req: any,
+    @Body() body: { sessionId: string },
+  ) {
+    return this.subscriptionsService.disconnectDevice(req.user.id, body.sessionId);
+  }
+
   // Admins can activate pending manual subscriptions
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
   @Post(':id/activate')

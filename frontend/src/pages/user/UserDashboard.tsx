@@ -99,6 +99,14 @@ export default function UserDashboard() {
     return () => clearInterval(interval);
   }, [activeSub?.id, activeSub?.startedAt]);
 
+  // Device limit modal state
+  const [deviceLimitModal, setDeviceLimitModal] = useState<{
+    open: boolean;
+    maxDevices: number;
+    connectedDevices: Array<{ id: string; mac: string; ip: string; model: string; connectedAt: string }>;
+    pendingSubId: string;
+  }>({ open: false, maxDevices: 1, connectedDevices: [], pendingSubId: '' });
+
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
       const mac = localStorage.getItem('hotspot_mac');
@@ -110,8 +118,34 @@ export default function UserDashboard() {
       toast.success('Internet Activated!');
       setTimeout(() => fireInternet(), 1000);
     },
+    onError: (err: any, subId: string) => {
+      const data = err.response?.data;
+      if (data?.error === 'DEVICE_LIMIT_REACHED') {
+        setDeviceLimitModal({
+          open: true,
+          maxDevices: data.maxDevices || 1,
+          connectedDevices: data.connectedDevices || [],
+          pendingSubId: subId,
+        });
+      } else {
+        toast.error(data?.message || 'Connection failed.');
+      }
+    },
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
+    onSuccess: (_, sessionId) => {
+      toast.success('Device disconnected!');
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+      // Remove from modal list
+      setDeviceLimitModal(prev => ({
+        ...prev,
+        connectedDevices: prev.connectedDevices.filter(d => d.id !== sessionId),
+      }));
+    },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Connection failed.');
+      toast.error(err.response?.data?.message || 'Failed to disconnect device.');
     },
   });
 
@@ -213,11 +247,28 @@ export default function UserDashboard() {
                                  ID: <span className="text-slate-400">{sub.id.substring(0, 8)}</span>
                                </span>
                              </div>
-                             {(sub.deviceSessions?.[0]?.deviceModel || (isSynced && localDeviceName)) ? (
+                             {/* Connected Devices List */}
+                             {(sub.deviceSessions?.filter((s: any) => s.isActive).length > 0) ? (
+                               <div className="flex flex-col gap-1 mt-1">
+                                 <div className="flex items-center gap-1.5 mb-0.5">
+                                   <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">
+                                     DEVICES: {sub.deviceSessions.filter((s: any) => s.isActive).length}/{sub.package?.maxDevices || 1}
+                                   </span>
+                                 </div>
+                                 {sub.deviceSessions.filter((s: any) => s.isActive).map((ds: any) => (
+                                   <div key={ds.id} className="flex items-center gap-2 px-2 py-1 bg-slate-900/50 border border-emerald-500/10 rounded-md max-w-fit">
+                                     <Smartphone size={10} className="text-emerald-400" />
+                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                       {ds.deviceModel || 'Unknown'} <span className="text-slate-600 ml-1">({ds.macAddress?.slice(-8)})</span>
+                                     </span>
+                                   </div>
+                                 ))}
+                               </div>
+                             ) : (isSynced && localDeviceName) ? (
                                <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-slate-900/50 border border-slate-800 rounded-md max-w-fit">
                                  <Smartphone size={10} className="text-blue-500" />
                                  <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                   DEVICE: <span className="text-blue-300 ml-1">{sub.deviceSessions?.[0]?.deviceModel || localDeviceName}</span>
+                                   DEVICE: <span className="text-blue-300 ml-1">{localDeviceName}</span>
                                  </span>
                                </div>
                              ) : null}
@@ -366,6 +417,72 @@ export default function UserDashboard() {
           </div>
         </div>
       </div>
+
+      {/* ── DEVICE LIMIT MODAL ── */}
+      {deviceLimitModal.open && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl shadow-orange-500/10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center">
+                <Smartphone size={24} className="text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white uppercase tracking-wide">Device Limit Reached</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                  Max {deviceLimitModal.maxDevices} device{deviceLimitModal.maxDevices > 1 ? 's' : ''} allowed
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-400 mb-6">
+              Disconnect a device below to free up a slot for this device.
+            </p>
+
+            <div className="space-y-3 mb-6">
+              {deviceLimitModal.connectedDevices.map((device) => (
+                <div key={device.id} className="flex items-center justify-between p-4 bg-slate-950/80 border border-slate-800 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                      <Smartphone size={18} className="text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-white">{device.model}</p>
+                      <p className="text-[9px] text-slate-500 font-mono">{device.mac}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => disconnectMutation.mutate(device.id)}
+                    disabled={disconnectMutation.isPending}
+                    className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500/20 transition-all active:scale-95"
+                  >
+                    {disconnectMutation.isPending ? <RefreshCw size={12} className="animate-spin" /> : 'Disconnect'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeviceLimitModal(prev => ({ ...prev, open: false }))}
+                className="flex-1 py-3 bg-slate-800 border border-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-slate-700 transition-all"
+              >
+                Cancel
+              </button>
+              {deviceLimitModal.connectedDevices.length < deviceLimitModal.maxDevices && (
+                <button
+                  onClick={() => {
+                    setDeviceLimitModal(prev => ({ ...prev, open: false }));
+                    startMutation.mutate(deviceLimitModal.pendingSubId);
+                  }}
+                  className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:shadow-lg hover:shadow-cyan-500/20 transition-all active:scale-95"
+                >
+                  Connect Now
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

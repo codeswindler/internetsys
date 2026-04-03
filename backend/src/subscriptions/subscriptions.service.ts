@@ -463,6 +463,57 @@ export class SubscriptionsService {
     return 'Generic Device';
   }
 
+  /**
+   * Disconnect a specific device session — deactivates the session record
+   * and removes the device from the MikroTik router's active/host tables.
+   */
+  async disconnectDevice(userId: string, sessionId: string): Promise<{ success: boolean; message: string }> {
+    const session = await this.sessionRepo.findOne({
+      where: { id: sessionId },
+      relations: ['subscription', 'subscription.user', 'subscription.router'],
+    });
+
+    if (!session) throw new NotFoundException('Device session not found');
+    if (session.subscription?.user?.id !== userId) {
+      throw new BadRequestException('You can only disconnect your own devices');
+    }
+
+    // Deactivate session
+    session.isActive = false;
+    await this.sessionRepo.save(session);
+
+    // Remove from router if possible
+    if (session.subscription.router && session.macAddress) {
+      try {
+        const router = session.subscription.router;
+        const api = await (this.mikrotikService as any).connect(router);
+        try {
+          // Remove from hotspot active sessions by MAC
+          const active = await api.write('/ip/hotspot/active/print', [
+            `?mac-address=${session.macAddress}`,
+          ]);
+          for (const a of active) {
+            await api.write('/ip/hotspot/active/remove', [`=.id=${a['.id']}`]);
+          }
+          // Remove from host table
+          const hosts = await api.write('/ip/hotspot/host/print', [
+            `?mac-address=${session.macAddress}`,
+          ]);
+          for (const h of hosts) {
+            await api.write('/ip/hotspot/host/remove', [`=.id=${h['.id']}`]);
+          }
+          this.logger.log(`[DISCONNECT] Removed device ${session.macAddress} from router ${router.name}`);
+        } finally {
+          api.close();
+        }
+      } catch (e) {
+        this.logger.warn(`[DISCONNECT] Router cleanup failed for ${session.macAddress}: ${e.message}`);
+      }
+    }
+
+    return { success: true, message: `Device ${session.deviceModel || session.macAddress} disconnected` };
+  }
+
   async startSession(
     id: string,
     mac?: string,
@@ -531,12 +582,24 @@ export class SubscriptionsService {
         const maxAllowed = sub.package.maxDevices || 1;
 
         if (activeDeviceCount >= maxAllowed) {
-          // Deactivate oldest session if we want to allow "rolling" logins,
-          // or block if we want "hard" limits. User said "limit", but usually "rolling" is better UX.
-          // Let's go WITH HARD LIMIT FOR NOW per user request "limit number of devices".
-          throw new BadRequestException(
-            `DEVICE LIMIT REACHED: This package only supports ${maxAllowed} device(s). Please disconnect another device first.`,
-          );
+          const connectedDevices = sub.deviceSessions
+            .filter(s => s.isActive)
+            .map(s => ({
+              id: s.id,
+              mac: s.macAddress,
+              ip: s.ipAddress,
+              model: s.deviceModel || 'Unknown Device',
+              connectedAt: s.createdAt,
+            }));
+
+          const err: any = new BadRequestException({
+            statusCode: 400,
+            error: 'DEVICE_LIMIT_REACHED',
+            message: `This package supports ${maxAllowed} device(s). Disconnect one to connect this device.`,
+            maxDevices: maxAllowed,
+            connectedDevices,
+          });
+          throw err;
         }
 
         // Create new session
