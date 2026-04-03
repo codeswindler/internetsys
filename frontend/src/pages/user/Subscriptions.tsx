@@ -53,14 +53,18 @@ export default function Subscriptions() {
   });
 
   // 2. Unified Query Key: Centralizes the ACTIVE timer/status for the whole app
-  const { data: allActiveSubs = [] } = useQuery({
+  const { data: allActiveSubsRaw = [] } = useQuery({
     queryKey: ['active-all-subscriptions'],
     queryFn: async () => {
-      const res = await api.get('/subscriptions/active-all');
+      const res = await api.get('/subscriptions/my');
       return res.data;
     },
     refetchInterval: 10000,
   });
+
+  const allActiveSubs = allActiveSubsRaw.filter((s: any) => 
+    ['active', 'pending', 'paid', 'verified', 'allocated'].includes(s.status?.toLowerCase())
+  );
 
   const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
 
@@ -74,15 +78,15 @@ export default function Subscriptions() {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       
       setIsLaunching(true);
-      toast.success('Internet Flowing! Launching in 3s...', { 
+      toast.success('Internet Activated! Launching...', { 
         icon: '🚀',
         duration: 3000 
       });
 
       // The "Fluid Magic" Redirect: Satisfies the phone's OS that we are now UNBLOCKED
       setTimeout(() => {
-        window.location.href = 'http://pulselynk.co.ke';
-      }, 3000);
+        fireInternet();
+      }, 1500);
     },
     onError: (err: any) => {
       const msg = err.response?.data?.message || 'Connection failed. Try "Verify Device" again.';
@@ -93,6 +97,16 @@ export default function Subscriptions() {
   const pastSubs = Array.isArray(subscriptions) 
     ? subscriptions.filter((s: any) => !allActiveSubs.some((a: any) => a.id === s.id))
     : [];
+
+  // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mac = params.get('mac');
+    const ip = params.get('ip');
+    
+    if (mac) localStorage.setItem('hotspot_mac', mac);
+    if (ip) localStorage.setItem('hotspot_ip', ip);
+  }, []);
 
   // Poll traffic for active session (only for the primary one)
   useEffect(() => {
@@ -188,7 +202,7 @@ export default function Subscriptions() {
                           <div className="flex-1 min-w-0">
                             <p className="text-[9px] font-black text-muted uppercase tracking-[0.25em] mb-1 truncate">DEVICE MODEL</p>
                             <h4 className="text-xs font-bold text-slate-300 tracking-wide leading-relaxed truncate">
-                              {sub.deviceSessions?.[0]?.deviceModel || 'Unknown Device'}
+                              {sub.deviceSessions?.[0]?.deviceModel || (sub.startedAt ? 'Detected Device' : 'Your Current Device')}
                             </h4>
                             <div className="flex items-center gap-2 mt-2">
                               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
@@ -261,7 +275,7 @@ export default function Subscriptions() {
                              <Clock size={14} className="text-slate-500" />
                              <span className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">REMAINING TIME</span>
                            </div>
-                           <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="badge" />
+                           <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="md" />
                         </div>
                         <div className="bg-cyan-500/10 px-5 py-2 rounded-full border border-cyan-500/20 flex items-center gap-3">
                            <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
