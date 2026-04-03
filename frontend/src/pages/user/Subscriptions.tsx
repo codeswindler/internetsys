@@ -225,14 +225,12 @@ export default function Subscriptions() {
                             </div>
                             <button 
                               onClick={() => {
-                                localStorage.removeItem('hotspot_mac');
-                                localStorage.removeItem('hotspot_ip');
                                 startMutation.mutate(sub.id);
-                                toast.success('Repaired device identity!', { icon: '🔧' });
+                                toast.success('Connecting this device...', { icon: '🔄' });
                               }}
                               className="text-[10px] font-black text-cyan-400 uppercase tracking-widest hover:text-white transition-all underline underline-offset-4 relative z-10"
                             >
-                              FIX IDENTITY
+                              CONNECT THIS DEVICE
                             </button>
                           </div>
 
