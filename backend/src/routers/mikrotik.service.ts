@@ -62,6 +62,30 @@ export class MikrotikService {
     }
   }
 
+  public normalizeMac(mac?: string): string | undefined {
+    if (!mac) return undefined;
+    return mac.toUpperCase().replace(/-/g, ':');
+  }
+
+  async verifyHostPresence(router: Router, mac?: string, ip?: string): Promise<boolean> {
+    if (!mac && !ip) return false;
+    if (router.connectionMode === 'pppoe') return true; 
+
+    try {
+      const api = await this.connect(router);
+      try {
+        const query = mac ? `?mac-address=${this.normalizeMac(mac)}` : `?address=${ip}`;
+        const hosts = await api.write('/ip/hotspot/host/print', [query]);
+        return hosts && hosts.length > 0;
+      } finally {
+        api.close();
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to verify host presence on ${router.name}: ${e.message}`);
+      return false;
+    }
+  }
+
   async testConnection(
     router: Router,
   ): Promise<{ success: boolean; message?: string }> {

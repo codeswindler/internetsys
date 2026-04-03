@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -19,10 +19,15 @@ import UserPackages from './pages/user/Packages';
 import UserSubscriptions from './pages/user/Subscriptions';
 import UserDashboard from './pages/user/UserDashboard';
 
+function RootRedirect() {
+  const location = useLocation();
+  return <Navigate to="/login" replace state={{ from: location }} search={location.search} />;
+}
+
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<RootRedirect />} />
       
       {/* Auth Routes */}
       <Route element={<AuthLayout />}>

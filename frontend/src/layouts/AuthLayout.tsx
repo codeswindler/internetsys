@@ -1,16 +1,17 @@
-import { Outlet, Navigate } from 'react-router-dom';
+import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import bgImage from '../assets/auth_background.png';
 import '../auth.css';
 
 export default function AuthLayout() {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
+  const location = useLocation();
 
   if (token) {
     if (role === 'admin' || role === 'superadmin') {
-      return <Navigate to="/admin/dashboard" replace />;
+      return <Navigate to="/admin/dashboard" search={location.search} replace />;
     }
-    return <Navigate to="/user/dashboard" replace />;
+    return <Navigate to="/user/dashboard" search={location.search} replace />;
   }
 
   return (

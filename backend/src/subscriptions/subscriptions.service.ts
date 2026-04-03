@@ -370,54 +370,10 @@ export class SubscriptionsService {
       );
     }
 
-    // Re-create on MikroTik with same credentials
-    try {
-      if (sub.router.connectionMode === 'pppoe') {
-        await this.mikrotikService.createPppoeSecret(
-          sub.router,
-          sub.mikrotikUsername,
-          sub.mikrotikPassword,
-          sub.package.bandwidthProfile,
-        );
-      } else {
-        await this.mikrotikService.createHotspotUser(
-          sub.router,
-          sub.mikrotikUsername,
-          sub.mikrotikPassword,
-          sub.package.bandwidthProfile,
-        );
-      }
-    } catch (e) {
-      throw new BadRequestException(
-        `MikroTik Error on reactivation: ${e.message}`,
-      );
-    }
-
-    // Calculate new expiry
-    const now = new Date();
-    const expiresAt = new Date(now);
-    const durationCount = sub.package.durationValue;
-    switch (sub.package.durationType) {
-      case DurationType.MINUTES:
-        expiresAt.setMinutes(expiresAt.getMinutes() + durationCount);
-        break;
-      case DurationType.HOURS:
-        expiresAt.setHours(expiresAt.getHours() + durationCount);
-        break;
-      case DurationType.DAYS:
-        expiresAt.setDate(expiresAt.getDate() + durationCount);
-        break;
-      case DurationType.WEEKS:
-        expiresAt.setDate(expiresAt.getDate() + durationCount * 7);
-        break;
-      case DurationType.MONTHS:
-        expiresAt.setMonth(expiresAt.getMonth() + durationCount);
-        break;
-    }
-
-    sub.status = SubscriptionStatus.ACTIVE;
-    sub.startedAt = now;
-    sub.expiresAt = expiresAt;
+    // Reset status to pending so the user can activate it when they are physically connected
+    sub.status = SubscriptionStatus.PENDING;
+    sub.startedAt = null;
+    sub.expiresAt = null;
 
     return this.subRepo.save(sub);
   }
@@ -451,9 +407,26 @@ export class SubscriptionsService {
     // Capture and Save Device Model if missing
     const model = userAgent ? this.parseUserAgent(userAgent) : 'Unknown Device';
 
-    if (sub.status !== SubscriptionStatus.ACTIVE) {
+    if (sub.status !== SubscriptionStatus.ACTIVE && sub.status !== SubscriptionStatus.PENDING) {
       throw new BadRequestException(
         `Subscription is in ${sub.status} state, cannot start`,
+      );
+    }
+
+    // VERIFY PHYSICAL CONNECTION TO AP
+    const finalMac = mac || sub.user.lastMac;
+    const finalIp = ip || sub.user.lastIp;
+
+    if (finalMac || finalIp) {
+      const isPresent = await this.mikrotikService.verifyHostPresence(sub.router, finalMac, finalIp);
+      if (!isPresent) {
+        throw new BadRequestException(
+          'CONNECTION REJECTED: You are not physically connected to the hotspot Wi-Fi network. Please connect to the Wi-Fi first to activate this package.',
+        );
+      }
+    } else {
+      throw new BadRequestException(
+        'Missing MAC and IP address bindings to assign this package to.',
       );
     }
 
@@ -513,9 +486,6 @@ export class SubscriptionsService {
     }
 
     // 2. ALWAYS attempt login on MikroTik
-    const finalMac = mac || sub.user.lastMac;
-    const finalIp = ip || sub.user.lastIp;
-
     if (finalMac || finalIp) {
       try {
         await this.mikrotikService.loginUser(
@@ -534,6 +504,7 @@ export class SubscriptionsService {
     // 3. Mark subscription as STARTED if first time
     if (!sub.startedAt) {
       sub.startedAt = new Date();
+      sub.status = SubscriptionStatus.ACTIVE;
 
       // Calculate expiry
       const duration = sub.package.durationValue;
