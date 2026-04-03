@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard } from 'lucide-react';
+import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
@@ -180,6 +180,14 @@ export default function UserDashboard() {
                                  ID: <span className="text-slate-400">{sub.id.substring(0, 8)}</span>
                                </span>
                              </div>
+                             {sub.deviceSessions?.[0]?.deviceModel && (
+                               <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-slate-900/50 border border-slate-800 rounded-md max-w-fit">
+                                 <Smartphone size={10} className="text-blue-500" />
+                                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                                   DEVICE: <span className="text-blue-300 ml-1">{sub.deviceSessions[0].deviceModel}</span>
+                                 </span>
+                               </div>
+                             )}
                           </div>
                         </div>
                       </div>
@@ -207,13 +215,22 @@ export default function UserDashboard() {
                                   </div>
                                </div>
                                <button 
-                                 onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
+                                 onClick={(e) => { 
+                                   e.stopPropagation(); 
+                                   if (!localStorage.getItem('hotspot_mac')) {
+                                     window.location.href = 'http://neverssl.com';
+                                   } else {
+                                     startMutation.mutate(sub.id); 
+                                   }
+                                 }}
                                  disabled={startMutation.isPending}
                                  className="bg-slate-900 border border-cyan-500/20 hover:bg-[#0c1a1f] hover:border-cyan-400/40 rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn shadow-lg"
                                >
-                                 {startMutation.isPending ? <RefreshCw size={16} className="text-cyan-400 animate-spin" /> : <Wifi size={16} className="text-cyan-400 group-hover/btn:animate-pulse" />}
-                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em]">
-                                   {startMutation.isPending ? 'Connecting...' : 'Connect This Device'}
+                                 {startMutation.isPending ? <RefreshCw size={16} className="text-cyan-400 animate-spin" /> : 
+                                  (!localStorage.getItem('hotspot_mac') ? <Link size={16} className="text-orange-400 group-hover/btn:animate-pulse" /> : <Wifi size={16} className="text-cyan-400 group-hover/btn:animate-pulse" />)}
+                                 <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${!localStorage.getItem('hotspot_mac') ? 'text-orange-400' : 'text-cyan-400'}`}>
+                                   {startMutation.isPending ? 'Connecting...' : 
+                                    (!localStorage.getItem('hotspot_mac') ? 'Sync Device First' : 'Connect This Device')}
                                  </span>
                                </button>
                             </div>
@@ -225,17 +242,25 @@ export default function UserDashboard() {
                                <h4 className="text-4xl font-black text-cyan-400 tracking-widest">READY</h4>
                              </div>
                              <button 
-                              onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (!localStorage.getItem('hotspot_mac')) {
+                                  window.location.href = 'http://neverssl.com';
+                                } else {
+                                  startMutation.mutate(sub.id); 
+                                }
+                              }}
                               disabled={startMutation.isPending || isAnyLive}
                               className={`btn-primary w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
                                 isAnyLive 
                                 ? 'opacity-30 cursor-not-allowed grayscale' 
-                                : 'shadow-cyan-500/30'
+                                : (!localStorage.getItem('hotspot_mac') ? 'shadow-orange-500/30' : 'shadow-cyan-500/30')
                               }`}
+                              style={!localStorage.getItem('hotspot_mac') ? { background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' } : {}}
                              >
                               {startMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
                                isAnyLive ? 'SESSION LOCKED' : 
-                               'ACTIVATE INTERNET'}
+                               (!localStorage.getItem('hotspot_mac') ? 'SYNC DEVICE FIRST' : 'ACTIVATE INTERNET')}
                              </button>
                           </div>
                         )}
