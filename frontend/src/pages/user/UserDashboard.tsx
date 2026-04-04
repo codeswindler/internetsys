@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle } from 'lucide-react';
+import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle, Monitor, Play } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
@@ -15,6 +15,7 @@ export default function UserDashboard() {
     fireInternet: (u?: string, p?: string) => void,
     currentUser: any 
   }>();
+
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
@@ -86,12 +87,10 @@ export default function UserDashboard() {
 
   const subHistory = Array.isArray(activeSubsData) ? activeSubsData : [];
   
-  // Filter for ONLY actionable types: active, pending, or allocated
   const allActiveSubs = subHistory.filter((s: any) => 
     ['active', 'paid', 'pending', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
   );
 
-  // Global Check: Is ANY session live?
   const isAnyLive = allActiveSubs.some((s: any) => 
     s.status === 'ACTIVE' && s.expiresAt && new Date(s.expiresAt) > new Date()
   );
@@ -102,55 +101,13 @@ export default function UserDashboard() {
 
   const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
 
-  // Poll for real-time traffic
-  useEffect(() => {
-    if (!activeSub || !activeSub.startedAt) return;
-
-    const fetchTraffic = async () => {
-      try {
-        const res = await api.get('/subscriptions/my/traffic');
-        const data = res.data;
-        if (!data) return;
-
-        const now = Date.now();
-        if (lastTraffic.current && lastTraffic.current.time) {
-          const timeDiff = Math.max((now - lastTraffic.current.time) / 1000, 1);
-          const bytesIn = Number(data.bytesIn) || 0;
-          const bytesOut = Number(data.bytesOut) || 0;
-          
-          const downBits = Math.max((bytesOut - lastTraffic.current.bytesOut) * 8, 0) / timeDiff;
-          const upBits = Math.max((bytesIn - lastTraffic.current.bytesIn) * 8, 0) / timeDiff;
-
-          const formatSpeed = (bits: number) => {
-            if (!bits || isNaN(bits)) return '0 bps';
-            if (bits > 1000000) return (bits / 1000000).toFixed(1) + ' Mbps';
-            if (bits > 1000) return (bits / 1000).toFixed(0) + ' Kbps';
-            return bits.toFixed(0) + ' bps';
-          };
-
-          setTraffic({
-            downloadSpeed: formatSpeed(downBits),
-            uploadSpeed: formatSpeed(upBits)
-          });
-        }
-        lastTraffic.current = { ...data, time: now };
-      } catch (e) {
-        console.error('Traffic poll failed', e);
-      }
-    };
-
-    const interval = setInterval(fetchTraffic, 5000);
-    fetchTraffic();
-    return () => clearInterval(interval);
-  }, [activeSub?.id, activeSub?.startedAt]);
-
-  // Device limit modal state
-  const [deviceLimitModal, setDeviceLimitModal] = useState<{
-    open: boolean;
-    maxDevices: number;
-    connectedDevices: Array<{ id: string; mac: string; ip: string; model: string; connectedAt: string }>;
+  // Multi-Device Slot Logic
+  const [deviceLimitModal, setDeviceLimitModal] = useState({ 
+    open: false, 
+    maxDevices: 1, 
+    connectedDevices: [],
     pendingSubId: string;
-  }>({ open: false, maxDevices: 1, connectedDevices: [], pendingSubId: '' });
+  });
 
   const startDiscovery = async (subId: string) => {
     setDiscoverySubId(subId);
@@ -182,522 +139,355 @@ export default function UserDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
-      toast.success('Internet Activated!');
-      setTimeout(() => fireInternet(), 1000);
+      toast.success('Internet Connection Established!', { icon: '🚀' });
+      
+      setTimeout(() => {
+        fireInternet();
+      }, 1000);
     },
-    onError: (err: any, subId: string) => {
-      const data = err.response?.data;
-      if (data?.error === 'DEVICE_LIMIT_REACHED') {
+    onError: (err: any) => {
+      if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
         setDeviceLimitModal({
           open: true,
-          maxDevices: data.maxDevices || 1,
-          connectedDevices: data.connectedDevices || [],
-          pendingSubId: subId,
+          maxDevices: err.response.data.maxDevices,
+          connectedDevices: err.response.data.connectedDevices,
+          pendingSubId: err.response.data.subId
         });
-        toast.error(data.message || 'Device limit reached', { id: 'limit-reached' });
       } else {
-        toast.error(data?.message || 'Connection failed.');
+        toast.error(err.response?.data?.message || 'Failed to start session');
       }
-    },
+    }
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
-    onSuccess: (_, sessionId) => {
-      toast.success('Device disconnected!');
+    mutationFn: (sessionId: string) => api.post(`/subscriptions/session/${sessionId}/disconnect`),
+    onSuccess: () => {
+      toast.success('Device disconnected! You have a free slot.');
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
-      // Remove from modal list
-      setDeviceLimitModal(prev => ({
-        ...prev,
-        connectedDevices: prev.connectedDevices.filter(d => d.id !== sessionId),
-      }));
-    },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to disconnect device.');
-    },
+      
+      if (deviceLimitModal.connectedDevices.length <= deviceLimitModal.maxDevices) {
+        setDeviceLimitModal(prev => ({ ...prev, open: false }));
+        if (deviceLimitModal.pendingSubId) startMutation.mutate(deviceLimitModal.pendingSubId);
+      }
+    }
   });
 
-  const syncMutation = useMutation({
-    mutationFn: () => {
-      const existingIp = localStorage.getItem('hotspot_ip');
-      const existingMac = localStorage.getItem('hotspot_mac');
-      return api.post('/subscriptions/sync-device', { 
-        ip: existingIp || undefined,
-        mac: existingMac || undefined
-      });
-    },
-    onSuccess: (res) => {
-      const { mac, ip } = res.data;
-      if (mac) {
-        localStorage.setItem('hotspot_mac', mac);
-        if (ip) localStorage.setItem('hotspot_ip', ip);
-        setIsSynced(true);
-        toast.success(`Connected!`, { id: 'syncing-toast', icon: '📱' });
-        queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
-      }
-    },
-    onError: (err: any) => {
-      const data = err.response?.data;
-      if (data?.error === 'DEVICE_LIMIT_REACHED') {
-        setDeviceLimitModal({
-          open: true,
-          maxDevices: data.maxDevices || 1,
-          connectedDevices: data.connectedDevices || [],
-          pendingSubId: '', 
-        });
-        toast.error(data.message || 'All device slots are full.', { id: 'limit-reached' });
-      } else {
-        const routerGateway = activeSub?.router?.localGateway || '10.5.50.1';
-        const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect')}`;
+  // Poll traffic for active session
+  useEffect(() => {
+    if (!activeSub?.id || activeSub?.status !== 'ACTIVE') return;
+
+    const fetchTraffic = async () => {
+      try {
+        const res = await api.get('/subscriptions/my/traffic');
+        const data = res.data;
+        const now = Date.now();
         
-        toast((t) => (
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">Auto-Sync Failed. Link this device?</span>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => { window.location.href = redirectUrl; toast.dismiss(t.id); }}
-                className="bg-cyan-600 text-white text-[10px] uppercase font-bold py-1.5 px-3 rounded-lg hover:bg-cyan-500 transition-colors"
-              >
-                Yes, Link Device
-              </button>
-              <button 
-                onClick={() => toast.dismiss(t.id)}
-                className="bg-slate-800 text-slate-400 text-[10px] uppercase font-bold py-1.5 px-3 rounded-lg"
-              >
-                Try Later
-              </button>
-            </div>
-          </div>
-        ), { id: 'syncing-toast', duration: 8000 });
-      }
-    },
-  });
+        if (lastTraffic.current && lastTraffic.current.time && data) {
+          const timeDiff = Math.max((now - lastTraffic.current.time) / 1000, 1);
+          const bytesIn = Number(data.bytesIn) || 0; // Upload
+          const bytesOut = Number(data.bytesOut) || 0; // Download
+          
+          const downBits = Math.max((bytesOut - lastTraffic.current.bytesOut) * 8, 0) / timeDiff;
+          const upBits = Math.max((bytesIn - lastTraffic.current.bytesIn) * 8, 0) / timeDiff;
 
-  if (activeSubsLoading) return <div className="p-8 text-center text-slate-400">Loading your session...</div>;
+          const formatSpeed = (bits: number) => {
+            if (!bits || isNaN(bits)) return '0 bps';
+            if (bits > 1000000) return (bits / 1000000).toFixed(1) + ' Mbps';
+            if (bits > 1000) return (bits / 1000).toFixed(0) + ' Kbps';
+            return bits.toFixed(0) + ' bps';
+          };
+
+          setTraffic({
+            downloadSpeed: formatSpeed(downBits),
+            uploadSpeed: formatSpeed(upBits)
+          });
+        }
+        lastTraffic.current = { ...data, time: now };
+      } catch (e) {
+        console.error('Traffic poll failed', e);
+      }
+    };
+
+    const interval = setInterval(fetchTraffic, 5000);
+    fetchTraffic();
+    return () => clearInterval(interval);
+  }, [activeSub?.id, activeSub?.status]);
+
+  if (activeSubsLoading) return (
+    <div className="flex items-center justify-center p-20 animate-fade-in">
+       <RefreshCw className="animate-spin text-cyan-500 mr-3" size={24} />
+       <span className="text-muted font-black tracking-widest text-sm uppercase">Synchronizing Systems...</span>
+    </div>
+  );
 
   return (
-    <div className="space-y-10 pb-20">
-      {/* ── HEADER SECTION ── */}
-      <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-900 to-slate-950 p-8 md:p-12 border border-white/5 shadow-2xl">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 blur-[100px] -mr-32 -mt-32 rounded-full" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
+      
+      {/* ── 💎 ADAPTIVE WELCOME BANNER ── */}
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 shadow-2xl p-8 md:p-12">
+        <div className="absolute top-0 right-0 p-4 opacity-10 group">
+          <Zap size={140} className="text-white transform group-hover:rotate-12 transition-transform duration-700" />
+        </div>
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
-            <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight mb-4">
-              Welcome Back, <span className="text-cyan-400">{currentUser?.name?.split(' ')[0] || currentUser?.username || 'Surfer'}</span>
+            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4">
+              Welcome Back, <span className="text-cyan-400 capitalize">{currentUser?.name || 'User'}</span>
             </h1>
-            <p className="text-slate-400 text-lg max-w-xl font-medium">
+            <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80">
               Your high-speed internet portal is ready. Manage your connections and browse without limits.
             </p>
           </div>
-          <div className="flex items-center gap-4">
-             <div className="p-4 bg-slate-900/60 rounded-2xl border border-white/5 shadow-xl glass-panel text-center min-w-[120px]">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Status</p>
-                <div className="flex items-center justify-center gap-2">
-                   <div className={`w-2 h-2 rounded-full ${isAnyLive ? 'bg-emerald-500 animate-pulse' : 'bg-orange-500'}`} />
-                   <span className="text-sm font-bold text-white uppercase tracking-tighter">{isAnyLive ? 'Online' : 'Paused'}</span>
-                </div>
-             </div>
+          <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center gap-2">
+            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">STATUS</p>
+            <div className="flex items-center gap-3">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_#10b981]" />
+              <span className="text-2xl font-black text-white tracking-widest uppercase">READY</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── ACTIVE CONNECTION DASHBOARD (Amazing Cards) ── */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between px-2">
+      <div className="space-y-10">
+        <div className="flex items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <Activity size={20} className="text-cyan-400 animate-pulse" />
-            <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">Live Session Control</h2>
+            <div className="w-10 h-1 rounded-full bg-cyan-500 shadow-[0_0_10px_#06b6d4]" />
+            <h3 className="text-sm font-black text-main uppercase tracking-[0.3em]">LIVE SESSION CONTROL</h3>
           </div>
-          {allActiveSubs.length > 1 && (
-            <span className="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-[10px] font-black tracking-widest border border-cyan-500/20">
-               {allActiveSubs.length} ACTIVE PLANS
-            </span>
-          )}
+          <div className="text-[10px] font-black text-muted uppercase tracking-widest bg-main/5 px-4 py-2 rounded-full border border-main/5">
+            {allActiveSubs.length} ACTIVE PLANS
+          </div>
         </div>
 
-        {/* ── PENDING APPROVALS SECTION ── */}
-        {reviewPlans.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {reviewPlans.map((sub: any) => (
-              <div key={sub.id} className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
-                    <RefreshCw className="animate-spin" size={18} />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-black text-white uppercase tracking-widest">{sub.package?.name}</h4>
-                    <p className="text-[9px] font-bold text-amber-500/70 uppercase">
-                      {sub.status === 'AWAITING_APPROVAL' ? 'Awaiting Human Review' : 'Verifying M-Pesa Transaction'}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest bg-slate-900 px-3 py-1 rounded-lg">
-                  LOCKED
-                </div>
-              </div>
-            ))}
+        {allActiveSubs.length === 0 ? (
+          <div className="glass-panel p-20 flex flex-col items-center justify-center text-center gap-6 group hover:border-cyan-500/30 transition-all border-dashed bg-opacity-20">
+             <div className="w-24 h-24 rounded-full bg-main/5 flex items-center justify-center text-muted opacity-30 group-hover:scale-110 transition-transform">
+               <Zap size={48} />
+             </div>
+             <div className="space-y-2">
+               <h4 className="text-3xl font-black text-main uppercase tracking-widest opacity-30">No Active Plans</h4>
+               <p className="text-xs text-muted font-bold uppercase tracking-widest opacity-40">Choose a package to get started instantly</p>
+             </div>
+             <button 
+                onClick={() => navigate('/user/packages')}
+                className="mt-4 px-10 py-5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.3em] shadow-xl hover:shadow-cyan-500/20 active:scale-95 transition-all"
+             >
+                BROWSE PACKAGES
+             </button>
           </div>
-        )}
+        ) : (
+          <div className="grid gap-10">
+            {allActiveSubs.map((sub: any) => {
+               const isSubLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > new Date();
+               const isDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === localStorage.getItem('hotspot_mac') && ds.isActive);
+               const isLive = isSubLive;
 
-        {allActiveSubs.filter(s => !['AWAITING_APPROVAL', 'VERIFYING'].includes(s.status)).length > 0 ? (
-          <div className="grid grid-cols-1 gap-6">
-            {allActiveSubs.filter(s => !['AWAITING_APPROVAL', 'VERIFYING'].includes(s.status)).map((sub: any) => {
-              // Robust check: If status is ACTIVE and haven't reached expiresAt, it is LIVE.
-              const now = new Date();
-              const isLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > now;
-              const isDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === localStorage.getItem('hotspot_mac') && ds.isActive);
-              
-              return (
-                <div key={sub.id} className="relative group animate-in fade-in slide-in-from-bottom-5 duration-700">
-                  <div className="glass-panel p-6 md:p-10 border-cyan-500/20 bg-slate-900/40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_60px_rgba(34,211,238,0.15)] rounded-[2rem]">
+               return (
+                <div key={sub.id} className="relative group animate-fade-in">
+                  {/* Main Glass Card (Matches Screenshot 2) */}
+                  <div className="glass-panel p-6 md:p-10 border-cyan-500/20 bg-opacity-40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
                     
-                    {isLive && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/5 to-transparent -translate-x-full animate-[shimmer_4s_infinite]" />
-                    )}
+                    {/* Status Banner Row (Screenshot 2 Match) */}
+                    <div className="flex flex-col lg:flex-row items-center justify-between mb-8 gap-4 px-2">
+                       <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-10">
+                         <div className="flex flex-col">
+                           <h3 className="text-4xl font-black text-main tracking-tight leading-none capitalize">{sub.package?.name}</h3>
+                           <div className="flex items-center gap-3 mt-2">
+                              <div className="flex items-center gap-1.5 font-bold text-[10px] text-muted uppercase tracking-widest">
+                                <Clock size={12} className="text-cyan-500/50" />
+                                Acquired: <span className="opacity-80">{sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, HH:mm') : 'Unknown'}</span>
+                              </div>
+                              <div className="w-1 h-1 rounded-full bg-slate-500/20" />
+                              <div className="flex items-center gap-1.5 font-bold text-[10px] text-muted uppercase tracking-widest">
+                                <CreditCard size={12} className="text-emerald-500/50" />
+                                Via: <span className="text-emerald-400 opacity-60">{sub.paymentMethod || 'Manual'}</span>
+                              </div>
+                           </div>
+                         </div>
+                         <div className="flex items-center gap-2 text-xs font-bold text-muted uppercase tracking-widest opacity-60">
+                           <RouterIcon size={14} className="text-cyan-500" />
+                           Location: <span className="text-main">{sub.router?.name || 'Pulselynk'}</span>
+                         </div>
+                       </div>
+                       <div className="flex flex-col items-center lg:items-end">
+                          <p className="text-[10px] font-black text-muted uppercase tracking-[0.25em] mb-1">SESSION STATUS</p>
+                          <h4 className={`text-4xl font-black tracking-[0.1em] uppercase ${sub.status === 'ACTIVE' ? 'text-cyan-400' : 'text-main opacity-80'}`}>
+                            {sub.status === 'PAID' ? 'READY' : sub.status}
+                          </h4>
+                       </div>
+                    </div>
 
-                    <div className="flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
                       
-                      <div className="flex items-center gap-8 w-full lg:w-auto">
-                        <div className={`w-24 h-24 rounded-3xl flex items-center justify-center border transition-all duration-1000 ${isLive ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400 shadow-[0_0_30px_rgba(34,211,238,0.2)]' : 'bg-slate-900/80 border-white/5 text-slate-700'}`}>
-                          <Activity size={40} className={isLive ? 'animate-pulse' : ''} />
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <span className={`text-[10px] font-black uppercase tracking-[0.4em] ${
-                               sub.status === 'AWAITING_APPROVAL' ? 'text-amber-500' :
-                               sub.status === 'VERIFYING' ? 'text-blue-400' :
-                               sub.status === 'PAID' ? 'text-emerald-400' :
-                               'text-slate-500'
-                             }`}>
-                               {isLive ? 'SYSTEM LIVE' : 
-                                sub.status === 'AWAITING_APPROVAL' ? 'AWAITING ADMIN' :
-                                sub.status === 'VERIFYING' ? 'VERIFYING PAYMENT' :
-                                sub.status === 'PAID' ? 'READY TO START' :
-                                'AWAITING START'}
-                             </span>
-                             {isLive && <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-500/20" />}
-                             {(sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING') && (
-                               <RefreshCw size={12} className="text-current animate-spin opacity-50" />
-                             )}
-                          </div>
-                          <h3 className="text-5xl font-black text-white tracking-tighter uppercase leading-none">{sub.package?.name || 'Hotspot'}</h3>
-                          <div className="flex flex-col gap-1.5">
-                             <p className="text-xs font-bold text-slate-400 flex items-center gap-2">
-                               Router: <span className="text-white uppercase tracking-widest text-[10px]">{sub.router?.name || 'Pulselynk Edge'}</span>
-                             </p>
-                             <div className="flex items-center gap-2">
-                               <ShieldCheck size={12} className="text-cyan-500" />
-                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                 ID: <span className="text-slate-400">{sub.id.substring(0, 8)}</span>
-                               </span>
-                             </div>
-
-                             <div className="flex items-center gap-4 mt-1">
-                               <div className="flex items-center gap-1.5">
-                                 <Clock size={10} className="text-slate-500" />
-                                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                   Acquired: <span className="text-slate-400">{sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, HH:mm') : 'Unknown'}</span>
-                                 </span>
-                               </div>
-                               <div className="flex items-center gap-1.5">
-                                 <CreditCard size={10} className="text-cyan-500/50" />
-                                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                   Via: <span className="text-cyan-400/70 capitalize">{sub.paymentMethod || 'Manual'}</span>
-                                 </span>
-                               </div>
-                             </div>
-
-                             {/* Connected Devices List */}
-                             {(sub.deviceSessions?.filter((s: any) => s.isActive).length > 0) ? (
-                               <div className="flex flex-col gap-1.5 mt-2">
-                                 <div className="flex items-center gap-1.5 mb-1">
-                                   <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">
-                                     DEVICES: {sub.deviceSessions.filter((s: any) => s.isActive).length}/{sub.package?.maxDevices || 1}
-                                   </span>
-                                 </div>
-                                 {sub.deviceSessions.filter((s: any) => s.isActive).map((ds: any) => (
-                                   <div key={ds.id} className="flex items-center justify-between gap-4 px-3 py-1.5 bg-slate-950/50 border border-emerald-500/10 rounded-xl group/device hover:border-emerald-500/30 transition-all max-w-sm">
-                                      <div className="flex items-center gap-2">
-                                        <Smartphone size={10} className="text-emerald-400" />
-                                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest leading-none">
-                                          {ds.deviceModel || 'Matched Device'} <span className="text-slate-600 ml-1">({ds.macAddress?.slice(-8)})</span>
-                                        </span>
-                                      </div>
-                                      <button 
-                                        onClick={(e) => { e.stopPropagation(); disconnectMutation.mutate(ds.id); }}
-                                        className="w-5 h-5 flex items-center justify-center bg-red-500/10 hover:bg-red-500/30 border border-red-500/20 rounded-lg transition-all"
-                                        title="Disconnect Device"
-                                      >
-                                        <X size={8} className="text-red-400" />
-                                      </button>
-                                   </div>
-                                 ))}
-                               </div>
-                             ) : (isSynced && localDeviceName) ? (
-                               <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-slate-900/50 border border-slate-800 rounded-md max-w-fit">
-                                 <Smartphone size={10} className="text-blue-500" />
-                                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                   DEVICE: <span className="text-blue-300 ml-1">{localDeviceName}</span>
-                                 </span>
-                               </div>
-                             ) : null}
+                      {/* Left: Device Detail Box (Screenshot Match) */}
+                      <div className="lg:col-span-4 h-full">
+                        <div className="bg-opacity-20 border border-main/5 rounded-3xl p-6 h-full flex flex-col justify-center gap-6 backdrop-blur-md shadow-2xl group-hover:border-cyan-500/20 transition-colors" style={{ backgroundColor: 'var(--bg-input)' }}>
+                          <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 rounded-2xl bg-main/5 flex items-center justify-center text-cyan-400 border border-main/10 shrink-0">
+                               <Laptop size={28} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[9px] font-black text-muted uppercase tracking-[0.25em] mb-1 truncate">THIS DEVICE</p>
+                              <h4 className="text-xs font-bold text-main tracking-wide leading-relaxed truncate">
+                                {localDeviceName}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-2">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none truncate">Verified Identity</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-center lg:items-end gap-6 w-full lg:w-auto">
+                      {/* Right: Live Connectivity Box (Screenshot 2 Match) */}
+                      <div className="lg:col-span-8 space-y-4">
                         {isLive ? (
                           <>
-                            <div className="flex flex-col items-center lg:items-end">
-                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2">VALID REMAINING</span>
-                              <div className="text-6xl lg:text-7xl font-black font-mono text-orange-400 tracking-tighter tabular-nums drop-shadow-[0_0_20px_rgba(251,146,60,0.2)]">
-                                 <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="block" />
+                            <div className="w-full bg-cyan-950/10 border border-cyan-500/20 rounded-2xl py-6 px-10 flex items-center justify-between group-hover:bg-cyan-900/10 transition-all duration-700 relative overflow-hidden shadow-inner">
+                              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
+                              <div className="flex items-center gap-4 relative z-10">
+                                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">SURFING LIVE</span>
+                              </div>
+                               <button 
+                                 onClick={async (e) => {
+                                   e.stopPropagation();
+                                   if (isDeviceLive) return;
+                                   const gateway = sub.router?.localGateway || '10.5.50.1';
+                                   
+                                   if (!isSynced) {
+                                      const isNear = await checkRouterProximity(gateway);
+                                      if (!isNear) {
+                                        toast.error("Not on PulseLynk Wi-Fi! Please connect your device to 'PulseLynk' Wi-Fi first.", { id: 'proximity', icon: '📡' });
+                                        return;
+                                      }
+                                      startDiscovery(sub.id);
+                                      return;
+                                   }
+                                   startMutation.mutate(sub.id);
+                                 }}
+                                 className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : 'text-cyan-400 hover:text-white'}`}
+                               >
+                                 {isDeviceLive ? 'DEVICE CONNECTED' : 'CONNECT THIS DEVICE'}
+                               </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="bg-main/5 rounded-2xl p-5 border border-main/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-main/10 transition-colors">
+                                <Download size={20} className="text-cyan-400 mb-1" />
+                                <span className="text-base font-black text-main">{traffic.downloadSpeed}</span>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">DOWNLOAD</span>
+                              </div>
+                              <div className="bg-main/5 rounded-2xl p-5 border border-main/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-main/10 transition-colors">
+                                <Upload size={20} className="text-emerald-400 mb-1" />
+                                <span className="text-base font-black text-main">{traffic.uploadSpeed}</span>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">UPLOAD</span>
                               </div>
                             </div>
 
-                            <div className="flex flex-col w-full gap-3 mt-2">
-                               <div className="bg-slate-950/80 rounded-2xl px-6 py-3 border border-white/5 flex items-center justify-between gap-6 shadow-inner w-full">
-                                  <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-cyan-500/10 rounded-lg"><Download size={14} className="text-cyan-400" /></div>
-                                    <span className="text-sm font-black text-white font-mono">{traffic.downloadSpeed}</span>
-                                  </div>
-                                  <div className="w-px h-6 bg-white/5" />
-                                  <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-emerald-500/10 rounded-lg"><Upload size={14} className="text-emerald-400" /></div>
-                                    <span className="text-sm font-black text-white font-mono">{traffic.uploadSpeed}</span>
-                                  </div>
+                            <div className="w-full flex items-center justify-between px-6 pt-4 mt-2">
+                               <div className="flex items-center gap-4">
+                                 <div className="flex items-center gap-2">
+                                   <Clock size={16} className="text-muted" />
+                                   <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em]">EXPIRES IN</span>
+                                 </div>
+                                 <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="pill" size="lg" />
                                </div>
-                               <button 
-                                 onClick={async (e) => { 
-                                    e.stopPropagation(); 
-                                    if (isDeviceLive) return;
-                                    const gateway = sub.router?.localGateway || '10.5.50.1';
-
-                                    if (!isSynced) { startDiscovery(sub.id); return; } if (false) {
-                                       const isNear = await checkRouterProximity(gateway);
-                                       if (!isNear) {
-                                         toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first to sync.", {
-                                           duration: 5000,
-                                           icon: '📡'
-                                         });
-                                         return;
-                                       }
-                                       window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect&auto_start=' + sub.id)}`;
-                                       return;
-                                    }
-                                    startMutation.mutate(sub.id); 
-                                 }}
-                                 disabled={startMutation.isPending}
-                                 className={`rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn ${
-                                   isDeviceLive 
-                                     ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 cursor-default' 
-                                     : 'bg-white hover:bg-zinc-100 text-black border border-white shadow-xl'
-                                 }`}
-                               >
-                                 {startMutation.isPending ? <RefreshCw size={16} className="animate-spin text-orange-500" /> : 
-                                  isDeviceLive ? <ShieldCheck size={16} className="text-emerald-500" /> :
-                                  <Zap size={16} className="text-orange-500 group-hover/btn:animate-pulse" />}
-                                 
-                                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-                                   {startMutation.isPending ? 'Connecting...' : 
-                                    isDeviceLive ? 'CONNECTED' : 
-                                    'USE ON THIS DEVICE'}
-                                 </span>
-                               </button>
+                               <div className="px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center gap-3">
+                                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
+                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">SYSTEM LIVE</span>
+                               </div>
                             </div>
                           </>
                         ) : (
-                             <div className="flex flex-col items-center lg:items-end gap-6 text-center lg:text-right">
-                               <div className="flex flex-col items-center lg:items-end">
-                                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mb-2">SESSION STATUS</p>
-                                 <h4 className={`text-4xl font-black tracking-widest ${sub.status === 'PAID' ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                                   {sub.status === 'PAID' ? 'READY' : 'WAITING'}
-                                 </h4>
-                               </div>
+                          <div className="w-full h-full flex flex-col justify-center gap-8 py-4">
+                             <div className="flex flex-col items-center lg:items-start">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <ShieldCheck size={20} className="text-cyan-500" />
+                                  <h4 className="text-xl font-black text-main uppercase tracking-widest">START SESSION</h4>
+                                </div>
+                                <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Identify yourself to begin surfing the web.</p>
+                             </div>
 
+                             <div className="flex flex-col lg:flex-row items-center gap-6 w-full">
                                <button 
-                                 onClick={async (e) => { 
-                                   e.stopPropagation(); 
-                                   const gateway = sub.router?.localGateway || '10.5.50.1';
-                                   
-                                   if (!isSynced) { startDiscovery(sub.id); return; } if (false) {
+                                 onClick={async () => {
+                                   if (!isSynced) {
+                                      const gateway = sub.router?.localGateway || '10.5.50.1';
                                       const isNear = await checkRouterProximity(gateway);
                                       if (!isNear) {
-                                        toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first.", {
-                                          duration: 5000,
-                                          icon: '📡'
-                                        });
+                                        toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first.", { id: 'proximity', icon: '📡' });
                                         return;
                                       }
-                                      window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect&auto_start=' + sub.id)}`;
+                                      startDiscovery(sub.id);
                                       return;
                                    }
-                                   startMutation.mutate(sub.id); 
+                                   startMutation.mutate(sub.id);
                                  }}
-                                 disabled={startMutation.isPending}
-                                 className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
+                                 disabled={startMutation.isPending || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
+                                 className={`w-full lg:flex-1 py-6 text-sm font-black tracking-[0.4em] uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-3xl ${
                                    startMutation.isPending ? 'opacity-70 cursor-not-allowed' : 
                                    !isSynced ? 'shadow-cyan-500/40' : 'shadow-emerald-500/30'
                                  }`}
                                  style={{ 
                                    background: startMutation.isPending ? '#333' : 
-                                              !isSynced ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)' : // Blue for Connect
-                                              'linear-gradient(135deg, #10b981 0%, #059669 100%)' // Green for Start
+                                              !isSynced ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)' :
+                                              'linear-gradient(135deg, #10b981 0%, #059669 100%)'
                                  }}
                                >
-                                  {startMutation.isPending ? <RefreshCw size={20} className="animate-spin text-white" /> : 
-                                   !isSynced ? <Wifi size={20} className="text-white animate-pulse" /> :
-                                   <Zap size={20} className="text-white" />}
-                                  
-                                  {startMutation.isPending ? 'AUTHORIZING...' : 
-                                   !isSynced ? 'JOIN NETWORK' : 
-                                   'START SESSION'}
+                                {startMutation.isPending ? <RefreshCw className="animate-spin text-white" size={24} /> : 
+                                 !isSynced ? <Wifi size={24} className="text-white animate-pulse" /> :
+                                 <Zap size={24} className="text-white" />}
+                                
+                                {startMutation.isPending ? 'SCANNING...' : 
+                                 !isSynced ? 'LINK DEVICE' : 
+                                 'JOIN NETWORK'}
                                </button>
+
+                               <div className="w-full lg:w-48 bg-main/5 border border-main/5 rounded-3xl px-8 py-4 text-center">
+                                  <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">TOTAL TIME</p>
+                                  <span className="text-xl font-black text-main">{sub.package?.durationText || 'Ready'}</span>
+                               </div>
                              </div>
+
+                             <div className="flex items-center justify-between w-full px-2 opacity-50">
+                                <div className="flex items-center gap-2">
+                                  <Link size={14} className="text-muted" />
+                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">Router: {sub.router?.name}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <RefreshCw size={14} className="text-muted" />
+                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">Sync Active</span>
+                                </div>
+                             </div>
+                          </div>
                         )}
-                        
-                        <div 
-                          onClick={() => navigate('/user/subscriptions')}
-                          className="flex items-center gap-2 text-[10px] font-black text-slate-500 hover:text-cyan-400 uppercase tracking-[0.2em] cursor-pointer group/link transition-colors"
-                        >
-                           Session Details <ChevronRight size={16} className="group-hover/link:translate-x-1 transition-transform" />
-                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              );
+               );
             })}
-          </div>
-        ) : (
-          <div className="glass-panel p-16 text-center border-dashed border-white/5 bg-slate-900/20 rounded-[2rem] animate-pulse">
-            <Wifi size={48} className="mx-auto text-slate-700 mb-6" />
-            <h3 className="text-2xl font-bold text-slate-500 mb-4 uppercase tracking-widest">No Active Connections</h3>
-            <button 
-              onClick={() => navigate('/user/packages')}
-              className="px-8 py-4 bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-xl font-black text-xs uppercase tracking-[0.2em] hover:bg-cyan-500 hover:text-white transition-all shadow-lg hover:shadow-cyan-500/40 transform hover:-translate-y-1"
-            >
-              Browse Available Plans
-            </button>
           </div>
         )}
       </div>
 
-      {/* ── QUICK ACTIONS ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div 
-          onClick={() => navigate('/user/packages')}
-          className="glass-panel p-8 group cursor-pointer border border-white/5 hover:border-cyan-500/30 transition-all rounded-[2rem] bg-slate-900/40 overflow-hidden relative"
-        >
-          <div className="absolute top-0 right-0 p-8 text-slate-800 group-hover:text-cyan-500/10 transition-colors">
-            <CreditCard size={120} strokeWidth={1} />
-          </div>
-          <div className="relative z-10">
-            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-400 mb-6 group-hover:scale-110 transition-transform">
-              <Zap size={24} />
-            </div>
-            <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2">Buy New Plan</h3>
-            <p className="text-slate-400 font-medium">Browse our range of high-speed hotspot packages.</p>
-          </div>
-        </div>
-
-        <div 
-          onClick={() => navigate('/user/subscriptions')}
-          className="glass-panel p-8 group cursor-pointer border border-white/5 hover:border-emerald-500/30 transition-all rounded-[2rem] bg-slate-900/40 overflow-hidden relative"
-        >
-          <div className="absolute top-0 right-0 p-8 text-slate-800 group-hover:text-emerald-500/10 transition-colors">
-            <Clock size={120} strokeWidth={1} />
-          </div>
-          <div className="relative z-10">
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-6 group-hover:scale-110 transition-transform">
-              <Clock size={24} />
-            </div>
-            <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2">History</h3>
-            <p className="text-slate-400 font-medium">View your past sessions and usage analytics.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ── DEVICE LIMIT MODAL ── */}
-      {deviceLimitModal.open && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl shadow-orange-500/10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center">
-                <Smartphone size={24} className="text-orange-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-white uppercase tracking-wide">Device Limit Reached</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                  Max {deviceLimitModal.maxDevices} device{deviceLimitModal.maxDevices > 1 ? 's' : ''} allowed
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-400 mb-6">
-              Disconnect a device below to free up a slot for this device.
-            </p>
-
-            <div className="space-y-3 mb-6">
-              {deviceLimitModal.connectedDevices.map((device) => (
-                <div key={device.id} className="flex items-center justify-between p-4 bg-slate-950/80 border border-slate-800 rounded-2xl">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <Smartphone size={18} className="text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-white">{device.model}</p>
-                      <p className="text-[9px] text-slate-500 font-mono">{device.mac}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => disconnectMutation.mutate(device.id)}
-                    disabled={disconnectMutation.isPending}
-                    className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-red-500/20 transition-all active:scale-95"
-                  >
-                    {disconnectMutation.isPending ? <RefreshCw size={12} className="animate-spin" /> : 'Disconnect'}
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeviceLimitModal(prev => ({ ...prev, open: false }))}
-                className="flex-1 py-3 bg-slate-800 border border-slate-700 text-slate-400 text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-slate-700 transition-all"
-              >
-                Cancel
-              </button>
-              {deviceLimitModal.connectedDevices.length < deviceLimitModal.maxDevices && (
-                <button
-                  onClick={() => {
-                    setDeviceLimitModal(prev => ({ ...prev, open: false }));
-                    startMutation.mutate(deviceLimitModal.pendingSubId);
-                  }}
-                  className="flex-1 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white text-xs font-black uppercase tracking-widest rounded-2xl hover:shadow-lg hover:shadow-cyan-500/20 transition-all active:scale-95"
-                >
-                  Connect Now
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* 📡 DEVICE DISCOVERY MODAL */}
       {showDiscovery && (
         <div className="fixed inset-0 z-[110] flex items-start justify-center p-0 sm:p-6 backdrop-blur-xl bg-slate-950/80 animate-fade-in overflow-y-auto">
-          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 bg-slate-900/95 shadow-[0_0_100px_rgba(34,211,238,0.3)] rounded-b-[2.5rem] sm:rounded-[2.5rem] mt-0">
-            <div className="p-8 border-b border-white/10 flex items-center justify-between bg-white/[0.03]">
+          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 bg-opacity-95 shadow-[0_0_100px_rgba(34,211,238,0.3)] rounded-b-[2.5rem] sm:rounded-[2.5rem] mt-0" style={{ backgroundColor: 'var(--bg-panel)' }}>
+            <div className="p-8 border-b border-main/10 flex items-center justify-between bg-main/[0.03]">
               <div>
-                <h3 className="text-2xl font-black text-white tracking-tight uppercase mb-1">LINK THIS DEVICE</h3>
+                <h3 className="text-2xl font-black text-main tracking-tight uppercase mb-1">LINK THIS DEVICE</h3>
                 <p className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-60">Identify yourself in the PulseLynk network</p>
               </div>
               <button 
                 onClick={() => setShowDiscovery(false)}
                 className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center text-white hover:bg-red-500 hover:scale-110 transition-all shadow-[0_0_20px_rgba(220,38,38,0.4)] active:scale-95 group"
+                aria-label="Close"
               >
-                <X size={26} strokeWidth={4} className="group-hover:rotate-90 transition-transform duration-300" />
+                <svg viewBox="0 0 24 24" className="w-7 h-7 stroke-[4px] stroke-current fill-none">
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
             </div>
 
@@ -711,48 +501,49 @@ export default function UserDashboard() {
                     </div>
                   </div>
                   <div className="text-center">
-                    <h4 className="text-lg font-black text-white mb-2 uppercase tracking-widest">Scanning Network...</h4>
+                    <h4 className="text-lg font-black text-main mb-2 uppercase tracking-widest">Scanning Network...</h4>
                     <p className="text-xs text-muted leading-relaxed max-w-[250px] mx-auto font-medium">Looking for connected devices on the Wi-Fi. This will only take a moment.</p>
                   </div>
                 </div>
               ) : discoveredHosts.length === 0 ? (
                 <div className="py-16 text-center">
-                  <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <div className="w-20 h-20 bg-main/5 rounded-full flex items-center justify-center mx-auto mb-6">
                     <AlertTriangle size={32} className="text-amber-500/50" />
                   </div>
-                  <h4 className="text-xl font-black text-slate-400 mb-4 uppercase">No Devices Found</h4>
-                  <p className="text-xs text-muted mb-8 leading-relaxed max-w-[280px] mx-auto font-medium">
-                    We couldn't detect any newly connected devices. Please make sure you are physically connected to the <span className="text-cyan-400">PulseLynk Wi-Fi</span> on this device.
+                  <h4 className="text-xl font-black text-muted mb-4 uppercase">No Devices Found</h4>
+                  <p className="text-sm text-muted mb-8 leading-relaxed max-w-[280px] mx-auto font-medium">
+                    We couldn't detect any newly connected devices on the <span className="text-cyan-500 font-black italic">PulseLynk Wi-Fi</span>.
                   </p>
                   <button 
                     onClick={() => discoverySubId && startDiscovery(discoverySubId)}
-                    className="btn-primary-outline px-10 py-4 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-cyan-500/10"
+                    className="px-10 py-4 bg-muted/10 border border-muted/20 text-muted text-[11px] font-black uppercase tracking-widest rounded-2xl hover:bg-muted/20 hover:text-main transition-all"
                   >
                     Try Scan Again
                   </button>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-6 block text-center bg-cyan-400/5 py-3 rounded-xl border border-cyan-400/10">Select your device from the list below</p>
+                  <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest mb-6 block text-center bg-cyan-500/5 py-3 rounded-xl border border-cyan-500/10">Select your device from the list below</p>
                   <div className="grid gap-3">
                     {discoveredHosts.map((host) => (
                       <button
                         key={host.mac}
                         onClick={() => linkDevice(host.mac)}
-                        className="w-full glass-panel p-5 bg-slate-800/40 border-white/5 hover:border-cyan-500/50 hover:bg-slate-800/60 transition-all flex items-center justify-between group rounded-2xl text-left"
+                        className="w-full glass-panel p-5 bg-opacity-40 border-main/5 hover:border-cyan-500/50 hover:bg-opacity-60 transition-all flex items-center justify-between group rounded-2xl text-left"
+                        style={{ backgroundColor: 'var(--bg-panel)' }}
                       >
                         <div className="flex items-center gap-5">
-                          <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                          <div className="w-12 h-12 rounded-xl bg-main/5 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
                             {host.deviceName === 'Apple' ? <Smartphone size={24} /> : <Laptop size={24} />}
                           </div>
                           <div>
-                            <h5 className="font-black text-white text-sm tracking-wide uppercase mb-1">{host.deviceName || 'Neighbor Device'}</h5>
+                            <h5 className="font-black text-main text-sm tracking-wide uppercase mb-1">{host.deviceName || 'Neighbor Device'}</h5>
                             <div className="flex items-center gap-3">
-                              <span className="text-[10px] font-bold text-slate-500 font-mono tracking-widest">{host.mac}</span>
+                              <span className="text-[11px] font-bold text-muted font-mono tracking-widest">{host.mac}</span>
                               {host.ip && (
                                 <>
-                                  <div className="w-1 h-1 rounded-full bg-slate-700" />
-                                  <span className="text-[10px] font-bold text-slate-600 font-mono">{host.ip}</span>
+                                  <div className="w-1 h-1 rounded-full bg-muted/30" />
+                                  <span className="text-[11px] font-bold text-muted/60 font-mono">{host.ip}</span>
                                 </>
                               )}
                             </div>
@@ -764,14 +555,61 @@ export default function UserDashboard() {
                       </button>
                     ))}
                   </div>
-                  <div className="mt-8 pt-8 border-t border-white/5 text-center px-4">
-                    <p className="text-[10px] text-muted leading-relaxed font-bold uppercase tracking-widest opacity-40">
-                      Don't see your device? Make sure you have connected to the Wi-Fi and refresh the scan.
-                    </p>
-                  </div>
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {deviceLimitModal.open && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-2xl bg-slate-950/60 animate-fade-in">
+          <div className="glass-panel w-full max-w-lg p-8 sm:p-12 border-red-500/30 bg-opacity-95 shadow-[0_0_80px_rgba(239,68,68,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
+            <div className="flex items-center gap-6 mb-8 pb-8 border-b border-main/10">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
+                <AlertTriangle size={32} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-main uppercase tracking-tight">Limit Reached</h3>
+                <p className="text-[10px] text-muted font-bold uppercase tracking-widest opacity-60">
+                  Max {deviceLimitModal.maxDevices} device{deviceLimitModal.maxDevices > 1 ? 's' : ''} allowed
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted mb-8 leading-relaxed font-bold uppercase tracking-wide opacity-80">
+              Your plan is currently active on other devices. Please disconnect a device below to start surfing here.
+            </p>
+
+            <div className="space-y-4 mb-10">
+              {deviceLimitModal.connectedDevices.map((device: any) => (
+                <div key={device.id} className="flex items-center justify-between p-5 bg-main/5 border border-main/5 rounded-2xl group hover:border-red-500/20 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                      <Smartphone size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-main uppercase tracking-wide">{device.model || 'Unknown Device'}</p>
+                      <p className="text-[10px] text-muted font-mono tracking-widest">{device.mac}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => disconnectMutation.mutate(device.id)}
+                    disabled={disconnectMutation.isPending}
+                    className="px-6 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 shadow-lg shadow-red-500/10"
+                  >
+                    {disconnectMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : 'KICK'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setDeviceLimitModal(prev => ({ ...prev, open: false }))}
+              className="w-full py-5 bg-main/5 border border-main/10 text-muted text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-main/10 hover:text-main transition-all"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
