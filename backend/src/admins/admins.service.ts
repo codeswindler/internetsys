@@ -80,15 +80,20 @@ export class AdminsService implements OnModuleInit {
       forcePasswordChange: true // Always force change for system-gen passwords
     });
 
-    const saved = await this.adminRepo.save(admin);
+    try {
+      const saved = await this.adminRepo.save(admin);
 
-    // Send SMS with credentials
-    if (saved.phone) {
-      const msg = `Hello ${saved.name}, your PulseLynk staff credentials: Username: ${saved.username || saved.email}, Pass: ${rawPassword}. Login at pulselynk.co.ke/admin. Please change password on first login.`;
-      await this.smsService.sendSms(saved.phone, msg);
+      // Send SMS with credentials
+      if (saved.phone) {
+        const msg = `Hello ${saved.name}, your PulseLynk staff credentials: Username: ${saved.username || saved.email}, Pass: ${rawPassword}. Login at pulselynk.co.ke/admin. Please change password on first login.`;
+        await this.smsService.sendSms(saved.phone, msg);
+      }
+
+      return { ...saved, rawPassword };
+    } catch (e) {
+      this.logger.error(`[Admins] Create Failed: ${e.message}`);
+      throw new BadRequestException(`Staff enrollment failed: ${e.message}`);
     }
-
-    return { ...saved, rawPassword };
   }
 
   async update(id: string, data: any): Promise<Admin> {

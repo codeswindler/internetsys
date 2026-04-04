@@ -50,6 +50,12 @@ export class AdminsController {
     return this.adminsService.update(id, data);
   }
 
+  @Post('seed')
+  async seed() {
+    await this.adminsService.onModuleInit();
+    return { success: true, message: 'Permissions seeded' };
+  }
+
   @Delete(':id')
   async delete(@Param('id') id: string) {
     return this.adminsService.delete(id);
