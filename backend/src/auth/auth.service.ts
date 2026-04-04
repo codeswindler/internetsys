@@ -243,6 +243,7 @@ export class AuthService {
 
       if (data.password) {
         admin.passwordHash = await bcrypt.hash(data.password, 10);
+        admin.forcePasswordChange = false; // Clear mandatory change flag
       }
 
       await this.adminRepo.save(admin);
