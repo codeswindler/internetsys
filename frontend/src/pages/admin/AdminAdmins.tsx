@@ -100,6 +100,27 @@ export default function AdminAdmins() {
       toast.success('Admin deleted');
     }
   });
+  
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const token = localStorage.getItem('token');
+      return axios.post(`${API_URL}/admins/${id}/reset-password`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    },
+    onSuccess: (res) => {
+      toast.success('New credentials generated and sent via SMS!');
+      if (res.data?.rawPassword) {
+        setGeneratedCreds({
+          username: 'Staff Member',
+          password: res.data.rawPassword
+        });
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Reset failed');
+    }
+  });
 
   const handleOpenModal = (admin?: any) => {
     if (admin) {
@@ -172,6 +193,13 @@ export default function AdminAdmins() {
                 <Shield size={32} />
               </div>
               <div className="flex gap-2">
+                <button 
+                  onClick={() => { if(confirm('Reset and send new credentials via SMS?')) resetPasswordMutation.mutate(admin.id) }} 
+                  className="p-2 text-muted hover:text-cyan-400 transition-colors"
+                  title="Reset & Send Credentials"
+                >
+                  <Key size={18} />
+                </button>
                 <button onClick={() => handleOpenModal(admin)} className="p-2 text-muted hover:text-cyan-400 transition-colors">
                   <Edit2 size={18} />
                 </button>
@@ -346,14 +374,26 @@ export default function AdminAdmins() {
                    </div>
                 </div>
 
-                <button 
-                  type="submit" 
-                  disabled={upsertMutation.isPending}
-                  className="w-full py-6 btn-primary font-black uppercase tracking-[0.3em] text-xs shadow-2xl shadow-cyan-500/20 active:scale-95 transition-all flex items-center justify-center gap-4"
-                >
-                  {upsertMutation.isPending ? <RefreshCw className="animate-spin" /> : <Shield size={20} />}
-                  {editingAdmin ? 'Update Credentials' : 'Enroll & Send Credentials'}
-                </button>
+                 <div className="flex gap-4">
+                    <button 
+                      type="submit" 
+                      disabled={upsertMutation.isPending}
+                      className="flex-1 py-6 btn-primary font-black uppercase tracking-[0.3em] text-xs shadow-2xl shadow-cyan-500/20 active:scale-95 transition-all flex items-center justify-center gap-4"
+                    >
+                      {upsertMutation.isPending ? <RefreshCw className="animate-spin" /> : <Shield size={20} />}
+                      {editingAdmin ? 'Update Credits' : 'Enroll & Send Credentials'}
+                    </button>
+                    {editingAdmin && (
+                       <button 
+                         type="button"
+                         onClick={() => { if(confirm('Reset password and send SMS?')) resetPasswordMutation.mutate(editingAdmin.id) }}
+                         className="px-6 rounded-[2rem] bg-slate-800 border border-main/10 text-cyan-400 hover:bg-slate-700 transition-all flex items-center justify-center"
+                         title="Reset & Send Credentials"
+                       >
+                         <Key size={20} />
+                       </button>
+                    )}
+                 </div>
              </form>
           </div>
         </div>,

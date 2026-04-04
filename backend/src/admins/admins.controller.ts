@@ -56,6 +56,11 @@ export class AdminsController {
     return { success: true, message: 'Permissions seeded' };
   }
 
+  @Post(':id/reset-password')
+  async resetPassword(@Param('id') id: string) {
+    return this.adminsService.resetCredentials(id);
+  }
+
   @Delete(':id')
   async delete(@Param('id') id: string) {
     return this.adminsService.delete(id);

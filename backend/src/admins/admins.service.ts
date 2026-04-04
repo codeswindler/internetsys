@@ -131,6 +131,25 @@ export class AdminsService implements OnModuleInit {
     await this.adminRepo.remove(admin);
   }
 
+  async resetCredentials(id: string): Promise<any> {
+    const admin = await this.findOne(id);
+    
+    // Generate new random 8-char password
+    const rawPassword = Math.random().toString(36).slice(-8).toUpperCase();
+    admin.passwordHash = await bcrypt.hash(rawPassword, 10);
+    admin.forcePasswordChange = true;
+    
+    await this.adminRepo.save(admin);
+
+    // Send SMS with new credentials
+    if (admin.phone) {
+      const msg = `Your PulseLynk password has been reset. Username: ${admin.username || admin.email}, New Pass: ${rawPassword}. Please change it on login.`;
+      await this.smsService.sendSms(admin.phone, msg);
+    }
+
+    return { success: true, rawPassword };
+  }
+
   async findAllPermissions(): Promise<Permission[]> {
     return this.permissionRepo.find();
   }
