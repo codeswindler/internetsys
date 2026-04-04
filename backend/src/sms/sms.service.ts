@@ -14,35 +14,34 @@ export class SmsService {
     this.partnerId = this.configService.get<string>('ADVANTA_PARTNER_ID') || '';
     this.apiKey = this.configService.get<string>('ADVANTA_API_KEY') || '';
     this.shortCode = this.configService.get<string>('ADVANTA_SHORTCODE') || '';
-    // Normalize baseUrl: strip trailing slash if present
-    const rawUrl = this.configService.get<string>('ADVANTA_BASE_URL') || 'https://quicksms.advantasms.com/api/v2';
+    // Advanta services endpoint: https://quicksms.advantasms.com/api/services
+    const rawUrl = this.configService.get<string>('ADVANTA_BASE_URL') || 'https://quicksms.advantasms.com';
     this.baseUrl = rawUrl.replace(/\/$/, '');
   }
 
   /**
    * Send OTP via Advanta SMS API
-   * Ref: https://developers.advantasms.com/sms-api/send-otp.html
    */
   async sendOtp(phone: string, otp: string): Promise<boolean> {
     const cleanPhone = this.formatPhone(phone);
-    // Use standard SendSMS for v2 OTP delivery
-    const url = `${this.baseUrl}/SendSMS`;
+    // Official OTP endpoint for transactional/OTP messages
+    const url = `${this.baseUrl}/api/services/sendotp`;
     const data = {
-      partnerID: this.partnerId,
       apikey: this.apiKey,
+      partnerID: this.partnerId,
       mobile: cleanPhone,
-      shortcode: this.shortCode,
       message: `Your PulseLynk code is: ${otp}. Valid for 5 minutes.`,
+      shortcode: this.shortCode,
     };
 
     try {
       this.logger.log(`[SMS] Sending OTP to ${cleanPhone}...`);
       const response = await axios.post(url, data);
       
-      // Advanta v2 returns "response-code": "200" for success
-      if (response.data?.['response-code'] == 200) {
-        return true;
-      }
+      // Official Advanta OTP response is wrapped in 'responses' array
+      const success = response.data?.responses?.[0]?.['response-code'] == 200 || response.data?.['response-code'] == 200;
+      
+      if (success) return true;
       
       this.logger.error(`[SMS] Advanta Error: ${JSON.stringify(response.data)}`);
       return false;
@@ -53,28 +52,27 @@ export class SmsService {
   }
 
   /**
-   * Send Bulk SMS for notifications
+   * Send Notification SMS
    */
   async sendSms(phone: string, message: string): Promise<boolean> {
     const cleanPhone = this.formatPhone(phone);
-    const url = `${this.baseUrl}/SendSMS`;
+    const url = `${this.baseUrl}/api/services/sendsms`;
     const data = {
-      partnerID: this.partnerId,
       apikey: this.apiKey,
+      partnerID: this.partnerId,
       mobile: cleanPhone,
-      shortcode: this.shortCode,
       message: message,
+      shortcode: this.shortCode,
     };
 
     try {
-      this.logger.log(`[SMS] Sending Notification to ${cleanPhone}...`);
+      this.logger.log(`[SMS] Sending Notification...`);
       const response = await axios.post(url, data);
       
-      if (response.data?.['response-code'] == 200) {
-        return true;
-      }
+      const success = response.data?.['response-code'] == 200 || response.data?.responses?.[0]?.['response-code'] == 200;
+      if (success) return true;
       
-      this.logger.error(`[SMS] Advanta Error (Sms): ${JSON.stringify(response.data)}`);
+      this.logger.error(`[SMS] Advanta Error: ${JSON.stringify(response.data)}`);
       return false;
     } catch (e) {
       this.logger.error(`[SMS] Failed to send SMS: ${e.message}`);
@@ -84,20 +82,19 @@ export class SmsService {
 
   /**
    * Check SMS Balance
-   * Ref: https://developers.advantasms.com/sms-api/balance.html
    */
   async getBalance(): Promise<number> {
-    const url = `${this.baseUrl}/Balance`;
+    const url = `${this.baseUrl}/api/services/getbalance`;
     const data = {
-      partnerID: this.partnerId,
       apikey: this.apiKey,
+      partnerID: this.partnerId,
     };
 
     try {
       const response = await axios.post(url, data);
       if (response.data?.['response-code'] == 200) {
-        // Return only the credit balance
-        return parseFloat(response.data?.credit_balance || '0');
+        // Success response uses "credit" field
+        return parseFloat(response.data?.credit || '0');
       }
       this.logger.error(`[SMS] Balance failed: ${JSON.stringify(response.data)}`);
       return 0;
