@@ -42,6 +42,23 @@ export default function UserDashboard() {
     }
   }, [window.location.search]);
   
+  // Router proximity check to prevent 10.5.50.1 timeouts
+  const checkRouterProximity = async (gateway: string) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      await fetch(`http://${gateway}/favicon.ico`, { 
+        mode: 'no-cors', 
+        signal: controller.signal,
+        cache: 'no-cache'
+      });
+      clearTimeout(timeoutId);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -70,20 +87,16 @@ export default function UserDashboard() {
     ['active', 'paid', 'pending', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
   );
 
-  const liveSession = allActiveSubs.find((s: any) => 
-    s.startedAt && s.expiresAt && new Date(s.expiresAt) > new Date()
-  );
-  
-  const pendingPlans = allActiveSubs.filter((s: any) => 
-    s.status === 'PAID' || s.status === 'PENDING' || (s.status === 'ACTIVE' && (!s.expiresAt || new Date(s.expiresAt) <= new Date()))
+  // Global Check: Is ANY session live?
+  const isAnyLive = allActiveSubs.some((s: any) => 
+    s.status === 'ACTIVE' && s.expiresAt && new Date(s.expiresAt) > new Date()
   );
 
   const reviewPlans = allActiveSubs.filter((s: any) => 
     s.status === 'AWAITING_APPROVAL' || s.status === 'VERIFYING'
   );
 
-  const isAnyLive = !!liveSession;
-  const activeSub = liveSession || (pendingPlans.length > 0 ? pendingPlans[0] : null);
+  const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
 
   // Poll for real-time traffic
   useEffect(() => {
@@ -306,6 +319,7 @@ export default function UserDashboard() {
               // Robust check: If status is ACTIVE and haven't reached expiresAt, it is LIVE.
               const now = new Date();
               const isLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > now;
+              const isDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === localStorage.getItem('hotspot_mac') && ds.isActive);
               
               return (
                 <div key={sub.id} className="relative group animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -429,65 +443,92 @@ export default function UserDashboard() {
                                   </div>
                                </div>
                                <button 
-                                 onClick={(e) => { 
+                                 onClick={async (e) => { 
                                     e.stopPropagation(); 
+                                    if (isDeviceLive) return;
+                                    const gateway = sub.router?.localGateway || '10.5.50.1';
+
                                     if (!isSynced) {
-                                       const gateway = sub.router?.localGateway || '10.5.50.1';
+                                       const isNear = await checkRouterProximity(gateway);
+                                       if (!isNear) {
+                                         toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first to sync.", {
+                                           duration: 5000,
+                                           icon: '📡'
+                                         });
+                                         return;
+                                       }
                                        window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect&auto_start=' + sub.id)}`;
                                        return;
                                     }
                                     startMutation.mutate(sub.id); 
                                  }}
                                  disabled={startMutation.isPending}
-                                 className="bg-white hover:bg-zinc-100 text-black rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn"
+                                 className={`rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn ${
+                                   isDeviceLive 
+                                     ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 cursor-default' 
+                                     : 'bg-white hover:bg-zinc-100 text-black border border-white shadow-xl'
+                                 }`}
                                >
-                                 {startMutation.isPending ? <RefreshCw size={16} className="animate-spin text-orange-500" /> : <Zap size={16} className="text-orange-500 group-hover/btn:animate-pulse" />}
+                                 {startMutation.isPending ? <RefreshCw size={16} className="animate-spin text-orange-500" /> : 
+                                  isDeviceLive ? <ShieldCheck size={16} className="text-emerald-500" /> :
+                                  <Zap size={16} className="text-orange-500 group-hover/btn:animate-pulse" />}
+                                 
                                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-                                   {startMutation.isPending ? 'Connecting...' : 'Start Session'}
+                                   {startMutation.isPending ? 'Connecting...' : 
+                                    isDeviceLive ? 'CONNECTED' : 
+                                    'USE ON THIS DEVICE'}
                                  </span>
                                </button>
                             </div>
                           </>
                         ) : (
-                          <div className="flex flex-col items-center lg:items-end gap-6">
-                            <div className="text-center lg:text-right">
-                               <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mb-2">SESSION STATUS</p>
-                               <h4 className={`text-4xl font-black tracking-widest ${sub.status === 'PAID' ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                                 {sub.status === 'PAID' ? 'READY' : 'WAITING'}
-                               </h4>
-                             </div>
-                              {sub.status === 'PAID' && (
-                                <button 
-                                  onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    if (!isSynced) {
-                                       const gateway = sub.router?.localGateway || '10.5.50.1';
-                                       window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect&auto_start=' + sub.id)}`;
-                                       return;
-                                    }
-                                    startMutation.mutate(sub.id); 
-                                  }}
-                                  disabled={startMutation.isPending || isAnyLive}
-                                  className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
-                                    isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 
-                                    !isSynced ? 'shadow-cyan-500/40' : 'shadow-emerald-500/30'
-                                  }`}
-                                  style={{ 
-                                    background: isAnyLive ? '#333' : 
-                                               !isSynced ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)' : // Blue for Connect
-                                               'linear-gradient(135deg, #10b981 0%, #059669 100%)' // Green for Start
-                                  }}
-                                >
-                                   {startMutation.isPending ? <RefreshCw size={20} className="animate-spin text-white" /> : 
-                                    !isSynced ? <Wifi size={20} className="text-white animate-pulse" /> :
-                                    <Zap size={20} className="text-white" />}
+                             <div className="flex flex-col items-center lg:items-end gap-6 text-center lg:text-right">
+                               <div className="flex flex-col items-center lg:items-end">
+                                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mb-2">SESSION STATUS</p>
+                                 <h4 className={`text-4xl font-black tracking-widest ${sub.status === 'PAID' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                                   {sub.status === 'PAID' ? 'READY' : 'WAITING'}
+                                 </h4>
+                               </div>
+
+                               <button 
+                                 onClick={async (e) => { 
+                                   e.stopPropagation(); 
+                                   const gateway = sub.router?.localGateway || '10.5.50.1';
                                    
-                                   {isAnyLive ? 'SESSION LOCKED' : 
-                                    !isSynced ? 'CONNECT THIS DEVICE' : 
-                                    'START SESSION'}
-                                </button>
-                              )}
-                          </div>
+                                   if (!isSynced) {
+                                      const isNear = await checkRouterProximity(gateway);
+                                      if (!isNear) {
+                                        toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first.", {
+                                          duration: 5000,
+                                          icon: '📡'
+                                        });
+                                        return;
+                                      }
+                                      window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect&auto_start=' + sub.id)}`;
+                                      return;
+                                   }
+                                   startMutation.mutate(sub.id); 
+                                 }}
+                                 disabled={startMutation.isPending}
+                                 className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
+                                   startMutation.isPending ? 'opacity-70 cursor-not-allowed' : 
+                                   !isSynced ? 'shadow-cyan-500/40' : 'shadow-emerald-500/30'
+                                 }`}
+                                 style={{ 
+                                   background: startMutation.isPending ? '#333' : 
+                                              !isSynced ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)' : // Blue for Connect
+                                              'linear-gradient(135deg, #10b981 0%, #059669 100%)' // Green for Start
+                                 }}
+                               >
+                                  {startMutation.isPending ? <RefreshCw size={20} className="animate-spin text-white" /> : 
+                                   !isSynced ? <Wifi size={20} className="text-white animate-pulse" /> :
+                                   <Zap size={20} className="text-white" />}
+                                  
+                                  {startMutation.isPending ? 'AUTHORIZING...' : 
+                                   !isSynced ? 'JOIN NETWORK' : 
+                                   'START SESSION'}
+                               </button>
+                             </div>
                         )}
                         
                         <div 
