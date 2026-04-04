@@ -181,8 +181,7 @@ export default function Users() {
 
   const [plansPopupUserId, setPlansPopupUserId] = useState<string | null>(null);
 
-  const [resetTarget, setResetTarget] = useState<CustomerUser | null>(null);
-  const [resetPassword, setResetPassword] = useState('');
+  const [generatedCreds, setGeneratedCreds] = useState<any>(null);
 
   const [hiddenUsers, setHiddenUsers] = useState<string[]>([]);
   const deleteTimeouts = useRef<{ [key: string]: ReturnType<typeof setTimeout> }>({});
@@ -270,12 +269,17 @@ export default function Users() {
   });
 
   const resetPasswordMutation = useMutation({
-    mutationFn: (data: { id: string, password: string }) => 
-      api.post(`/auth/admin/users/${data.id}/password`, { password: data.password }),
-    onSuccess: () => {
-      toast.success('Password reset successfully');
-      setResetTarget(null);
-      setResetPassword('');
+    mutationFn: (id: string) => 
+      api.post(`/auth/admin/users/${id}/reset-password`),
+    onSuccess: (res, userId) => {
+      toast.success('New password generated and sent via SMS!');
+      const user = users?.find(u => u.id === userId);
+      if (res.data?.rawPassword) {
+        setGeneratedCreds({
+          username: user?.username || user?.phone || 'Customer',
+          password: res.data.rawPassword
+        });
+      }
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Password reset failed')
   });
@@ -519,13 +523,24 @@ export default function Users() {
                 </button>
 
                 <div className="flex items-center gap-1">
-                  <button
-                    className="text-[11px] font-semibold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors border border-transparent hover:border-orange-500/30"
-                    onClick={() => setResetTarget(u)}
-                    title="Reset Password"
-                  >
-                    <KeyRound size={13} /> Rest Pass
-                  </button>
+                    <button
+                      className="text-[11px] font-semibold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-orange-400 hover:bg-orange-400/10 transition-colors border border-transparent hover:border-orange-500/30"
+                      onClick={() => {
+                        setConfirmState({
+                          isOpen: true,
+                          title: 'Reset Password',
+                          message: `Generate a new password for ${u.name} and send it to their phone via SMS?`,
+                          confirmText: 'Reset & Send',
+                          onConfirm: () => {
+                            resetPasswordMutation.mutate(u.id);
+                            setConfirmState(s => ({ ...s, isOpen: false }));
+                          }
+                        });
+                      }}
+                      title="Generate & Send Password"
+                    >
+                      <KeyRound size={13} /> Rest Pass
+                    </button>
 
                   <button
                     className={`text-[11px] font-semibold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors border border-transparent
@@ -680,45 +695,34 @@ export default function Users() {
         document.body
       )}
 
-      {/* ── Reset Password Modal ── */}
-      {resetTarget && createPortal(
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setResetTarget(null); }}
-        >
-          <div className="glass-panel w-full max-w-sm animate-fade-in bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl overflow-hidden flex flex-col">
-            <div className="flex items-center gap-3 p-5 border-b border-white/10">
-               <div className="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-400"><KeyRound size={18} /></div>
-               <div>
-                  <h3 className="text-lg font-bold text-white leading-tight">Reset Password</h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">{resetTarget.username}</p>
-               </div>
+      {/* ── Generated Credentials Modal ── */}
+      {generatedCreds && createPortal(
+        <div className="fixed inset-0 z-[10006] flex items-center justify-center p-4" style={{ backdropFilter: 'blur(24px)', backgroundColor: 'rgba(5,10,25,0.90)' }}>
+          <div className="w-full max-w-md rounded-[2.5rem] border border-emerald-500/30 bg-slate-900 shadow-2xl p-10 text-center">
+            <div className="w-20 h-20 bg-emerald-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-emerald-500/20">
+              <KeyRound size={36} className="text-emerald-400" />
             </div>
-            <form
-               onSubmit={(e) => { e.preventDefault(); resetPasswordMutation.mutate({ id: resetTarget.id, password: resetPassword }); }}
-               className="p-5 flex flex-col gap-5"
-            >
-               <div>
-                 <label className="block text-sm font-medium text-slate-300 mb-1.5">New Password</label>
-                 <input 
-                   className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-orange-500 transition-all font-medium" 
-                   type="password" 
-                   value={resetPassword} 
-                   onChange={e => setResetPassword(e.target.value)} 
-                   placeholder="Enter new password" 
-                   required 
-                   minLength={6} 
-                 />
-                 <p className="mt-2 text-[10px] text-slate-500 italic">User will be logged out of current sessions automatically.</p>
-               </div>
-               
-               <div className="flex justify-end gap-3 pt-2">
-                 <button type="button" className="px-5 py-2 rounded-lg font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all text-sm" onClick={() => setResetTarget(null)} disabled={resetPasswordMutation.isPending}>Cancel</button>
-                 <button type="submit" className="px-6 py-2 rounded-lg font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-400 hover:to-red-400 shadow-lg shadow-orange-900/20 transition-all active:scale-95 flex items-center gap-2 text-sm" disabled={resetPasswordMutation.isPending}>
-                   {resetPasswordMutation.isPending ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : 'Save Password'}
-                 </button>
-               </div>
-            </form>
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-1">Credentials Reset</h3>
+            <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mb-8">New password sent to their phone via SMS</p>
+            <div className="space-y-4 mb-8">
+              <div className="p-4 bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Username</span>
+                <span className="text-lg font-bold text-white">{generatedCreds.username}</span>
+              </div>
+              <div className="p-4 bg-cyan-500/10 rounded-2xl border border-cyan-500/20 flex flex-col items-center">
+                <span className="text-[9px] font-black text-cyan-400/60 uppercase tracking-widest mb-1">Generated Password</span>
+                <span className="text-2xl font-black text-cyan-400 tracking-[0.3em]">{generatedCreds.password}</span>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(generatedCreds.password); toast.success('Copied!'); }}
+                  className="mt-3 text-[10px] font-black text-cyan-400 uppercase tracking-widest hover:text-white transition-colors"
+                >
+                  Copy to Clipboard
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setGeneratedCreds(null)} className="btn-primary w-full py-4 text-xs font-black uppercase tracking-[0.2em]">
+              Got it, Continue
+            </button>
           </div>
         </div>,
         document.body

@@ -141,6 +141,13 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Post('admin/users/:id/reset-password')
+  adminAutoResetPassword(@Param('id') id: string) {
+    return this.authService.adminAutoResetUserPassword(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
   @Post('admin/users/:id/delete')
   deleteUserAlias(@Param('id') id: string) {
     return this.authService.deleteUser(id);

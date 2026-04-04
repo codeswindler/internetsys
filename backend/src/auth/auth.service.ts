@@ -259,6 +259,20 @@ export class AuthService {
     return { success: true, message: 'Password reset successfully' };
   }
 
+  async adminAutoResetUserPassword(userId: string) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found');
+    const rawPassword = Math.random().toString(36).slice(-8).toUpperCase();
+    user.passwordHash = await bcrypt.hash(rawPassword, 10);
+    await this.userRepo.save(user);
+    // Send SMS with new credentials
+    if (user.phone) {
+      const msg = `Hello ${user.name || user.username}, your PulseLynk password has been reset. Username: ${user.username || user.phone}, New Pass: ${rawPassword}. Login at pulselynk.co.ke. Please change on first login.`;
+      await this.smsService.sendSms(user.phone, msg);
+    }
+    return { success: true, rawPassword };
+  }
+
   async deleteUser(userId: string) {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
