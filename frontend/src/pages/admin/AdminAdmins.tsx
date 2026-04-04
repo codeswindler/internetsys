@@ -318,8 +318,9 @@ export default function AdminAdmins() {
                   {editingAdmin ? 'Update Credentials' : 'Enroll Administrator'}
                 </button>
              </form>
-          </div>
-        </div>
+           </div>
+         </div>
+       </div>
       )}
     </div>
   );
