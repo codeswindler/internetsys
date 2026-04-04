@@ -484,9 +484,9 @@ export default function Subscriptions() {
               </div>
               <button 
                 onClick={() => setShowDiscovery(false)}
-                className="w-12 h-12 rounded-xl bg-cyan-500 flex items-center justify-center text-white hover:bg-cyan-400 hover:scale-110 transition-all shadow-lg active:scale-95"
+                className="w-10 h-10 rounded-full flex items-center justify-center text-red-500 hover:bg-red-500/10 hover:scale-110 transition-all active:scale-95"
               >
-                <X size={24} strokeWidth={3} />
+                <X size={28} strokeWidth={2.5} />
               </button>
             </div>
 
