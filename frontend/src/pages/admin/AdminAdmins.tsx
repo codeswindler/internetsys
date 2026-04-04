@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -212,10 +213,12 @@ export default function AdminAdmins() {
         ))}
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[1200] overflow-y-auto backdrop-blur-2xl bg-slate-950/60 p-4 transition-all duration-500">
-          <div className="flex min-h-full items-center justify-center py-12">
-            <div className="glass-panel w-full max-w-2xl bg-slate-900 border border-main/10 shadow-3xl rounded-[2.5rem] p-8 md:p-12 relative animate-scale-in" style={{ backgroundColor: 'var(--bg-panel)' }}>
+      {isModalOpen && createPortal(
+        <div 
+          className="fixed inset-0 z-[10005] overflow-y-auto backdrop-blur-2xl bg-slate-950/60 p-4 transition-all duration-500 flex items-start justify-center pt-20 pb-20"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) handleCloseModal(); }}
+        >
+          <div className="glass-panel w-full max-w-2xl bg-slate-900 border border-main/10 shadow-3xl rounded-[2.5rem] p-8 md:p-12 relative animate-scale-in" style={{ backgroundColor: 'var(--bg-panel)' }}>
              <div className="flex items-center justify-between mb-10 pb-6 border-b border-main/5">
                 <div className="flex items-center gap-6">
                   <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-500 shrink-0">
@@ -318,9 +321,9 @@ export default function AdminAdmins() {
                   {editingAdmin ? 'Update Credentials' : 'Enroll Administrator'}
                 </button>
              </form>
-           </div>
-         </div>
-       </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
