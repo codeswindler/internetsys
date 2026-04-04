@@ -132,15 +132,15 @@ export default function Subscriptions() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
       {/* ── 🌓 THEME-ADAPTIVE ELITE HEADER ── */}
-      <div className="relative overflow-hidden rounded-[2.5rem] bg-white dark:bg-slate-900 shadow-2xl p-10 md:p-14 transition-all duration-500 border border-main/5">
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-cyan-50 to-white dark:from-slate-900 dark:to-slate-950 shadow-2xl p-10 md:p-14 transition-all duration-500 border border-cyan-500/10">
         <div className="absolute top-0 right-0 p-4 opacity-5 md:opacity-10 group">
-          <ShieldCheck size={140} className="text-slate-900 dark:text-white transform group-hover:-rotate-12 transition-transform duration-700" />
+          <ShieldCheck size={140} className="text-cyan-900 dark:text-white transform group-hover:-rotate-12 transition-transform duration-700" />
         </div>
         <div className="relative z-10">
           <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">
-             My <span className="text-cyan-500">Subscriptions</span>
+             My <span className="text-cyan-600 dark:text-cyan-400">Subscriptions</span>
           </h1>
-          <p className="text-slate-500 dark:text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
+          <p className="text-slate-600 dark:text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
              Track your active sessions, traffic usage, and historical plans with PulseLynk precision.
           </p>
         </div>
@@ -356,10 +356,10 @@ export default function Subscriptions() {
         )}
       </div>
 
-      {/* ── 💎 ELITE CRYSTAL DISCOVERY MODAL (RESTORATION) ── */}
+      {/* ── 💎 ELITE CRYSTAL DISCOVERY MODAL (CENTERED RESTORATION) ── */}
       {showDiscovery && (
-        <div className="fixed inset-0 z-[1000] flex items-start justify-center p-0 md:p-10 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in animate-in slide-in-from-top-12 duration-500 overflow-y-auto pt-0 md:pt-14">
-          <div className="relative w-full max-w-xl transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-b-[3rem] md:rounded-[3rem] mt-0">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in duration-500 overflow-y-auto">
+          <div className="relative w-full max-w-xl transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-[3rem]">
             {/* Header */}
             <div className="p-10 pb-8 flex items-center justify-between relative overflow-hidden">
                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -translate-y-12 translate-x-12" />
