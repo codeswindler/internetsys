@@ -453,6 +453,49 @@ export default function UserDashboard() {
         )}
       </div>
 
+      {/* ── 🚀 QUICK ACTION SHORTCUTS (RESTORATION) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
+        <button 
+          onClick={() => navigate('/user/packages')}
+          className="glass-panel p-8 text-left group hover:border-cyan-500/30 transition-all active:scale-[0.98] relative overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-panel)' }}
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+            <Zap size={80} />
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-500 border border-cyan-500/10">
+              <Zap size={32} />
+            </div>
+            <div>
+              <h4 className="text-xl font-black text-main uppercase tracking-tight mb-1">Buy New Package</h4>
+              <p className="text-[10px] text-muted font-bold uppercase tracking-widest opacity-60">Instant activation for any device</p>
+            </div>
+            <ChevronRight className="ml-auto text-muted group-hover:text-cyan-500 transition-colors" />
+          </div>
+        </button>
+
+        <button 
+          onClick={() => navigate('/user/subscriptions')}
+          className="glass-panel p-8 text-left group hover:border-main/20 transition-all active:scale-[0.98] relative overflow-hidden"
+          style={{ backgroundColor: 'var(--bg-panel)' }}
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+            <Clock size={80} />
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 rounded-2xl bg-main/5 flex items-center justify-center text-muted border border-main/10">
+              <Clock size={32} />
+            </div>
+            <div>
+              <h4 className="text-xl font-black text-main uppercase tracking-tight mb-1">Session History</h4>
+              <p className="text-[10px] text-muted font-bold uppercase tracking-widest opacity-60">Manage past & active plans</p>
+            </div>
+            <ChevronRight className="ml-auto text-muted group-hover:text-main transition-colors" />
+          </div>
+        </button>
+      </div>
+
       {/* ── 💎 ELITE CRYSTAL DISCOVERY MODAL (CENTERED RESTORATION) ── */}
       {showDiscovery && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in duration-500 overflow-y-auto">
