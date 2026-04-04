@@ -475,8 +475,8 @@ export default function Subscriptions() {
 
       {/* 📡 DEVICE DISCOVERY MODAL */}
       {showDiscovery && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-950/80 animate-fade-in">
-          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 bg-slate-900/90 shadow-[0_0_80px_rgba(34,211,238,0.15)] rounded-[2.5rem]">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 sm:p-6 sm:items-center backdrop-blur-xl bg-slate-950/80 animate-fade-in overflow-y-auto">
+          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 bg-slate-900/90 shadow-[0_0_80px_rgba(34,211,238,0.25)] rounded-[2.5rem] mt-10 sm:mt-0">
             <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
               <div>
                 <h3 className="text-2xl font-black text-white tracking-tight uppercase mb-1">LINK THIS DEVICE</h3>
@@ -484,7 +484,7 @@ export default function Subscriptions() {
               </div>
               <button 
                 onClick={() => setShowDiscovery(false)}
-                className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:bg-white/10 hover:text-white transition-all"
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 hover:scale-110 transition-all"
               >
                 <X size={20} />
               </button>
