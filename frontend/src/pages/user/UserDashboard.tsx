@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X } from 'lucide-react';
+import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
@@ -18,6 +18,10 @@ export default function UserDashboard() {
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
+  const [showDiscovery, setShowDiscovery] = useState(false);
+  const [discoverySubId, setDiscoverySubId] = useState<string | null>(null);
+  const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
+  const [isScanning, setIsScanning] = useState(false);
   
   // URL Parameter Capture (from Router Round-Trip)
   useEffect(() => {
@@ -147,6 +151,28 @@ export default function UserDashboard() {
     connectedDevices: Array<{ id: string; mac: string; ip: string; model: string; connectedAt: string }>;
     pendingSubId: string;
   }>({ open: false, maxDevices: 1, connectedDevices: [], pendingSubId: '' });
+
+  const startDiscovery = async (subId: string) => {
+    setDiscoverySubId(subId);
+    setShowDiscovery(true);
+    setIsScanning(true);
+    setDiscoveredHosts([]);
+    try {
+      const res = await api.get(`/subscriptions/${subId}/discover-hosts`);
+      setDiscoveredHosts(res.data);
+    } catch (e) {
+      toast.error('Failed to scan for devices. Make sure you are on Wi-Fi!');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const linkDevice = (mac: string) => {
+    localStorage.setItem('hotspot_mac', mac);
+    setIsSynced(true);
+    setShowDiscovery(false);
+    toast.success('Device linked successfully! Ready to start.', { icon: '🔗' });
+  };
 
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
@@ -448,7 +474,7 @@ export default function UserDashboard() {
                                     if (isDeviceLive) return;
                                     const gateway = sub.router?.localGateway || '10.5.50.1';
 
-                                    if (!isSynced) {
+                                    if (!isSynced) { startDiscovery(sub.id); return; } if (false) {
                                        const isNear = await checkRouterProximity(gateway);
                                        if (!isNear) {
                                          toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first to sync.", {
@@ -495,7 +521,7 @@ export default function UserDashboard() {
                                    e.stopPropagation(); 
                                    const gateway = sub.router?.localGateway || '10.5.50.1';
                                    
-                                   if (!isSynced) {
+                                   if (!isSynced) { startDiscovery(sub.id); return; } if (false) {
                                       const isNear = await checkRouterProximity(gateway);
                                       if (!isNear) {
                                         toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first.", {
@@ -653,6 +679,97 @@ export default function UserDashboard() {
                 >
                   Connect Now
                 </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 📡 DEVICE DISCOVERY MODAL */}
+      {showDiscovery && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xl bg-slate-950/80 animate-fade-in">
+          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 bg-slate-900/90 shadow-[0_0_80px_rgba(34,211,238,0.15)] rounded-[2.5rem]">
+            <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+              <div>
+                <h3 className="text-2xl font-black text-white tracking-tight uppercase mb-1">LINK THIS DEVICE</h3>
+                <p className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-60">Identify yourself in the PulseLynk network</p>
+              </div>
+              <button 
+                onClick={() => setShowDiscovery(false)}
+                className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:bg-white/10 hover:text-white transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {isScanning ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-6">
+                  <div className="relative">
+                    <div className="w-24 h-24 rounded-full border-t-2 border-cyan-500 animate-spin" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Search className="text-cyan-400 animate-pulse" size={32} />
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <h4 className="text-lg font-black text-white mb-2 uppercase tracking-widest">Scanning Network...</h4>
+                    <p className="text-xs text-muted leading-relaxed max-w-[250px] mx-auto font-medium">Looking for connected devices on the Wi-Fi. This will only take a moment.</p>
+                  </div>
+                </div>
+              ) : discoveredHosts.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <AlertTriangle size={32} className="text-amber-500/50" />
+                  </div>
+                  <h4 className="text-xl font-black text-slate-400 mb-4 uppercase">No Devices Found</h4>
+                  <p className="text-xs text-muted mb-8 leading-relaxed max-w-[280px] mx-auto font-medium">
+                    We couldn't detect any newly connected devices. Please make sure you are physically connected to the <span className="text-cyan-400">PulseLynk Wi-Fi</span> on this device.
+                  </p>
+                  <button 
+                    onClick={() => discoverySubId && startDiscovery(discoverySubId)}
+                    className="btn-primary-outline px-10 py-4 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-cyan-500/10"
+                  >
+                    Try Scan Again
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-6 block text-center bg-cyan-400/5 py-3 rounded-xl border border-cyan-400/10">Select your device from the list below</p>
+                  <div className="grid gap-3">
+                    {discoveredHosts.map((host) => (
+                      <button
+                        key={host.mac}
+                        onClick={() => linkDevice(host.mac)}
+                        className="w-full glass-panel p-5 bg-slate-800/40 border-white/5 hover:border-cyan-500/50 hover:bg-slate-800/60 transition-all flex items-center justify-between group rounded-2xl text-left"
+                      >
+                        <div className="flex items-center gap-5">
+                          <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                            {host.deviceName === 'Apple' ? <Smartphone size={24} /> : <Laptop size={24} />}
+                          </div>
+                          <div>
+                            <h5 className="font-black text-white text-sm tracking-wide uppercase mb-1">{host.deviceName || 'Neighbor Device'}</h5>
+                            <div className="flex items-center gap-3">
+                              <span className="text-[10px] font-bold text-slate-500 font-mono tracking-widest">{host.mac}</span>
+                              {host.ip && (
+                                <>
+                                  <div className="w-1 h-1 rounded-full bg-slate-700" />
+                                  <span className="text-[10px] font-bold text-slate-600 font-mono">{host.ip}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-white transition-all">
+                          <ArrowRight size={16} />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-8 pt-8 border-t border-white/5 text-center px-4">
+                    <p className="text-[10px] text-muted leading-relaxed font-bold uppercase tracking-widest opacity-40">
+                      Don't see your device? Make sure you have connected to the Wi-Fi and refresh the scan.
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
           </div>

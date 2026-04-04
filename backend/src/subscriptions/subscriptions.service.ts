@@ -579,6 +579,51 @@ export class SubscriptionsService {
     return { success: true, message: `Device ${session.deviceModel || session.macAddress} disconnected` };
   }
 
+  /**
+   * Discovery Scanner: Fetches all active hosts on the router
+   * and filters out those already linked to other user sessions.
+   */
+  async discoverNearbyHosts(subId: string): Promise<Array<{ mac: string; ip: string; deviceName?: string }>> {
+    const sub = await this.subRepo.findOne({
+      where: { id: subId },
+      relations: ['router'],
+    });
+
+    if (!sub || !sub.router) throw new NotFoundException('Subscription or Router not found');
+
+    // 1. Get all hardware hosts from MikroTik
+    const allHosts = await this.mikrotikService.getAllHosts(sub.router);
+    if (!allHosts || allHosts.length === 0) return [];
+
+    // 2. Get all currently linked active sessions to filter them out
+    const activeSessions = await this.sessionRepo.find({
+      select: ['macAddress'],
+      where: { isActive: true },
+    });
+    const linkedMacs = new Set(activeSessions.map((s) => s.macAddress?.toLowerCase()));
+
+    // 3. Filter to only show 'New' or 'Unlinked' devices
+    return allHosts
+      .filter((h) => h.mac && !linkedMacs.has(h.mac.toLowerCase()))
+      .map((h) => ({
+        mac: h.mac,
+        ip: h.ip,
+        deviceName: this.getVendorFromMac(h.mac),
+      }));
+  }
+
+  private getVendorFromMac(mac: string): string {
+    if (!mac) return 'Generic Device';
+    // Simple vendor hints for UI clarity
+    const m = mac.toUpperCase();
+    if (m.startsWith('00:0C:29') || m.startsWith('00:50:56')) return 'VMware';
+    if (m.startsWith('BC:6A:40') || m.startsWith('B0:C0:90')) return 'Laptop/PC';
+    if (m.startsWith('A4:77:33')) return 'Samsung';
+    if (m.startsWith('DC:A6:32')) return 'Raspberry Pi';
+    if (m.startsWith('00:23:24')) return 'Apple';
+    return 'Hotspot Device';
+  }
+
   async startSession(
     id: string,
     mac?: string,

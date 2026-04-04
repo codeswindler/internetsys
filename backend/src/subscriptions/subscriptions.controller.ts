@@ -107,6 +107,11 @@ export class SubscriptionsController {
     );
   }
 
+  @Get(':id/discover-hosts')
+  discoverHosts(@Param('id') id: string) {
+    return this.subscriptionsService.discoverNearbyHosts(id);
+  }
+
   @Post('disconnect-device')
   @HttpCode(200)
   disconnectDevice(
