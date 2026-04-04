@@ -211,25 +211,25 @@ export default function UserDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
-      {/* ── 🌓 THEME-ADAPTIVE ELITE WELCOME BANNER ── */}
-      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-cyan-50 to-white dark:from-slate-900 dark:to-slate-950 shadow-2xl p-8 md:p-12 transition-all duration-500 border border-cyan-500/10">
-        <div className="absolute top-0 right-0 p-4 opacity-5 md:opacity-10 group">
-          <Zap size={140} className="text-cyan-900 dark:text-white transform group-hover:rotate-12 transition-transform duration-700" />
+      {/* ── 🌓 PERMANENT ELITE DARK BANNER (FOR PEAK READABILITY) ── */}
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-900 to-slate-950 shadow-2xl p-8 md:p-12 transition-all duration-500 border border-white/5">
+        <div className="absolute top-0 right-0 p-4 opacity-10 group">
+          <Zap size={140} className="text-white transform group-hover:rotate-12 transition-transform duration-700" />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
-            <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">
-              Welcome Back, <span className="text-cyan-600 dark:text-cyan-400 capitalize">{currentUser?.name || 'User'}</span>
+            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4">
+              Welcome Back, <span className="text-cyan-400 capitalize">{currentUser?.name || 'User'}</span>
             </h1>
-            <p className="text-slate-600 dark:text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
+            <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
               Your high-speed internet portal is ready. Manage your connections and browse without limits.
             </p>
           </div>
-          <div className="bg-white/60 dark:bg-white/10 backdrop-blur-xl border border-cyan-200 dark:border-white/10 rounded-3xl p-8 shadow-2xl flex flex-col items-center gap-3 min-w-[200px]">
-            <p className="text-[10px] font-black text-slate-400 dark:text-white/50 uppercase tracking-[0.2em]">STATUS</p>
+          <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl flex flex-col items-center gap-3 min-w-[200px]">
+            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">STATUS</p>
             <div className="flex items-center gap-4">
               <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]" />
-              <span className="text-3xl font-black text-slate-900 dark:text-white tracking-widest uppercase">READY</span>
+              <span className="text-3xl font-black text-white tracking-widest uppercase">READY</span>
             </div>
           </div>
         </div>

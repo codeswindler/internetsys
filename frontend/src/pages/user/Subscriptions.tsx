@@ -131,16 +131,16 @@ export default function Subscriptions() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
-      {/* ── 🌓 THEME-ADAPTIVE ELITE HEADER ── */}
-      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-cyan-50 to-white dark:from-slate-900 dark:to-slate-950 shadow-2xl p-10 md:p-14 transition-all duration-500 border border-cyan-500/10">
-        <div className="absolute top-0 right-0 p-4 opacity-5 md:opacity-10 group">
-          <ShieldCheck size={140} className="text-cyan-900 dark:text-white transform group-hover:-rotate-12 transition-transform duration-700" />
+      {/* ── 🌓 PERMANENT ELITE DARK HEADER (FOR PEAK READABILITY) ── */}
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-900 to-slate-950 shadow-2xl p-10 md:p-14 transition-all duration-500 border border-white/5">
+        <div className="absolute top-0 right-0 p-4 opacity-10 group">
+          <ShieldCheck size={140} className="text-white transform group-hover:-rotate-12 transition-transform duration-700" />
         </div>
         <div className="relative z-10">
-          <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">
-             My <span className="text-cyan-600 dark:text-cyan-400">Subscriptions</span>
+          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4">
+             My <span className="text-cyan-400">Subscriptions</span>
           </h1>
-          <p className="text-slate-600 dark:text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
+          <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
              Track your active sessions, traffic usage, and historical plans with PulseLynk precision.
           </p>
         </div>
