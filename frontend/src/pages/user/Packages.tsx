@@ -101,7 +101,8 @@ export default function Packages() {
       try {
         setIsDetecting(true);
         setDetectionError(null);
-        const res = await api.get('/subscriptions/detect-router');
+        const existingIp = localStorage.getItem('hotspot_ip');
+        const res = await api.post('/subscriptions/detect-router', { ip: existingIp || undefined });
         const { mac } = res.data;
         if (mac) {
           localStorage.setItem('hotspot_mac', mac);

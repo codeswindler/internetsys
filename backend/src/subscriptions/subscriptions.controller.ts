@@ -30,13 +30,14 @@ export class SubscriptionsController {
 
   @Post('sync-device')
   @HttpCode(200)
-  syncDevice(@Request() req: any, @Ip() ip: string) {
-    return this.subscriptionsService.syncDevice(req.user.id, ip);
+  syncDevice(@Request() req: any, @Ip() ip: string, @Body('ip') bodyIp?: string) {
+    return this.subscriptionsService.syncDevice(req.user.id, bodyIp || ip);
   }
 
-  @Get('detect-router')
-  detectRouter(@Request() req: any, @Ip() ip: string) {
-    return this.subscriptionsService.syncDevice(req.user.id, ip);
+  @Post('detect-router')
+  @HttpCode(200)
+  detectRouter(@Request() req: any, @Ip() ip: string, @Body('ip') bodyIp?: string) {
+    return this.subscriptionsService.syncDevice(req.user.id, bodyIp || ip);
   }
 
   @Post('purchase')
