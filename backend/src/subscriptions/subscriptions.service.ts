@@ -722,7 +722,7 @@ export class SubscriptionsService {
     // 2. ALWAYS attempt login on MikroTik
     if (finalMac || finalIp) {
       try {
-        await this.mikrotikService.loginUser(
+        const loginRes = await this.mikrotikService.loginUser(
           sub.router,
           sub.mikrotikUsername,
           sub.mikrotikPassword,
@@ -730,8 +730,13 @@ export class SubscriptionsService {
           finalMac,
           sub.package.bandwidthProfile,
         );
+        
+        if (!loginRes?.success) {
+           throw new BadRequestException('Router failed to authorize your device. Please try again in 10 seconds.');
+        }
       } catch (e) {
         this.logger.error(`Router Login Failed: ${e.message}`);
+        throw new BadRequestException(`Connection Error: ${e.message}`);
       }
     }
 

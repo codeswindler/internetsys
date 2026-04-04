@@ -236,6 +236,11 @@ export class MikrotikService {
     }
   }
 
+  private isPrivateIp(ip: string): boolean {
+    if (!ip) return false;
+    return ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('172.');
+  }
+
   async listProfiles(router: Router): Promise<any[]> {
     const api = await this.connect(router);
     try {
@@ -534,17 +539,21 @@ export class MikrotikService {
         // Cleanup old bindings
         const macQuery = finalMac
           ? `?mac-address=${finalMac}`
-          : ip
+          : (ip && this.isPrivateIp(ip))
             ? `?address=${ip}`
             : null;
+            
         if (macQuery) {
           const existing = await api.write('/ip/hotspot/ip-binding/print', [
             macQuery,
           ]);
           for (const b of existing) {
-            await api.write('/ip/hotspot/ip-binding/remove', [
-              `=.id=${b['.id']}`,
-            ]);
+            // ONLY if .id is present!
+            if (b['.id']) {
+              await api.write('/ip/hotspot/ip-binding/remove', [
+                `=.id=${b['.id']}`,
+              ]);
+            }
           }
         }
 
@@ -591,15 +600,17 @@ export class MikrotikService {
       }
 
       // FALLBACK 1: Scan Hotspot Hosts (The most accurate for hotspot devices)
-      this.logger.log(`Scanning Hotspot Hosts for ${ip}...`);
-      const hosts = await api.write('/ip/hotspot/host/print', [
-        `?address=${ip}`,
-      ]);
-      if (hosts && hosts[0]?.['mac-address']) {
-        this.logger.log(
-          `Found MAC ${hosts[0]['mac-address']} in Hotspot Hosts`,
-        );
-        return hosts[0]['mac-address'];
+      if (this.isPrivateIp(ip)) {
+        this.logger.log(`Scanning Hotspot Hosts for ${ip}...`);
+        const hosts = await api.write('/ip/hotspot/host/print', [
+          `?address=${ip}`,
+        ]);
+        if (hosts && hosts[0]?.['mac-address']) {
+          this.logger.log(
+            `Found MAC ${hosts[0]['mac-address']} in Hotspot Hosts`,
+          );
+          return hosts[0]['mac-address'];
+        }
       }
 
       // FALLBACK 2: Scan DHCP Leases (Good for devices that just joined)

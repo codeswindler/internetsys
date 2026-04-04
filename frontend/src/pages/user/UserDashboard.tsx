@@ -254,12 +254,10 @@ export default function UserDashboard() {
              <div className="p-4 bg-slate-900/60 rounded-2xl border border-white/5 shadow-xl glass-panel text-center min-w-[120px]">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Status</p>
                 <div className="flex items-center justify-center gap-2">
-                   <div className={`w-2 h-2 rounded-full ${isAnyLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                   <div className={`w-2 h-2 rounded-full ${isAnyLive ? 'bg-emerald-500 animate-pulse' : 'bg-orange-500'}`} />
                    <span className="text-sm font-bold text-white uppercase tracking-tighter">{isAnyLive ? 'Online' : 'Paused'}</span>
                 </div>
              </div>
-             
-             {/* Cleaned up sync icon as per user request */}
           </div>
         </div>
       </div>
@@ -469,12 +467,22 @@ export default function UserDashboard() {
                                   }}
                                   disabled={startMutation.isPending || isAnyLive}
                                   className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
-                                    isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-emerald-500/30'
+                                    isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 
+                                    !isSynced ? 'shadow-cyan-500/40' : 'shadow-emerald-500/30'
                                   }`}
-                                  style={{ background: isAnyLive ? '#333' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                                  style={{ 
+                                    background: isAnyLive ? '#333' : 
+                                               !isSynced ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)' : // Blue for Connect
+                                               'linear-gradient(135deg, #10b981 0%, #059669 100%)' // Green for Start
+                                  }}
                                 >
-                                   {startMutation.isPending ? <RefreshCw size={20} className="animate-spin text-white" /> : <Zap size={20} className="text-white" />}
-                                   {isAnyLive ? 'SESSION LOCKED' : 'START SESSION'}
+                                   {startMutation.isPending ? <RefreshCw size={20} className="animate-spin text-white" /> : 
+                                    !isSynced ? <Wifi size={20} className="text-white animate-pulse" /> :
+                                    <Zap size={20} className="text-white" />}
+                                   
+                                   {isAnyLive ? 'SESSION LOCKED' : 
+                                    !isSynced ? 'CONNECT THIS DEVICE' : 
+                                    'START SESSION'}
                                 </button>
                               )}
                           </div>
