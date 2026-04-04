@@ -218,18 +218,18 @@ export default function UserDashboard() {
         </div>
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
-            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4">
-              Welcome Back, <span className="text-cyan-400 capitalize">{currentUser?.name || 'User'}</span>
+            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4 !text-white">
+              Welcome Back, <span className="text-cyan-400 capitalize !text-cyan-400">{currentUser?.name || 'User'}</span>
             </h1>
-            <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
+            <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest leading-relaxed !text-blue-100">
               Your high-speed internet portal is ready. Manage your connections and browse without limits.
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl flex flex-col items-center gap-3 min-w-[200px]">
-            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">STATUS</p>
+            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em] !text-white/60">STATUS</p>
             <div className="flex items-center gap-4">
               <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]" />
-              <span className="text-3xl font-black text-white tracking-widest uppercase">READY</span>
+              <span className="text-3xl font-black text-white tracking-widest uppercase !text-white">READY</span>
             </div>
           </div>
         </div>
