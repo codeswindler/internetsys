@@ -535,7 +535,7 @@ export default function Packages() {
             
             <form onSubmit={handleSubscribe} className="flex flex-col gap-5">
               <div className="bg-slate-100/50 dark:bg-[rgba(255,255,255,0.02)] p-5 rounded-2xl border border-slate-200 dark:border-[rgba(255,255,255,0.05)]">
-                <label className="block text-sm font-black text-slate-500 dark:text-slate-300 mb-3 uppercase tracking-widest">Payment Method</label>
+                <label className="block text-sm font-black text-slate-900 dark:text-slate-300 mb-3 uppercase tracking-widest">Payment Method</label>
                 <div className="flex bg-slate-200/50 dark:bg-[rgba(0,0,0,0.2)] rounded-xl p-1.5 mb-4 border border-slate-300/30 dark:border-none">
                   <button
                     type="button"
@@ -543,7 +543,7 @@ export default function Packages() {
                     className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
                       paymentType === 'mpesa' 
                         ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 active:scale-95' 
-                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     M-Pesa STK
@@ -554,7 +554,7 @@ export default function Packages() {
                     className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
                       paymentType === 'manual' 
                         ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20 active:scale-95' 
-                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     Admin Activation
@@ -563,9 +563,9 @@ export default function Packages() {
 
                 {paymentType === 'mpesa' && (
                   <div className="p-5 bg-emerald-500/5 dark:bg-green-500/10 rounded-2xl border border-emerald-500/20 animate-in slide-in-from-top-2 duration-300">
-                    <p className="font-black text-emerald-700 dark:text-green-300 mb-4 block text-[10px] uppercase tracking-[0.2em]">Pay with M-Pesa</p>
+                    <p className="font-black text-slate-900 dark:text-green-300 mb-4 block text-[10px] uppercase tracking-[0.2em]">Pay with M-Pesa</p>
                     <div className="flex flex-col gap-2">
-                      <span className="text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">Phone Number:</span>
+                      <span className="text-slate-900 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">Phone Number:</span>
                       <input 
                         type="tel"
                         className="w-full bg-white dark:bg-[rgba(15,23,42,0.8)] border border-slate-300 dark:border-[rgba(255,255,255,0.1)] focus:border-emerald-500 dark:focus:border-green-400 rounded-xl p-3 text-slate-900 dark:text-white font-mono text-lg tracking-widest shadow-inner outline-none transition-all"
@@ -575,7 +575,7 @@ export default function Packages() {
                         required
                       />
                     </div>
-                    <p className="text-[10px] text-slate-500 dark:text-green-200/60 mt-4 leading-relaxed font-medium capitalize italic">
+                    <p className="text-[10px] text-slate-600 dark:text-green-200/60 mt-4 leading-relaxed font-bold italic">
                       Confirm or edit the phone number above. An M-Pesa prompt will be sent immediately to complete your payment of KES {selectedPkg.price}.
                     </p>
                   </div>
