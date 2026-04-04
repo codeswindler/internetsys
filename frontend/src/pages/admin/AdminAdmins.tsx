@@ -292,7 +292,7 @@ export default function AdminAdmins() {
                 <div className="flex items-center justify-between p-6 bg-main/5 border border-main/10 rounded-2xl">
                    <div>
                       <p className="text-sm font-black text-main uppercase tracking-tight">Enforce OTP Security (2FA)</p>
-                      <p className="text-[9px] text-muted font-bold uppercase tracking-widest">Compulsory Advanta SMS code for every login</p>
+                      <p className="text-[9px] text-muted font-bold uppercase tracking-widest">Compulsory 2FA OTP code for every login</p>
                    </div>
                    <button 
                      type="button"
@@ -304,9 +304,28 @@ export default function AdminAdmins() {
                 </div>
 
                 <div className="space-y-4">
-                   <p className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Granular Capabilities (Permissions)</p>
+                   <div className="flex items-center justify-between ml-1">
+                      <p className="text-[9px] font-black text-muted uppercase tracking-widest">Granular Capabilities (Permissions)</p>
+                      {permissions.length === 0 && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const token = localStorage.getItem('token');
+                            axios.post(`${API_URL}/admins/seed`, {}, {
+                              headers: { Authorization: `Bearer ${token}` }
+                            }).then(() => {
+                              queryClient.invalidateQueries({ queryKey: ['admin-permissions'] });
+                              toast.success('Permissions re-synced!');
+                            }).catch(() => toast.error('Seeding failed'));
+                          }}
+                          className="text-[9px] font-black text-cyan-400 uppercase tracking-widest hover:underline"
+                        >
+                          Emergency Re-sync
+                        </button>
+                      )}
+                   </div>
                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {permissions.map((p: any) => (
+                      {permissions.length > 0 ? permissions.map((p: any) => (
                         <button
                           key={p.id}
                           type="button"
@@ -319,7 +338,11 @@ export default function AdminAdmins() {
                         >
                           <p className="text-[10px] font-black uppercase tracking-tighter">{p.name.replace('_', ' ')}</p>
                         </button>
-                      ))}
+                      )) : (
+                        <div className="col-span-full py-4 text-center border border-dashed border-main/10 rounded-xl">
+                           <p className="text-[10px] text-muted font-bold uppercase tracking-widest italic">No granular roles found. Try Re-sync above.</p>
+                        </div>
+                      )}
                    </div>
                 </div>
 
