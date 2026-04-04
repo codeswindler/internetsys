@@ -211,25 +211,25 @@ export default function UserDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 shadow-2xl p-8 md:p-12">
-        <div className="absolute top-0 right-0 p-4 opacity-10 group">
-          <Zap size={140} className="text-white transform group-hover:rotate-12 transition-transform duration-700" />
+      {/* ── 🌓 THEME-ADAPTIVE ELITE WELCOME BANNER ── */}
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-white dark:bg-slate-900 shadow-2xl p-8 md:p-12 transition-all duration-500 border border-main/5">
+        <div className="absolute top-0 right-0 p-4 opacity-5 md:opacity-10 group">
+          <Zap size={140} className="text-slate-900 dark:text-white transform group-hover:rotate-12 transition-transform duration-700" />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
           <div>
-            <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4">
-              Welcome Back, <span className="text-cyan-400 capitalize">{currentUser?.name || 'User'}</span>
+            <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter mb-4">
+              Welcome Back, <span className="text-cyan-500 capitalize">{currentUser?.name || 'User'}</span>
             </h1>
-            <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80">
+            <p className="text-slate-500 dark:text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
               Your high-speed internet portal is ready. Manage your connections and browse without limits.
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center gap-2">
-            <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.2em]">STATUS</p>
-            <div className="flex items-center gap-3">
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_#10b981]" />
-              <span className="text-2xl font-black text-white tracking-widest uppercase">READY</span>
+          <div className="bg-slate-100/50 dark:bg-white/10 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-3xl p-8 shadow-2xl flex flex-col items-center gap-3 min-w-[200px]">
+            <p className="text-[10px] font-black text-slate-400 dark:text-white/50 uppercase tracking-[0.2em]">STATUS</p>
+            <div className="flex items-center gap-4">
+              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_#10b981]" />
+              <span className="text-3xl font-black text-slate-900 dark:text-white tracking-widest uppercase">READY</span>
             </div>
           </div>
         </div>
@@ -270,7 +270,7 @@ export default function UserDashboard() {
                
                return (
                 <div key={sub.id} className="relative group animate-fade-in">
-                  <div className="glass-panel p-6 md:p-10 border-cyan-500/20 bg-opacity-40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
+                  <div className="glass-panel p-6 md:p-10 border-cyan-500/10 bg-opacity-40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
                     
                     <div className="flex flex-col lg:flex-row items-center justify-between mb-8 gap-4 px-2">
                        <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-10">
@@ -284,7 +284,7 @@ export default function UserDashboard() {
                               <div className="w-1 h-1 rounded-full bg-slate-500/20" />
                               <div className="flex items-center gap-1.5 font-bold text-[10px] text-muted uppercase tracking-widest">
                                 <CreditCard size={12} className="text-emerald-500/50" />
-                                Via: <span className="text-emerald-400 opacity-60">{sub.paymentMethod || 'Manual'}</span>
+                                Via: <span className="text-emerald-500 opacity-60">{sub.paymentMethod || 'Manual'}</span>
                               </div>
                            </div>
                          </div>
@@ -295,7 +295,7 @@ export default function UserDashboard() {
                        </div>
                        <div className="flex flex-col items-center lg:items-end">
                           <p className="text-[10px] font-black text-muted uppercase tracking-[0.25em] mb-1">SESSION STATUS</p>
-                          <h4 className={`text-4xl font-black tracking-[0.1em] uppercase ${isSubLive ? 'text-cyan-400' : 'text-main opacity-80'}`}>
+                          <h4 className={`text-4xl font-black tracking-[0.1em] uppercase ${isSubLive ? 'text-cyan-500' : 'text-main opacity-80'}`}>
                             {sub.status === 'PAID' ? 'READY' : sub.status}
                           </h4>
                        </div>
@@ -305,7 +305,7 @@ export default function UserDashboard() {
                       <div className="lg:col-span-4 h-full">
                         <div className="bg-opacity-20 border border-main/5 rounded-3xl p-6 h-full flex flex-col justify-center gap-6 backdrop-blur-md shadow-2xl group-hover:border-cyan-500/20 transition-colors" style={{ backgroundColor: 'var(--bg-input)' }}>
                           <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 rounded-2xl bg-main/5 flex items-center justify-center text-cyan-400 border border-main/10 shrink-0">
+                            <div className="w-14 h-14 rounded-2xl bg-main/5 flex items-center justify-center text-cyan-500 border border-main/10 shrink-0">
                                <Laptop size={28} />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -347,7 +347,7 @@ export default function UserDashboard() {
                                    }
                                    startMutation.mutate(sub.id);
                                  }}
-                                 className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : 'text-cyan-400 hover:text-white'}`}
+                                 className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : 'text-cyan-500 hover:text-main'}`}
                                >
                                  {isDeviceLive ? 'DEVICE CONNECTED' : 'CONNECT THIS DEVICE'}
                                </button>
@@ -412,7 +412,7 @@ export default function UserDashboard() {
                                  }`}
                                  style={{ 
                                    background: startMutation.isPending ? '#333' : 
-                                              !isSynced ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)' :
+                                              !isSynced ? 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)' :
                                               'linear-gradient(135deg, #10b981 0%, #059669 100%)'
                                  }}
                                >
@@ -453,85 +453,97 @@ export default function UserDashboard() {
         )}
       </div>
 
+      {/* ── 💎 ELITE CRYSTAL DISCOVERY MODAL (RESTORATION) ── */}
       {showDiscovery && (
-        <div className="fixed inset-0 z-[110] flex items-start justify-center p-0 sm:p-6 backdrop-blur-xl bg-slate-950/80 animate-fade-in overflow-y-auto">
-          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 shadow-[0_0_100px_rgba(34,211,238,0.3)] rounded-b-[2.5rem] sm:rounded-[2.5rem] mt-0" style={{ backgroundColor: 'var(--bg-panel)' }}>
-            <div className="p-8 border-b border-main/10 flex items-center justify-between bg-main/[0.03]">
-              <div>
-                <h3 className="text-2xl font-black text-main tracking-tight uppercase mb-1">LINK THIS DEVICE</h3>
-                <p className="text-[10px] font-bold text-muted uppercase tracking-widest opacity-60">Identify yourself in the PulseLynk network</p>
-              </div>
-              <button 
-                onClick={() => setShowDiscovery(false)}
-                className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center text-white hover:bg-red-500 hover:scale-110 transition-all shadow-[0_0_20px_rgba(220,38,38,0.4)] active:scale-95 group"
-                aria-label="Close"
-              >
-                <svg viewBox="0 0 24 24" className="w-7 h-7 stroke-[4px] stroke-current fill-none">
-                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
+        <div className="fixed inset-0 z-[1000] flex items-start justify-center p-0 md:p-10 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in animate-in slide-in-from-top-12 duration-500 overflow-y-auto pt-0 md:pt-14">
+          <div className="relative w-full max-w-xl transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-b-[3rem] md:rounded-[3rem] mt-0">
+            {/* Header / Top Shelf */}
+            <div className="p-10 pb-8 flex items-center justify-between relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -translate-y-12 translate-x-12" />
+               <div className="relative z-10">
+                 <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase mb-2">LINK THIS DEVICE</h3>
+                 <p className="text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.3em] opacity-80">Hardware Identification Active</p>
+               </div>
+               <button 
+                 onClick={() => setShowDiscovery(false)}
+                 className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center text-white hover:bg-red-500 hover:scale-110 transition-all shadow-[0_0_30px_rgba(220,38,38,0.4)] active:scale-95 group relative z-10"
+               >
+                 <svg viewBox="0 0 24 24" className="w-8 h-8 stroke-[4px] stroke-current fill-none">
+                   <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                 </svg>
+               </button>
             </div>
 
-            <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <div className="p-10 pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar">
               {isScanning ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-6">
-                  <div className="relative">
-                    <div className="w-24 h-24 rounded-full border-t-2 border-cyan-500 animate-spin" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Search className="text-cyan-400 animate-pulse" size={32} />
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <h4 className="text-lg font-black text-main mb-2 uppercase tracking-widest">Scanning Network...</h4>
-                    <p className="text-xs text-muted leading-relaxed max-w-[250px] mx-auto font-medium">Looking for connected devices on the Wi-Fi. This will only take a moment.</p>
-                  </div>
+                <div className="py-20 flex flex-col items-center justify-center gap-10">
+                   <div className="relative">
+                      <div className="w-32 h-32 rounded-full border-[6px] border-cyan-500/20 border-t-cyan-500 animate-[spin_1.5s_linear_infinite]" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                         <div className="w-20 h-20 rounded-full bg-cyan-500/10 flex items-center justify-center animate-pulse">
+                           <Search className="text-cyan-500" size={40} />
+                         </div>
+                      </div>
+                      <div className="absolute -inset-4 rounded-full border border-cyan-500/10 animate-[ping_3s_infinite]" />
+                   </div>
+                   <div className="text-center space-y-3">
+                     <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-[0.2em] animate-pulse">Scanning Router OS...</h4>
+                     <p className="text-[10px] text-slate-400 dark:text-muted font-black uppercase tracking-widest leading-relaxed max-w-[300px] mx-auto opacity-70">
+                       Direct Router Integration: Searching for active hardware signatures on your local network.
+                     </p>
+                   </div>
                 </div>
               ) : discoveredHosts.length === 0 ? (
-                <div className="py-16 text-center">
-                  <div className="w-20 h-20 bg-main/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <AlertTriangle size={32} className="text-amber-500/50" />
+                <div className="py-24 text-center">
+                  <div className="w-24 h-24 bg-amber-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8 rotate-12">
+                    <AlertTriangle size={48} className="text-amber-500 animate-pulse" />
                   </div>
-                  <h4 className="text-xl font-black text-muted mb-4 uppercase">No Devices Found</h4>
-                  <p className="text-sm text-muted mb-8 leading-relaxed max-w-[280px] mx-auto font-medium">
-                    We couldn't detect any newly connected devices on the <span className="text-cyan-500 font-black italic">PulseLynk Wi-Fi</span>.
+                  <h4 className="text-2xl font-black text-slate-900 dark:text-white mb-4 uppercase tracking-[0.1em]">Signal Not Detected</h4>
+                  <p className="text-xs text-slate-400 dark:text-muted mb-10 leading-relaxed max-w-[320px] mx-auto font-bold uppercase tracking-widest opacity-60 px-4">
+                    PulseLynk couldn't detect your hardware signature. Verify you are connected to the <span className="text-cyan-500 font-black">PulseLynk Wi-Fi</span> network.
                   </p>
                   <button 
                     onClick={() => discoverySubId && startDiscovery(discoverySubId)}
-                    className="px-10 py-4 bg-muted/10 border border-muted/20 text-muted text-[11px] font-black uppercase tracking-widest rounded-2xl hover:bg-muted/20 hover:text-main transition-all"
+                    className="group px-12 py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-black uppercase tracking-[0.4em] rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-2xl flex items-center gap-4 mx-auto"
                   >
-                    Try Scan Again
+                    <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-700" />
+                    RE-SCAN NETWORK
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest mb-6 block text-center bg-cyan-500/5 py-3 rounded-xl border border-cyan-500/10">Select your device from the list below</p>
-                  <div className="grid gap-3">
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4 px-6 py-4 bg-cyan-500/5 dark:bg-cyan-500/10 rounded-2xl border border-cyan-500/20 mb-8">
+                     <ShieldCheck className="text-cyan-500 shrink-0" size={24} />
+                     <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest leading-none">Select your detected device to bind with this plan</p>
+                  </div>
+                  <div className="grid gap-6">
                     {discoveredHosts.map((host) => (
                       <button
                         key={host.mac}
                         onClick={() => linkDevice(host.mac)}
-                        className="w-full glass-panel p-5 bg-opacity-40 border-main/5 hover:border-cyan-500/50 hover:bg-opacity-60 transition-all flex items-center justify-between group rounded-2xl text-left"
-                        style={{ backgroundColor: 'var(--bg-panel)' }}
+                        className="w-full relative group transition-all duration-500 active:scale-95 text-left"
                       >
-                        <div className="flex items-center gap-5">
-                          <div className="w-12 h-12 rounded-xl bg-main/5 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
-                            {host.deviceName === 'Apple' ? <Smartphone size={24} /> : <Laptop size={24} />}
-                          </div>
-                          <div>
-                            <h5 className="font-black text-main text-sm tracking-wide uppercase mb-1">{host.deviceName || 'Neighbor Device'}</h5>
-                            <div className="flex items-center gap-3">
-                              <span className="text-[11px] font-bold text-muted font-mono tracking-widest">{host.mac}</span>
-                              {host.ip && (
-                                <>
-                                  <div className="w-1 h-1 rounded-full bg-muted/30" />
-                                  <span className="text-[11px] font-bold text-muted/60 font-mono">{host.ip}</span>
-                                </>
-                              )}
+                        <div className="p-8 rounded-[2rem] bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-white/5 group-hover:border-cyan-500/40 group-hover:bg-white dark:group-hover:bg-slate-800 transition-all shadow-xl group-hover:shadow-[0_20px_50px_rgba(6,182,212,0.15)] flex items-center justify-between">
+                          <div className="flex items-center gap-8">
+                            <div className="w-20 h-20 rounded-3xl bg-white dark:bg-slate-950 flex items-center justify-center text-cyan-500 shadow-xl group-hover:scale-110 transition-transform border border-slate-100 dark:border-white/5">
+                              {host.deviceName === 'Apple' ? <Smartphone size={36} /> : <Laptop size={36} />}
+                            </div>
+                            <div>
+                               <h5 className="font-black text-slate-900 dark:text-white text-lg tracking-tighter uppercase mb-2">{host.deviceName || 'Neighbor Device'}</h5>
+                               <div className="flex items-center gap-4">
+                                 <span className="text-[11px] font-black text-slate-400 dark:text-muted font-mono tracking-widest">{host.mac}</span>
+                                 {host.ip && (
+                                   <>
+                                     <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/30" />
+                                     <span className="text-[11px] font-black text-cyan-500/60 font-mono italic">{host.ip}</span>
+                                   </>
+                                 )}
+                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:bg-cyan-500 group-hover:text-white transition-all">
-                          <ArrowRight size={16} />
+                          <div className="w-12 h-12 rounded-full bg-cyan-500 flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+                            <ArrowRight size={20} />
+                          </div>
                         </div>
                       </button>
                     ))}
@@ -539,12 +551,20 @@ export default function UserDashboard() {
                 </div>
               )}
             </div>
+            {/* Footer / Info Rail */}
+            <div className="p-8 bg-slate-50 dark:bg-slate-950/20 border-t border-main/5 flex items-center justify-between px-12">
+               <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-[9px] font-black text-slate-400 dark:text-muted uppercase tracking-widest">Router Protected</span>
+               </div>
+               <span className="text-[9px] font-black text-slate-400 dark:text-muted uppercase tracking-tighter opacity-50 font-mono">ID: {discoverySubId?.slice(-8).toUpperCase()}</span>
+            </div>
           </div>
         </div>
       )}
 
       {deviceLimitModal.open && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 backdrop-blur-2xl bg-slate-950/60 animate-fade-in">
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 backdrop-blur-2xl bg-slate-950/60 animate-fade-in">
           <div className="glass-panel w-full max-w-lg p-8 sm:p-12 border-red-500/30 bg-opacity-95 shadow-[0_0_80px_rgba(239,68,68,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
             <div className="flex items-center gap-6 mb-8 pb-8 border-b border-main/10">
               <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
