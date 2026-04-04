@@ -137,10 +137,10 @@ export default function Subscriptions() {
           <ShieldCheck size={140} className="text-white transform group-hover:-rotate-12 transition-transform duration-700" />
         </div>
         <div className="relative z-10">
-          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4">
-             My <span className="text-cyan-400">Subscriptions</span>
+          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4 !text-white">
+             My <span className="text-cyan-400 !text-cyan-400">Subscriptions</span>
           </h1>
-          <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest opacity-80 leading-relaxed">
+          <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest leading-relaxed !text-blue-100/70">
              Track your active sessions, traffic usage, and historical plans with PulseLynk precision.
           </p>
         </div>
@@ -180,21 +180,21 @@ export default function Subscriptions() {
                         <div className="flex flex-col">
                           <h3 className="text-4xl font-black text-main tracking-tight leading-none capitalize">{sub.package?.name}</h3>
                           <div className="flex items-center gap-3 mt-2">
-                             <div className="flex items-center gap-1.5 font-bold text-[10px] text-muted uppercase tracking-widest">
+                             <div className="flex items-center gap-1.5 font-black text-[10px] text-slate-900 dark:text-muted uppercase tracking-widest">
                                <Clock size={12} className="text-cyan-500/50" />
-                               Acquired: <span className="opacity-80">{sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, HH:mm') : 'Unknown'}</span>
+                               Acquired: <span className="opacity-80 font-bold dark:font-normal">{sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, HH:mm') : 'Unknown'}</span>
                              </div>
                              <div className="w-1 h-1 rounded-full bg-slate-500/20" />
-                             <div className="flex items-center gap-1.5 font-bold text-[10px] text-muted uppercase tracking-widest">
+                             <div className="flex items-center gap-1.5 font-black text-[10px] text-slate-900 dark:text-muted uppercase tracking-widest">
                                <CreditCard size={12} className="text-emerald-500/50" />
-                               Via: <span className="text-emerald-500 opacity-60">{sub.paymentMethod || 'Manual'}</span>
+                               Via: <span className="text-emerald-600 dark:text-emerald-500 font-bold dark:font-normal opacity-80 dark:opacity-60">{sub.paymentMethod || 'Manual'}</span>
                              </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-muted uppercase tracking-widest opacity-60">
-                          <Wifi size={14} className="text-cyan-500" />
-                          Location: <span className="text-main">{sub.router?.name || 'Pulselynk'}</span>
-                        </div>
+                         <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-muted uppercase tracking-widest opacity-80 dark:opacity-60">
+                           <Wifi size={14} className="text-cyan-500" />
+                           Location: <span className="text-main font-bold dark:font-normal">{sub.router?.name || 'Pulselynk'}</span>
+                         </div>
                       </div>
                       <div className="flex flex-col items-center lg:items-end">
                           <p className="text-[10px] font-black text-muted uppercase tracking-[0.25em] mb-1">SESSION STATUS</p>
