@@ -95,6 +95,33 @@ export class MpesaService {
     return response.data;
   }
 
+  async queryStkStatus(checkoutRequestId: string): Promise<any> {
+    const accessToken = await this.getAccessToken();
+    const timestamp = this.getTimestamp();
+    const password = Buffer.from(
+      `${this.shortcode}${this.passkey}${timestamp}`,
+    ).toString('base64');
+
+    const payload = {
+      BusinessShortCode: this.shortcode,
+      Password: password,
+      Timestamp: timestamp,
+      CheckoutRequestID: checkoutRequestId,
+    };
+
+    const response = await axios.post(
+      `${this.baseUrl}/mpesa/stkpushquery/v1/query`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    return response.data;
+  }
+
   private getTimestamp(): string {
     const date = new Date();
     const year = date.getFullYear();

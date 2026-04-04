@@ -75,6 +75,9 @@ export class Subscription {
   @Column({ nullable: true })
   paymentRef: string;
 
+  @Column({ nullable: true })
+  mpesaCheckoutId: string;
+
   @OneToMany(() => DeviceSession, (session) => session.subscription)
   deviceSessions: DeviceSession[];
 

@@ -168,7 +168,7 @@ export default function Subscriptions() {
                 }`}
               >
                 {f}
-                {f === 'pending' && (subs?.filter((s:any) => s.status?.toString().toLowerCase() === 'pending').length || 0) > 0 && (
+                {f === 'pending' && (subs?.filter((s:any) => ['pending', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())).length || 0) > 0 && (
                   <span className="ml-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full inline-block animate-pulse" />
                 )}
               </button>
@@ -200,7 +200,12 @@ export default function Subscriptions() {
             </thead>
             <tbody>
               {subs
-                ?.filter((s: any) => statusFilter === 'all' || s.status?.toString().toLowerCase() === statusFilter)
+                ?.filter((s: any) => {
+                  const status = s.status?.toLowerCase();
+                  if (statusFilter === 'all') return true;
+                  if (statusFilter === 'pending') return ['pending', 'awaiting_approval', 'verifying'].includes(status);
+                  return status === statusFilter.toLowerCase();
+                })
                 ?.map((s: any) => (
                 <tr
                   key={s.id}
@@ -268,18 +273,18 @@ export default function Subscriptions() {
                   {/* Actions */}
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {s.status?.toString().toLowerCase() === 'pending' && (
+                      {['pending', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase()) && (
                         <button
                           className="flex items-center gap-1 text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 rounded-lg transition-colors"
                           onClick={() => setConfirmState({
                             isOpen: true,
-                            title: 'Activate Manually',
-                            message: 'Activate this subscription manually?',
+                            title: 'Activate/Approve',
+                            message: 'Mark this subscription as PAID and activate it?',
                             onConfirm: () => { activateMutation.mutate(s.id); setConfirmState(st => ({...st, isOpen: false})); }
                           })}
                           disabled={activateMutation.isPending}
                         >
-                          <CheckCircle size={13} /> Activate
+                          <CheckCircle size={13} /> Approve
                         </button>
                       )}
 

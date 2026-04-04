@@ -18,6 +18,7 @@ import { DeviceSession } from '../entities/device-session.entity';
 import { MikrotikService } from '../routers/mikrotik.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { TransactionMethod } from '../entities/transaction.entity';
+import { MpesaService } from './mpesa.service';
 
 @Injectable()
 export class SubscriptionsService {
@@ -31,6 +32,7 @@ export class SubscriptionsService {
     @InjectRepository(DeviceSession)
     private sessionRepo: Repository<DeviceSession>,
     private mikrotikService: MikrotikService,
+    private mpesaService: MpesaService,
     private transactionsService: TransactionsService,
   ) {}
 
@@ -60,9 +62,8 @@ export class SubscriptionsService {
     // Step 2: Get ALL hosts currently on the router's hotspot
     const allHosts = await this.mikrotikService.getAllHosts(router);
     if (allHosts.length === 0) {
-      throw new BadRequestException(
-        'No devices detected on the Wi-Fi network. Make sure you are connected to the hotspot.'
-      );
+      this.logger.warn(`[SYNC] No hosts detected on router ${router.name}. Might be a false network error or router delay.`);
+      return { mac: null, ip: null } as any; 
     }
 
     this.logger.log(`[SYNC] Found ${allHosts.length} hosts on ${router.name}: ${allHosts.map(h => h.mac).join(', ')}`);
@@ -163,6 +164,64 @@ export class SubscriptionsService {
     if (!sub) throw new NotFoundException('Subscription not found');
     sub.status = status;
     return this.subRepo.save(sub);
+  }
+
+  async updateMpesaCheckoutId(subId: string, checkoutId: string): Promise<void> {
+    await this.subRepo.update(subId, { mpesaCheckoutId: checkoutId });
+  }
+
+  async checkStkStatus(subId: string): Promise<any> {
+    const sub = await this.subRepo.findOne({
+      where: { id: subId },
+      relations: ['user', 'package', 'router'],
+    });
+
+    if (!sub) throw new NotFoundException('Subscription not found');
+    if (!sub.mpesaCheckoutId) {
+      throw new BadRequestException('No M-Pesa transaction ID found for this subscription');
+    }
+
+    try {
+      const result = await this.mpesaService.queryStkStatus(sub.mpesaCheckoutId);
+      this.logger.log(`[STK QUERY] Sub ${subId} Result: ${result.ResultCode} - ${result.ResultDesc}`);
+
+      // ResultCode "0" means Success
+      if (result.ResultCode === '0') {
+        await this.activate(sub.id, PaymentMethod.MPESA, `STK-${sub.mpesaCheckoutId.substring(0, 10)}`);
+        return { success: true, status: SubscriptionStatus.PAID, result };
+      } 
+      
+      // ResultCode "1032" means Cancelled by User
+      if (result.ResultCode === '1032') {
+        sub.status = SubscriptionStatus.PENDING; 
+        await this.subRepo.save(sub);
+        return { success: false, status: SubscriptionStatus.PENDING, cancelled: true, result };
+      }
+
+      // Other codes (Timeout, etc)
+      return { success: false, status: sub.status, result };
+    } catch (e: any) {
+      this.logger.error(`STK Status Query failed for ${subId}: ${e.message}`);
+      throw e;
+    }
+  }
+
+  async delete(subId: string, userId?: string): Promise<void> {
+    const where: any = { id: subId };
+    if (userId) where.user = { id: userId };
+
+    const sub = await this.subRepo.findOne({ where });
+    if (!sub) throw new NotFoundException('Subscription not found');
+
+    if (
+      sub.status !== SubscriptionStatus.PENDING &&
+      sub.status !== SubscriptionStatus.AWAITING_APPROVAL &&
+      sub.status !== SubscriptionStatus.VERIFYING
+    ) {
+      throw new BadRequestException('Can only delete unapproved or pending requests');
+    }
+
+    await this.subRepo.remove(sub);
   }
 
   async activate(

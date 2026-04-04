@@ -208,6 +208,17 @@ export default function UserDashboard() {
                    <span className="text-sm font-bold text-white uppercase tracking-tighter">{isAnyLive ? 'Online' : 'Paused'}</span>
                 </div>
              </div>
+             
+             {!isSynced && (
+               <button 
+                 onClick={() => syncMutation.mutate()}
+                 disabled={syncMutation.isPending}
+                 className="p-4 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-2xl text-orange-500 flex flex-col items-center gap-1 min-w-[120px] transition-all active:scale-95 group shadow-lg shadow-orange-500/10"
+               >
+                 {syncMutation.isPending ? <RefreshCw className="animate-spin" size={16} /> : <Link size={16} className="group-hover:rotate-12 transition-transform" />}
+                 <span className="text-[10px] font-black uppercase tracking-widest">Sync Device</span>
+               </button>
+             )}
           </div>
         </div>
       </div>

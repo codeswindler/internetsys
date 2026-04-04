@@ -47,6 +47,7 @@ export default function Packages() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyingSubId, setVerifyingSubId] = useState<string | null>(null);
   const [pollCount, setPollCount] = useState(0);
+  const [showConnectionModal, setShowConnectionModal] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setShowScroll(window.scrollY > 300);
@@ -220,28 +221,36 @@ export default function Packages() {
       setIsVerifying(true);
       toast.success('STK Push Sent! Enter your M-Pesa PIN.', { icon: '📲' });
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Payment simulation failed')
+    onError: (err: any, variables) => {
+      toast.error(err.response?.data?.message || 'Payment initiation failed');
+      setFailedSubId(variables.subId);
+      setShowRetryModal(true);
+    }
   });
 
-  // Polling logic for STK success
+  // Polling logic for STK result
   useEffect(() => {
     if (!isVerifying || !verifyingSubId) return;
 
     const pollInterval = setInterval(async () => {
       try {
-        const res = await api.get(`/subscriptions/${verifyingSubId}/status`);
-        const { status } = res.data;
+        const res = await api.get(`/subscriptions/${verifyingSubId}/stk-status`);
+        const { success, status, cancelled, result } = res.data;
 
-        if (status?.toLowerCase() === 'active' || status?.toLowerCase() === 'paid') {
+        if (success || status?.toLowerCase() === 'active' || status?.toLowerCase() === 'paid') {
           setIsVerifying(false);
           setVerifyingSubId(null);
           toast.success('Payment Verified! Head to Dashboard to Activate.', { icon: '✅', duration: 5000 });
           
-          // Small delay for the "Fluid Magic" effect before dashboard
           setTimeout(() => {
             navigate('/user/dashboard');
           }, 2000);
           
+          clearInterval(pollInterval);
+        } else if (cancelled) {
+          setIsVerifying(false);
+          setVerifyingSubId(null);
+          toast.error('Payment cancelled on your phone.', { icon: '📲' });
           clearInterval(pollInterval);
         }
 
@@ -253,16 +262,33 @@ export default function Packages() {
           clearInterval(pollInterval);
         }
       } catch (e) {
-        console.error('Polling failed', e);
+        console.error('STK status poll failed', e);
       }
     }, 2000);
 
     return () => clearInterval(pollInterval);
   }, [isVerifying, verifyingSubId, pollCount, navigate]);
 
+  const deleteSubMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/subscriptions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+      toast.success('Request removed.');
+    }
+  });
+
+  const [failedSubId, setFailedSubId] = useState<string | null>(null);
+  const [showRetryModal, setShowRetryModal] = useState(false);
+
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    // if (!routerId) return toast.error('Please select an active hotspot location');
+    
+    // Proactive Validation: Check if device is synced
+    const mac = localStorage.getItem('hotspot_mac');
+    if (!mac) {
+      setShowConnectionModal(true);
+      return;
+    }
     
     if (paymentType === 'mpesa') {
       try {
@@ -286,17 +312,6 @@ export default function Packages() {
         <p className="text-muted">Select a plan to start browsing the internet instantly.</p>
       </div>
 
-      {detectionError && (
-        <div className="mb-8 p-6 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-500">
-           <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400">
-              <Lock size={24} />
-           </div>
-           <div>
-              <p className="text-xs font-black text-red-500 uppercase tracking-widest mb-1">Network Protection Active</p>
-              <p className="text-sm font-bold text-white uppercase">{detectionError}</p>
-           </div>
-        </div>
-      )}
 
       {isAnyLive && (
         <div className="mb-8 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl flex items-center justify-between">
@@ -400,6 +415,82 @@ export default function Packages() {
               <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
                 Waiting for callback... ({60 - pollCount * 2}s)
               </p>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Connection Required Modal */}
+      {showConnectionModal && createPortal(
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[10002] flex items-center justify-center p-4">
+          <div className="glass-panel w-full max-w-md bg-slate-900 border border-orange-500/30 p-10 text-center rounded-[2.5rem] shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-orange-500/10 rounded-3xl flex items-center justify-center text-orange-440 mx-auto mb-8">
+              <Wifi size={40} className="text-orange-500" />
+            </div>
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">Connection Required</h3>
+            <div className="text-slate-400 text-sm mb-8 space-y-4 leading-relaxed">
+              <p>To purchase a package, you must be connected to the <span className="text-white font-bold tracking-widest">HOTSPOT WI-FI</span>.</p>
+              <div className="p-4 bg-slate-950/50 rounded-xl border border-white/5 text-xs text-left">
+                <p className="text-cyan-400 font-bold mb-1 uppercase tracking-widest text-[10px]">How to fix:</p>
+                <ol className="list-decimal list-inside space-y-1 text-slate-500">
+                  <li>Connect to the Wi-Fi network.</li>
+                  <li>Ensure you see the <span className="text-slate-300 font-bold">Login Page</span> (Captive Portal).</li>
+                  <li>Hit "Login" or "Sync" to register your device.</li>
+                </ol>
+              </div>
+              <p className="text-[10px] text-slate-500 italic">Privacy settings on some mobile browsers may hide your identity until you hit the Sync button on your dashboard.</p>
+            </div>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setShowConnectionModal(false)}
+                className="flex-1 py-4 bg-slate-800 text-slate-400 font-black uppercase tracking-widest rounded-2xl hover:bg-slate-700 transition-all active:scale-95"
+              >
+                Dismiss
+              </button>
+              <button 
+                onClick={() => { setShowConnectionModal(false); navigate('/user/dashboard'); }}
+                className="flex-1 py-4 bg-orange-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 hover:bg-orange-400 transition-all active:scale-95"
+              >
+                Go to Sync
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Retry/Delete Modal */}
+      {showRetryModal && createPortal(
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[10002] flex items-center justify-center p-4">
+          <div className="glass-panel w-full max-w-sm bg-slate-900 border border-red-500/30 p-10 text-center rounded-[2.5rem] shadow-2xl">
+            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center text-red-500 mx-auto mb-6">
+              <RefreshCw className="animate-pulse" size={30} />
+            </div>
+            <h3 className="text-xl font-black text-white uppercase mb-4">Payment Failed to Start</h3>
+            <p className="text-slate-400 text-sm mb-8">
+              We couldn't initiate the M-Pesa prompt. Would you like to try again or cancel this request?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => {
+                  setShowRetryModal(false);
+                  stkPushMutation.mutate({ subId: failedSubId!, phone: stkPhone, amount: selectedPkg.price });
+                }}
+                className="w-full py-4 bg-cyan-600 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-cyan-500 transition-all active:scale-95"
+              >
+                Retry STK Push
+              </button>
+              <button 
+                onClick={() => {
+                  setShowRetryModal(false);
+                  deleteSubMutation.mutate(failedSubId!);
+                  setFailedSubId(null);
+                }}
+                className="w-full py-4 bg-slate-800 text-slate-400 font-black uppercase tracking-widest rounded-2xl hover:bg-slate-700 transition-all active:scale-95"
+              >
+                No, Delete Request
+              </button>
             </div>
           </div>
         </div>,

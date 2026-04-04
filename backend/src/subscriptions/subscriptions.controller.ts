@@ -9,6 +9,7 @@ import {
   Ip,
   Logger,
   HttpCode,
+  Delete,
 } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { MpesaService } from './mpesa.service';
@@ -147,6 +148,12 @@ export class SubscriptionsController {
     return this.subscriptionsService.cancelSubscription(id);
   }
 
+  @Delete(':id')
+  delete(@Param('id') id: string, @Request() req: any) {
+    // Users can delete their own pending/unapproved requests
+    return this.subscriptionsService.delete(id, req.user.id);
+  }
+
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
   @Post(':id/reactivate')
   reactivate(@Param('id') id: string) {
@@ -170,6 +177,11 @@ export class SubscriptionsController {
     return this.subscriptionsService.getStatus(id);
   }
 
+  @Get(':id/stk-status')
+  getStkStatus(@Param('id') id: string) {
+    return this.subscriptionsService.checkStkStatus(id);
+  }
+
   @Post('stk-push')
   async stkPush(
     @Request() req: any,
@@ -190,6 +202,11 @@ export class SubscriptionsController {
         `SUB-${body.subId.substring(0, 8)}`,
         'Internet Subscription',
       );
+
+      // Save CheckoutRequestID for future status queries
+      if (mpesaRes.CheckoutRequestID) {
+        await this.subscriptionsService.updateMpesaCheckoutId(body.subId, mpesaRes.CheckoutRequestID);
+      }
 
       return { success: true, message: 'STK push sent', daraja: mpesaRes };
     } catch (e: any) {
