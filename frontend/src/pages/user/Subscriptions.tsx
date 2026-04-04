@@ -42,8 +42,26 @@ export default function Subscriptions() {
   const [isLaunching, setIsLaunching] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
+
+  // Router proximity check to prevent 10.5.50.1 timeouts
+  const checkRouterProximity = async (gateway: string) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      await fetch(`http://${gateway}/favicon.ico`, { 
+        mode: 'no-cors', 
+        signal: controller.signal,
+        cache: 'no-cache'
+      });
+      clearTimeout(timeoutId);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
 
   // 1. Fetch ALL subscriptions for the list
   const { data: subscriptions = [], isLoading } = useQuery({
@@ -120,8 +138,11 @@ export default function Subscriptions() {
     const mac = params.get('mac');
     const ip = params.get('ip');
     
-    if (mac) localStorage.setItem('hotspot_mac', mac);
-    if (ip) localStorage.setItem('hotspot_ip', ip);
+    if (mac || ip) {
+      if (mac) localStorage.setItem('hotspot_mac', mac);
+      if (ip) localStorage.setItem('hotspot_ip', ip);
+      setIsSynced(true);
+    }
   }, []);
 
   // Poll traffic for active session (only for the primary one)
@@ -186,7 +207,9 @@ export default function Subscriptions() {
           </div>
 
           {allActiveSubs.map((sub: any) => {
-            const isLive = sub.startedAt && new Date(sub.expiresAt) > new Date();
+            const isSubLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > new Date();
+            const isDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === localStorage.getItem('hotspot_mac') && ds.isActive);
+            const isLive = isSubLive; // Keep name for compatibility
             
             return (
               <div key={sub.id} className="relative group animate-fade-in">
@@ -252,15 +275,27 @@ export default function Subscriptions() {
                               <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
                               <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">SURFING LIVE</span>
                             </div>
-                            <button 
-                              onClick={() => {
-                                startMutation.mutate(sub.id);
-                                toast.success('Connecting this device...', { icon: '🔄' });
-                              }}
-                              className="text-[10px] font-black text-cyan-400 uppercase tracking-widest hover:text-white transition-all underline underline-offset-4 relative z-10"
-                            >
-                              CONNECT THIS DEVICE
-                            </button>
+                             <button 
+                               onClick={async (e) => {
+                                 e.stopPropagation();
+                                 if (isDeviceLive) return;
+                                 const gateway = sub.router?.localGateway || '10.5.50.1';
+                                 
+                                 if (!isSynced) {
+                                    const isNear = await checkRouterProximity(gateway);
+                                    if (!isNear) {
+                                      toast.error("Not on PulseLynk Wi-Fi! Please connect your device to 'PulseLynk' Wi-Fi first.", { id: 'proximity', icon: '📡' });
+                                      return;
+                                    }
+                                    window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/subscriptions?mac=detect&auto_start=' + sub.id)}`;
+                                    return;
+                                 }
+                                 startMutation.mutate(sub.id);
+                               }}
+                               className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : 'text-cyan-400 hover:text-white'}`}
+                             >
+                               {isDeviceLive ? 'DEVICE CONNECTED' : 'CONNECT THIS DEVICE'}
+                             </button>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
