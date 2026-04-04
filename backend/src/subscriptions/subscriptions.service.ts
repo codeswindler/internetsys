@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -737,11 +738,12 @@ export class SubscriptionsService {
             connectedAt: s.createdAt,
           }));
 
-          throw new BadRequestException({
+          throw new ConflictException({
             message: `You've reached your limit of ${maxAllowed} device(s). Disconnect one below to continue.`,
             error: 'DEVICE_LIMIT_REACHED',
             connectedDevices,
             maxDevices: maxAllowed,
+            subId: sub.id,
           });
         }
 

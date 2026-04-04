@@ -52,20 +52,18 @@ export default function UserDashboard() {
     }
   }, [window.location.search]);
   
-  // Router proximity check to prevent 10.5.50.1 timeouts
-  const checkRouterProximity = async (gateway: string) => {
+  const startDiscovery = async (subId: string) => {
+    setDiscoverySubId(subId);
+    setShowDiscovery(true);
+    setIsScanning(true);
+    setDiscoveredHosts([]);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      await fetch(`http://${gateway}/favicon.ico`, { 
-        mode: 'no-cors', 
-        signal: controller.signal,
-        cache: 'no-cache'
-      });
-      clearTimeout(timeoutId);
-      return true;
+      const res = await api.get(`/subscriptions/${subId}/discover-hosts`);
+      setDiscoveredHosts(res.data);
     } catch (e) {
-      return false;
+      toast.error('Failed to scan for devices. Make sure you are on Wi-Fi!');
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -97,21 +95,6 @@ export default function UserDashboard() {
   );
 
   const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
-
-  const startDiscovery = async (subId: string) => {
-    setDiscoverySubId(subId);
-    setShowDiscovery(true);
-    setIsScanning(true);
-    setDiscoveredHosts([]);
-    try {
-      const res = await api.get(`/subscriptions/${subId}/discover-hosts`);
-      setDiscoveredHosts(res.data);
-    } catch (e) {
-      toast.error('Failed to scan for devices. Make sure you are on Wi-Fi!');
-    } finally {
-      setIsScanning(false);
-    }
-  };
 
   const linkDevice = (mac: string) => {
     localStorage.setItem('hotspot_mac', mac);
@@ -335,13 +318,7 @@ export default function UserDashboard() {
                                  onClick={async (e) => {
                                    e.stopPropagation();
                                    if (isDeviceLive) return;
-                                   const gateway = sub.router?.localGateway || '10.5.50.1';
                                    if (!isSynced) {
-                                      const isNear = await checkRouterProximity(gateway);
-                                      if (!isNear) {
-                                        toast.error("Not on PulseLynk Wi-Fi! Please connect your device to 'PulseLynk' Wi-Fi first.", { id: 'proximity', icon: '📡' });
-                                        return;
-                                      }
                                       startDiscovery(sub.id);
                                       return;
                                    }
