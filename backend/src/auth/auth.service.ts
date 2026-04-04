@@ -57,7 +57,12 @@ export class AuthService {
     };
     return { 
       access_token: this.jwtService.sign(payload),
-      user: { id: admin.id, name: admin.name, role: admin.role }
+      user: { 
+        id: admin.id, 
+        name: admin.name, 
+        role: admin.role,
+        forcePasswordChange: admin.forcePasswordChange 
+      }
     };
   }
 
@@ -400,7 +405,12 @@ export class AuthService {
     };
     return { 
       access_token: this.jwtService.sign(payload),
-      user: { id: admin.id, name: admin.name, role: admin.role }
+      user: { 
+        id: admin.id, 
+        name: admin.name, 
+        role: admin.role,
+        forcePasswordChange: admin.forcePasswordChange 
+      }
     };
   }
 }

@@ -1,16 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, OnModuleInit, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Admin, AdminRole } from '../entities/admin.entity';
 import { Permission } from '../entities/permission.entity';
 import * as bcrypt from 'bcrypt';
 import { In } from 'typeorm';
+import { SmsService } from '../sms/sms.service';
 
 @Injectable()
 export class AdminsService implements OnModuleInit {
+  private readonly logger = new Logger(AdminsService.name);
+
   constructor(
     @InjectRepository(Admin) private adminRepo: Repository<Admin>,
     @InjectRepository(Permission) private permissionRepo: Repository<Permission>,
+    private smsService: SmsService,
   ) {}
 
   async onModuleInit() {
@@ -25,11 +29,16 @@ export class AdminsService implements OnModuleInit {
       'support_chat'
     ];
 
-    for (const name of defaults) {
-      const exist = await this.permissionRepo.findOne({ where: { name } });
-      if (!exist) {
-        await this.permissionRepo.save(this.permissionRepo.create({ name }));
+    try {
+      this.logger.log('[Admins] Seeding permissions...');
+      for (const name of defaults) {
+        const exist = await this.permissionRepo.findOne({ where: { name } });
+        if (!exist) {
+          await this.permissionRepo.save(this.permissionRepo.create({ name }));
+        }
       }
+    } catch (e) {
+      this.logger.error(`[Admins] Permission Seeding Failed: ${e.message}`);
     }
   }
 
@@ -43,7 +52,7 @@ export class AdminsService implements OnModuleInit {
     return admin;
   }
 
-  async create(data: any): Promise<Admin> {
+  async create(data: any): Promise<any> {
     const existing = await this.adminRepo.findOne({ where: { email: data.email } });
     if (existing) throw new BadRequestException('Email already in use');
 
@@ -52,7 +61,10 @@ export class AdminsService implements OnModuleInit {
       if (existUser) throw new BadRequestException('Username already taken');
     }
 
-    const passwordHash = await bcrypt.hash(data.password, 10);
+    // Generate random 8-char password if not provided
+    const rawPassword = Math.random().toString(36).slice(-8).toUpperCase();
+    const passwordHash = await bcrypt.hash(rawPassword, 10);
+    
     const permissions = await this.permissionRepo.find({
       where: { id: In(data.permissionIds || []) }
     });
@@ -62,12 +74,21 @@ export class AdminsService implements OnModuleInit {
       email: data.email,
       username: data.username,
       phone: data.phone,
-      role: data.role,
+      role: data.role || AdminRole.ADMIN,
       passwordHash,
-      permissions
+      permissions,
+      forcePasswordChange: true // Always force change for system-gen passwords
     });
 
-    return this.adminRepo.save(admin);
+    const saved = await this.adminRepo.save(admin);
+
+    // Send SMS with credentials
+    if (saved.phone) {
+      const msg = `Hello ${saved.name}, your PulseLynk staff credentials: Username: ${saved.username || saved.email}, Pass: ${rawPassword}. Login at pulselynk.co.ke/admin. Please change password on first login.`;
+      await this.smsService.sendSms(saved.phone, msg);
+    }
+
+    return { ...saved, rawPassword };
   }
 
   async update(id: string, data: any): Promise<Admin> {
@@ -75,6 +96,7 @@ export class AdminsService implements OnModuleInit {
     
     if (data.password) {
       admin.passwordHash = await bcrypt.hash(data.password, 10);
+      admin.forcePasswordChange = false; // Reset if updated manually
     }
 
     if (data.permissionIds) {
@@ -89,7 +111,8 @@ export class AdminsService implements OnModuleInit {
       username: data.username || admin.username,
       phone: data.phone || admin.phone,
       role: data.role || admin.role,
-      forceOtpLogin: data.forceOtpLogin !== undefined ? data.forceOtpLogin : admin.forceOtpLogin
+      forceOtpLogin: data.forceOtpLogin !== undefined ? data.forceOtpLogin : admin.forceOtpLogin,
+      forcePasswordChange: data.forcePasswordChange !== undefined ? data.forcePasswordChange : admin.forcePasswordChange
     });
 
     return this.adminRepo.save(admin);

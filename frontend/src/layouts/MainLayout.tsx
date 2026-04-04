@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import { BackToTop } from '../components/BackToTop';
 import SupportChat from '../components/SupportChat';
 import ProfileModal, { renderAvatar } from '../components/ProfileModal';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 interface LayoutProps {
   role: 'admin' | 'user';
@@ -746,6 +747,17 @@ export default function MainLayout({ role }: LayoutProps) {
         </div>
         <BackToTop />
         {role === 'user' && <SupportChat />}
+        
+        {role === 'admin' && currentUser?.forcePasswordChange && (
+          <ChangePasswordModal 
+            userId={currentUser.id} 
+            onSuccess={() => {
+              const updated = { ...currentUser, forcePasswordChange: false };
+              setCurrentUser(updated);
+              localStorage.setItem('user', JSON.stringify(updated));
+            }} 
+          />
+        )}
 
         <ProfileModal 
           isOpen={isProfileModalOpen} 

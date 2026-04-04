@@ -47,6 +47,9 @@ export class Admin {
   @Column({ default: false })
   forceOtpLogin: boolean;
 
+  @Column({ default: false })
+  forcePasswordChange: boolean;
+
   @ManyToMany(() => Permission)
   @JoinTable()
   permissions: Permission[];

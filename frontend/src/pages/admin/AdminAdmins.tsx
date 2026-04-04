@@ -35,6 +35,8 @@ export default function AdminAdmins() {
     permissionIds: [] as string[]
   });
 
+  const [generatedCreds, setGeneratedCreds] = useState<any>(null);
+
   const { data: admins = [], isLoading } = useQuery({
     queryKey: ['admin-admins'],
     queryFn: async () => {
@@ -69,9 +71,16 @@ export default function AdminAdmins() {
         headers: { Authorization: `Bearer ${token}` }
       });
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['admin-admins'] });
-      toast.success(editingAdmin ? 'Admin updated!' : 'Admin created!');
+      toast.success(editingAdmin ? 'Admin updated!' : 'Admin enrolled! Credentials sent via SMS.');
+      
+      if (!editingAdmin && res.data?.rawPassword) {
+        setGeneratedCreds({
+          username: res.data.username || res.data.email,
+          password: res.data.rawPassword
+        });
+      }
       handleCloseModal();
     },
     onError: (err: any) => {
@@ -100,7 +109,7 @@ export default function AdminAdmins() {
         email: admin.email,
         username: admin.username || '',
         phone: admin.phone || '',
-        password: '', // Don't show password
+        password: '', // Not used anymore for creation
         role: admin.role,
         forceOtpLogin: admin.forceOtpLogin,
         permissionIds: admin.permissions?.map((p: any) => p.id) || []
@@ -261,21 +270,23 @@ export default function AdminAdmins() {
                       />
                    </div>
                    <div className="space-y-2">
-                      <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Phone (For 2FA)</label>
+                      <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Phone (For 2FA & Credentials)</label>
                       <input 
                         className="glass-input" 
                         value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} 
                         placeholder="254..." 
                       />
                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">{editingAdmin ? 'New Password (Optional)' : 'Access Password'}</label>
-                       <input 
-                         type="password" className="glass-input text-cyan-400" 
-                         value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
-                         placeholder="••••••••" required={!editingAdmin}
-                       />
-                    </div>
+                   {editingAdmin && (
+                      <div className="space-y-2">
+                         <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Update Password (Optional)</label>
+                         <input 
+                           type="password" className="glass-input text-cyan-400" 
+                           value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
+                           placeholder="••••••••" 
+                         />
+                      </div>
+                   )}
                  </div>
 
                 <div className="flex items-center justify-between p-6 bg-main/5 border border-main/10 rounded-2xl">
@@ -318,9 +329,50 @@ export default function AdminAdmins() {
                   className="w-full py-6 btn-primary font-black uppercase tracking-[0.3em] text-xs shadow-2xl shadow-cyan-500/20 active:scale-95 transition-all flex items-center justify-center gap-4"
                 >
                   {upsertMutation.isPending ? <RefreshCw className="animate-spin" /> : <Shield size={20} />}
-                  {editingAdmin ? 'Update Credentials' : 'Enroll Administrator'}
+                  {editingAdmin ? 'Update Credentials' : 'Enroll & Send Credentials'}
                 </button>
              </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Generated Credentials Success Modal */}
+      {generatedCreds && createPortal(
+        <div className="fixed inset-0 z-[10006] bg-black/90 backdrop-blur-3xl flex items-center justify-center p-4">
+          <div className="glass-panel w-full max-w-md bg-slate-900 border border-emerald-500/30 shadow-3xl rounded-[2.5rem] p-10 text-center animate-scale-in">
+             <div className="w-20 h-20 bg-emerald-500/10 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-emerald-500/20">
+                <CheckCircle2 size={40} className="text-emerald-500" />
+             </div>
+             <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Staff Enrolled!</h3>
+             <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mb-8">Credentials sent to their phone via SMS</p>
+             
+             <div className="space-y-4 mb-10">
+                <div className="p-4 bg-black/40 rounded-2xl border border-white/5 flex flex-col items-center">
+                   <span className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">Username</span>
+                   <span className="text-xl font-bold text-white tracking-tight">{generatedCreds.username}</span>
+                </div>
+                <div className="p-4 bg-cyan-500/10 rounded-2xl border border-cyan-500/20 flex flex-col items-center relative group">
+                   <span className="text-[9px] font-black text-cyan-400/60 uppercase tracking-widest mb-1">Generated Password</span>
+                   <span className="text-2xl font-black text-cyan-400 tracking-[0.3em]">{generatedCreds.password}</span>
+                   <button 
+                     onClick={() => {
+                        navigator.clipboard.writeText(generatedCreds.password);
+                        toast.success('Password copied!');
+                     }}
+                     className="mt-4 text-[10px] font-black text-cyan-400 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2"
+                   >
+                     Copy to Clipboard
+                   </button>
+                </div>
+             </div>
+
+             <button 
+               onClick={() => setGeneratedCreds(null)}
+               className="btn-primary w-full py-4 text-xs font-black uppercase tracking-[0.2em]"
+             >
+               Got it, Continue
+             </button>
           </div>
         </div>,
         document.body
