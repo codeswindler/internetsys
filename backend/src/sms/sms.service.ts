@@ -14,7 +14,9 @@ export class SmsService {
     this.partnerId = this.configService.get<string>('ADVANTA_PARTNER_ID') || '';
     this.apiKey = this.configService.get<string>('ADVANTA_API_KEY') || '';
     this.shortCode = this.configService.get<string>('ADVANTA_SHORTCODE') || '';
-    this.baseUrl = this.configService.get<string>('ADVANTA_BASE_URL') || 'https://quicksms.advantasms.com/api/v2';
+    // Normalize baseUrl: strip trailing slash if present
+    const rawUrl = this.configService.get<string>('ADVANTA_BASE_URL') || 'https://quicksms.advantasms.com/api/v2';
+    this.baseUrl = rawUrl.replace(/\/$/, '');
   }
 
   /**
@@ -23,13 +25,13 @@ export class SmsService {
    */
   async sendOtp(phone: string, otp: string): Promise<boolean> {
     const cleanPhone = this.formatPhone(phone);
-    const url = `${this.baseUrl}/send/otp`;
+    // Use standard SendSMS for v2 OTP delivery
+    const url = `${this.baseUrl}/SendSMS`;
     const data = {
       partnerID: this.partnerId,
       apikey: this.apiKey,
       mobile: cleanPhone,
       shortcode: this.shortCode,
-      passcode: otp,
       message: `Your PulseLynk code is: ${otp}. Valid for 5 minutes.`,
     };
 
@@ -37,7 +39,8 @@ export class SmsService {
       this.logger.log(`[SMS] Sending OTP to ${cleanPhone}...`);
       const response = await axios.post(url, data);
       
-      if (response.data?.response?.['response-code'] === 200 || response.data?.['response-code'] === 200) {
+      // Advanta v2 returns "response-code": "200" for success
+      if (response.data?.['response-code'] == 200) {
         return true;
       }
       
@@ -54,7 +57,7 @@ export class SmsService {
    */
   async sendSms(phone: string, message: string): Promise<boolean> {
     const cleanPhone = this.formatPhone(phone);
-    const url = `${this.baseUrl}/send/sms`;
+    const url = `${this.baseUrl}/SendSMS`;
     const data = {
       partnerID: this.partnerId,
       apikey: this.apiKey,
@@ -67,7 +70,7 @@ export class SmsService {
       this.logger.log(`[SMS] Sending Notification to ${cleanPhone}...`);
       const response = await axios.post(url, data);
       
-      if (response.data?.['response-code'] === 200) {
+      if (response.data?.['response-code'] == 200) {
         return true;
       }
       
@@ -84,7 +87,7 @@ export class SmsService {
    * Ref: https://developers.advantasms.com/sms-api/balance.html
    */
   async getBalance(): Promise<number> {
-    const url = `${this.baseUrl}/balance`;
+    const url = `${this.baseUrl}/Balance`;
     const data = {
       partnerID: this.partnerId,
       apikey: this.apiKey,
@@ -92,9 +95,12 @@ export class SmsService {
 
     try {
       const response = await axios.post(url, data);
-      // Response structure according to Advanta: { "credit_balance": "123.45" }
-      const balance = response.data?.credit_balance || response.data?.credit;
-      return parseFloat(balance || '0');
+      if (response.data?.['response-code'] == 200) {
+        // Return only the credit balance
+        return parseFloat(response.data?.credit_balance || '0');
+      }
+      this.logger.error(`[SMS] Balance failed: ${JSON.stringify(response.data)}`);
+      return 0;
     } catch (e) {
       this.logger.error(`[SMS] Balance Check Failed: ${e.message}`);
       return 0;

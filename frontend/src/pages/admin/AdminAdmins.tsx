@@ -213,8 +213,9 @@ export default function AdminAdmins() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[1200] flex items-start justify-center p-4 backdrop-blur-2xl bg-slate-950/60 transition-all duration-500 overflow-y-auto pt-20">
-          <div className="glass-panel w-full max-w-2xl bg-slate-900 border border-main/10 shadow-3xl rounded-[2.5rem] p-8 md:p-12 mb-20 relative" style={{ backgroundColor: 'var(--bg-panel)' }}>
+        <div className="fixed inset-0 z-[1200] overflow-y-auto backdrop-blur-2xl bg-slate-950/60 p-4 transition-all duration-500">
+          <div className="flex min-h-full items-center justify-center py-12">
+            <div className="glass-panel w-full max-w-2xl bg-slate-900 border border-main/10 shadow-3xl rounded-[2.5rem] p-8 md:p-12 relative animate-scale-in" style={{ backgroundColor: 'var(--bg-panel)' }}>
              <div className="flex items-center justify-between mb-10 pb-6 border-b border-main/5">
                 <div className="flex items-center gap-6">
                   <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-500 shrink-0">
