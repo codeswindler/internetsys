@@ -396,22 +396,107 @@ export default function MainLayout({ role }: LayoutProps) {
 
   return (
     <div className="flex min-h-screen md:h-screen overflow-hidden bg-[var(--bg-main)]">
-      {/* Mobile Backdrop */}
-      <div 
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] md:hidden transition-all duration-300 ${
-          isMenuOpen ? 'opacity-100 pointer-events-auto cursor-pointer' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={() => setIsMenuOpen(false)}
-        title="Tap to close menu"
-      />
+      
+      {/* ── MOBILE NAV BAR & HAMBURGER DROPDOWN (NEW) ── */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-[9990] glass-panel rounded-none border-b border-white/5 shadow-2xl">
+        <div className="flex items-center justify-between p-4 relative z-20 bg-[var(--bg-panel)]">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 -ml-2 text-slate-300 hover:text-white transition-all active:scale-95 flex items-center justify-center transform"
+            >
+              <div className={`transition-transform duration-300 ${isMenuOpen ? 'rotate-90 scale-110' : 'rotate-0'}`}>
+                {isMenuOpen ? <X size={24} className="text-cyan-400" /> : <Menu size={24} />}
+              </div>
+            </button>
+            <Link 
+              to={role === 'admin' ? '/admin/dashboard' : '/user/dashboard'}
+              className="font-extrabold text-lg tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              PulseLynk
+            </Link>
+          </div>
+          <div className="flex items-center gap-3">
+             <button 
+               onClick={toggleTheme}
+               className="p-2 rounded-lg bg-white/5 text-muted hover:text-cyan-400 transition-all border border-white/5"
+             >
+               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+             </button>
+             <button 
+               onClick={() => {
+                 setIsMenuOpen(false);
+                 setIsProfileModalOpen(true);
+               }}
+               className="flex items-center justify-center rounded-full border border-white/10 p-0.5 overflow-hidden"
+             >
+               {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
+             </button>
+          </div>
+        </div>
 
-      {/* Sidebar */}
-      <aside className={`
-        fixed md:static inset-y-0 left-0 w-64 glass-panel shrink-0 m-0 md:m-4 flex flex-col z-[9999]
-        transition-transform duration-300 ease-in-out border-r border-white/5 md:border-none
-        ${isMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        <div className="p-6 flex items-center justify-between border-b border-white/5 md:border-b-0">
+        {/* MOBILE DROPDOWN TRAY */}
+        <div className={`absolute top-full left-0 right-0 glass-panel !rounded-none !border-x-0 !border-b border-b-white/10 !border-t-0 shadow-2xl overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] origin-top ${isMenuOpen ? 'max-h-[85vh] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}>
+           <nav className="flex flex-col p-4 gap-2 overflow-y-auto custom-scrollbar bg-[var(--bg-panel)] backdrop-blur-3xl">
+             {links.map((link) => {
+               const isActive = location.pathname.startsWith(link.path);
+               return (
+                   <Link
+                     key={link.path}
+                     to={link.path}
+                     onClick={(e) => {
+                       setIsMenuOpen(false);
+                       if (link.onClick) {
+                         e.preventDefault();
+                         link.onClick();
+                       }
+                     }}
+                     className={`flex items-center gap-3 px-4 py-4 rounded-xl transition-all relative ${
+                       isActive 
+                       ? 'bg-gradient-to-r from-cyan-500/15 to-transparent text-cyan-400 border-l-4 border-cyan-400 font-bold shadow-[inner_0_0_20px_rgba(6,182,212,0.05)]' 
+                       : 'text-muted hover:bg-white/5 hover:text-white hover:translate-x-1'
+                     }`}
+                   >
+                     {link.icon}
+                     <span className="font-semibold flex-1 tracking-tighter text-sm uppercase">{link.name}</span>
+                     {link.name === 'Support' && unreadTotal > 0 && (
+                       <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-red-500/40">
+                         {unreadTotal}
+                       </span>
+                     )}
+                     {link.name === 'Subscriptions' && role === 'admin' && pendingCount > 0 && (
+                       <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-amber-500/40">
+                         {pendingCount}
+                       </span>
+                     )}
+                   </Link>
+               )
+             })}
+             
+             {/* Log out button */}
+             <button 
+               onClick={() => {
+                 setIsMenuOpen(false);
+                 handleLogout();
+               }}
+               className="flex items-center gap-3 px-4 py-4 mt-2 w-full text-left rounded-xl text-muted hover:bg-red-500/10 hover:text-red-400 transition-all font-medium border border-transparent hover:border-red-500/20"
+             >
+               <LogOut size={20} />
+               <span className="font-bold flex-1 tracking-tighter text-sm uppercase">Logout</span>
+             </button>
+           </nav>
+        </div>
+        
+        {/* Dropdown Backdrop to close string clicks below the menu */}
+        {isMenuOpen && (
+           <div className="fixed inset-0 top-[73px] bg-black/60 z-[-1] min-h-screen" onClick={() => setIsMenuOpen(false)} />
+        )}
+      </div>
+
+      {/* ── DESKTOP SIDEBAR (HIDDEN ON MOBILE) ── */}
+      <aside className="hidden md:flex static inset-y-0 left-0 w-64 glass-panel shrink-0 m-4 flex-col z-[9000] border-none">
+        <div className="p-6 flex items-center justify-between border-b-0">
           <Link 
             to={role === 'admin' ? '/admin/dashboard' : '/user/dashboard'} 
             className="flex items-center gap-3 group px-2 py-1 -ml-2 rounded-xl hover:bg-white/5 transition-all"
@@ -434,16 +519,8 @@ export default function MainLayout({ role }: LayoutProps) {
             >
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-
-            <button 
-              className="md:hidden text-slate-400 hover:text-white p-2"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              <X size={20} />
-            </button>
           </div>
         </div>
-
         
         <nav className="flex-1 p-4 flex flex-col gap-2 overflow-y-auto">
           {links.map((link) => {
@@ -559,27 +636,12 @@ export default function MainLayout({ role }: LayoutProps) {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth w-full main-content-scroll"
+        className="flex-1 overflow-y-auto p-4 md:p-8 pt-24 md:pt-8 relative scroll-smooth w-full main-content-scroll"
       >
-        {/* Page Header (Desktop Header & Mobile Status) */}
-        <header className="flex items-center justify-between p-4 glass-panel mb-8 border border-white/10 md:bg-transparent md:border-none md:p-0 md:mb-10">
-          {/* Mobile-Only Menu Button & PL Logo */}
-          <div className="flex items-center gap-4 md:hidden">
-            <button 
-              onClick={() => setIsMenuOpen(true)}
-              className="p-2 -ml-2 text-slate-300 hover:text-white transition-colors active:scale-95"
-            >
-              <Menu size={24} />
-            </button>
-            <Link 
-              to={role === 'admin' ? '/admin/dashboard' : '/user/dashboard'}
-              className="font-extrabold text-lg tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400"
-            >
-              PulseLynk
-            </Link>
-          </div>
+        {/* Desktop-Only Action Header (Removed Mobile Items) */}
+        <header className="hidden md:flex items-center justify-end p-0 mb-10">
 
-          {/* Icons Stack: Right aligned on both views */}
+          {/* Icons Stack: Right aligned */}
           <div className="flex-1 flex items-center justify-end gap-4">
              {role === 'admin' && (
                <div className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.1)]">
@@ -587,7 +649,6 @@ export default function MainLayout({ role }: LayoutProps) {
                  <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">SMS: {smsBalance.toLocaleString()} Units</span>
                </div>
              )}
-
 
              <button 
                onClick={() => {
@@ -599,43 +660,6 @@ export default function MainLayout({ role }: LayoutProps) {
              >
                <Ticket size={18} className="drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" />
                <span className="hidden md:inline text-[11px] font-black uppercase tracking-widest">Redeem Voucher</span>
-             </button>
-
-              {role === 'user' && (
-                <div 
-                  onClick={() => navigate('/user/dashboard')}
-                  className={`flex items-center gap-2 border px-3 py-1.5 rounded-full cursor-pointer transition-all font-bold ${
-                    activeSub 
-                    ? (activeSub.startedAt ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan shadow-[0_0_20px_rgba(6,182,212,0.15)]' : 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-950/40')
-                    : 'bg-amber-500/10 border-amber-500/40 hover:bg-amber-500/20 animate-bounce shadow-xl shadow-amber-950/50 text-amber-400'
-                  }`}
-                >
-                  <Zap size={12} className={activeSub ? (activeSub.startedAt ? 'text-cyan-400 fill-cyan-400' : 'text-emerald-400 fill-emerald-400 animate-pulse') : 'text-amber-400 fill-amber-400'} />
-                  <span className={`text-[10px] uppercase tracking-widest ${activeSub?.startedAt ? 'text-cyan-400' : (activeSub ? 'text-emerald-400' : '')}`}>
-                    {activeSub ? (
-                      !activeSub.startedAt 
-                        ? 'SELECT YOUR PLAN' 
-                        : new Date(activeSub.expiresAt).getTime() < Date.now() 
-                          ? 'RENEW SESSION' 
-                          : 'LIVE SESSION •'
-                    ) : 'TOP-UP NOW'}
-                  </span>
-                  {allActiveSubs.length > 1 && (
-                    <span className="ml-1 px-2 py-0.5 bg-slate-950 text-white rounded-full text-[9px] font-black border border-white/10 shadow-2xl">
-                      +{allActiveSubs.length - 1}
-                    </span>
-                  )}
-                </div>
-              )}
-
-             <button 
-               onClick={() => {
-                 setIsMenuOpen(false);
-                 setIsProfileModalOpen(true);
-               }}
-               className="md:hidden flex items-center justify-center rounded-full border border-white/10 p-0.5 overflow-hidden"
-             >
-               {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
              </button>
           </div>
         </header>
