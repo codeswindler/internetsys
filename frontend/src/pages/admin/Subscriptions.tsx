@@ -288,13 +288,13 @@ export default function Subscriptions() {
                         </button>
                       )}
 
-                      {s.status?.toString().toLowerCase() === 'active' && (
+                      {['active', 'paid', 'verifying', 'awaiting_approval'].includes(s.status?.toLowerCase()) && (
                         <button
                           className="flex items-center gap-1 text-xs font-bold text-red-400 hover:bg-red-500/10 border border-red-500/30 hover:border-red-500/60 px-3 py-1.5 rounded-lg transition-colors"
                           onClick={() => setConfirmState({
                             isOpen: true,
                             title: 'Cancel Subscription',
-                            message: 'Cancel this subscription? The user will lose access immediately.',
+                            message: 'Cancel this subscription? If active, the user will lose access immediately.',
                             onConfirm: () => { cancelMutation.mutate(s.id); setConfirmState(st => ({...st, isOpen: false})); }
                           })}
                           disabled={cancelMutation.isPending}
