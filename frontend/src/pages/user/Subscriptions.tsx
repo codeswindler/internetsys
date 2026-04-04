@@ -16,6 +16,20 @@ export default function Subscriptions() {
   const [discoverySubId, setDiscoverySubId] = useState<string | null>(null);
   const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [userInitials, setUserInitials] = useState('');
+  const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
+  const [deviceLimitModal, setDeviceLimitModal] = useState({ open: false, maxDevices: 1, connectedDevices: [] as any[], pendingSubId: null as string | null });
+
+  useEffect(() => {
+    const ua = navigator.userAgent;
+    if (/Windows NT 10.0/.test(ua)) setLocalDeviceName('Windows 10/11 Device');
+    else if (/Windows NT/.test(ua)) setLocalDeviceName('Windows Device');
+    else if (/Mac OS X/.test(ua)) setLocalDeviceName('Apple Mac');
+    else if (/Android/.test(ua)) setLocalDeviceName('Android Device');
+    else if (/iPhone|iPad|iPod/.test(ua)) setLocalDeviceName('Apple iOS');
+    else if (/Linux/.test(ua)) setLocalDeviceName('Linux Device');
+    else setLocalDeviceName('Dashboard Browser');
+  }, []);
 
   // Proximity check for 10.5.50.1
   const checkRouterProximity = async (gateway: string) => {
@@ -75,10 +89,31 @@ export default function Subscriptions() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
-      toast.success('Connection Successful! Surf away.', { icon: '🚀' });
+      toast.success('Internet Connection Established!', { icon: '🚀' });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to start session');
+      if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
+        setDeviceLimitModal({
+          open: true,
+          maxDevices: err.response.data.maxDevices,
+          connectedDevices: err.response.data.connectedDevices,
+          pendingSubId: err.response.data.subId
+        });
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to start session');
+      }
+    }
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: (sessionId: string) => api.post(`/subscriptions/session/${sessionId}/disconnect`),
+    onSuccess: () => {
+      toast.success('Device disconnected! You have a free slot.');
+      queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+      if (deviceLimitModal.connectedDevices.length <= deviceLimitModal.maxDevices) {
+        setDeviceLimitModal(prev => ({ ...prev, open: false }));
+        if (deviceLimitModal.pendingSubId) startMutation.mutate(deviceLimitModal.pendingSubId);
+      }
     }
   });
 
@@ -169,7 +204,10 @@ export default function Subscriptions() {
           <div className="grid gap-10">
             {activeSubs.map((sub: any) => {
               const isSubLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > new Date();
-              const isDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === localStorage.getItem('hotspot_mac') && ds.isActive);
+              const storedMac = localStorage.getItem('hotspot_mac');
+              const isThisDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === storedMac && ds.isActive);
+              const hasActiveSession = sub.deviceSessions?.some((ds: any) => ds.isActive);
+              const isOtherDeviceLive = hasActiveSession && !isThisDeviceLive;
               const isLive = isSubLive;
 
               return (
@@ -215,7 +253,7 @@ export default function Subscriptions() {
                             <div className="flex-1 min-w-0">
                               <p className="text-[9px] font-black text-muted uppercase tracking-[0.25em] mb-1 truncate">DEVICE MODEL</p>
                               <h4 className="text-xs font-bold text-main tracking-wide leading-relaxed truncate">
-                                {sub.deviceSessions?.[0]?.deviceModel || (sub.startedAt ? 'Detected Device' : 'Your Current Device')}
+                                {isThisDeviceLive ? (sub.deviceSessions?.find((ds: any) => ds.macAddress === storedMac && ds.isActive)?.deviceModel || localDeviceName) : (sub.deviceSessions?.find((ds: any) => ds.isActive)?.deviceModel || localDeviceName)}
                               </h4>
                               <div className="flex items-center gap-2 mt-2">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
@@ -238,16 +276,15 @@ export default function Subscriptions() {
                                <button 
                                  onClick={async (e) => {
                                    e.stopPropagation();
-                                   if (isDeviceLive) return;
                                    if (!isSynced) {
                                       startDiscovery(sub.id);
                                       return;
                                    }
                                    startMutation.mutate(sub.id);
                                  }}
-                                 className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : 'text-cyan-500 hover:text-main'}`}
+                                 className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isThisDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : isOtherDeviceLive ? 'text-cyan-500 hover:text-main' : 'text-cyan-500 hover:text-main'}`}
                                >
-                                 {isDeviceLive ? 'DEVICE CONNECTED' : 'CONNECT THIS DEVICE'}
+                                 {isThisDeviceLive ? 'THIS DEVICE CONNECTED' : isOtherDeviceLive ? 'MANAGE DEVICES' : 'CONNECT THIS DEVICE'}
                                </button>
                             </div>
 
@@ -262,6 +299,25 @@ export default function Subscriptions() {
                                 <span className="text-base font-black text-main">{traffic.uploadSpeed}</span>
                                 <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">UPLOAD</span>
                               </div>
+                            </div>
+
+                            <div className={`p-4 rounded-2xl flex items-center justify-between transition-all border ${
+                              isThisDeviceLive 
+                                ? 'bg-cyan-500/10 border-cyan-500/30' 
+                                : isOtherDeviceLive 
+                                  ? 'bg-amber-500/5 border-amber-500/20' 
+                                  : 'bg-slate-800/50 border-white/5 hover:border-white/10'
+                            }`}>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${hasActiveSession ? 'bg-cyan-400 animate-[pulse_2s_ease-in-out_infinite]' : 'bg-slate-600'}`} />
+                                <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${hasActiveSession ? 'text-cyan-400' : 'text-slate-400'}`}>
+                                  {hasActiveSession ? 'SURFING LIVE' : 'OFFLINE'}
+                                </span>
+                              </div>
+                              
+                              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isThisDeviceLive ? 'text-cyan-400/70' : isOtherDeviceLive ? 'text-amber-500/80' : 'text-slate-500'}`}>
+                                {isThisDeviceLive ? 'THIS DEVICE CONNECTED' : isOtherDeviceLive ? 'IN USE BY ANOTHER DEVICE' : 'AWAITING CONNECTION'}
+                              </span>
                             </div>
 
                             <div className="w-full flex items-center justify-between px-6 pt-4 mt-2">
@@ -480,6 +536,55 @@ export default function Subscriptions() {
           </div>
         </div>
       )}
+      {/* ── DEVICE LIMIT MODAL ── */}
+      {deviceLimitModal.open && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 backdrop-blur-[20px] bg-slate-950/80 animate-fade-in">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-white/10 shadow-[0_0_100px_rgba(6,182,212,0.15)] rounded-[2.5rem] p-8 md:p-12 overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-3xl -translate-y-12 translate-x-12" />
+            <div className="flex items-center gap-6 mb-8 relative z-10">
+              <div className="w-20 h-20 rounded-[2rem] bg-red-500/10 border border-red-500/20 flex flex-col items-center justify-center text-red-500 shadow-inner">
+                 <AlertTriangle size={32} />
+              </div>
+              <div>
+                <h3 className="text-3xl font-black text-white tracking-tight uppercase mb-1">LIMIT REACHED</h3>
+                <p className="text-[10px] font-black text-red-400 uppercase tracking-[0.3em]">Max {deviceLimitModal.maxDevices} Device{deviceLimitModal.maxDevices > 1 ? 's' : ''}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted mb-8 leading-relaxed font-bold uppercase tracking-wide opacity-80">
+              Your plan is currently active on other devices. Please disconnect a device below to start surfing here.
+            </p>
+            <div className="space-y-4 mb-10">
+              {deviceLimitModal.connectedDevices.map((device: any) => (
+                <div key={device.id} className="flex items-center justify-between p-5 bg-main/5 border border-main/5 rounded-2xl group hover:border-red-500/20 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                      <Smartphone size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-main uppercase tracking-wide">{device.model || 'Unknown Device'}</p>
+                      <p className="text-[10px] text-muted font-mono tracking-widest">{device.mac}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => disconnectMutation.mutate(device.id)}
+                    disabled={disconnectMutation.isPending}
+                    className="px-6 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 shadow-lg shadow-red-500/10"
+                  >
+                    {disconnectMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : 'KICK'}
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setDeviceLimitModal(prev => ({ ...prev, open: false }))}
+              className="w-full py-5 bg-main/5 border border-main/10 text-muted text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-main/10 hover:text-main transition-all"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
