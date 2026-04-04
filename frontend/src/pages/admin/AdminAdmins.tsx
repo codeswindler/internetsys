@@ -206,7 +206,7 @@ export default function AdminAdmins() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {admins.filter((a: any) => a.role !== 'superadmin').map((admin: any) => (
           <div key={admin.id} className="glass-panel group hover:border-cyan-500/30 transition-all p-8 relative overflow-hidden" style={{ backgroundColor: 'var(--bg-panel)' }}>
-            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
               <Shield size={100} />
             </div>
 

@@ -60,7 +60,7 @@ export default function AuthLayout() {
         </div>
 
         <a 
-          href="https://pulsecloud.leasemaster.com" 
+          href="https://pulsecloud.theleasemaster.com" 
           target="_blank" 
           rel="noopener noreferrer" 
           className="auth-powered"
