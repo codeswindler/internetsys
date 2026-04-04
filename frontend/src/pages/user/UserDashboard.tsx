@@ -250,14 +250,34 @@ export default function UserDashboard() {
              </div>
              
              {!isSynced && (
-               <button 
-                 onClick={() => syncMutation.mutate()}
-                 disabled={syncMutation.isPending}
-                 className="p-4 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-2xl text-orange-500 flex flex-col items-center gap-1 min-w-[120px] transition-all active:scale-95 group shadow-lg shadow-orange-500/10"
-               >
-                 {syncMutation.isPending ? <RefreshCw className="animate-spin" size={16} /> : <Link size={16} className="group-hover:rotate-12 transition-transform" />}
-                 <span className="text-[10px] font-black uppercase tracking-widest">Sync Device</span>
-               </button>
+               <div className="flex items-center gap-3">
+                 <div className="px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-xl hidden md:flex items-center gap-2">
+                   <Activity size={12} className="text-orange-500 animate-pulse" />
+                   <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Action Needed</span>
+                 </div>
+                 
+                 <button 
+                   onClick={() => {
+                      const gateway = activeSub?.router?.localGateway || '10.5.50.1';
+                      window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect')}`;
+                   }}
+                   className="bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] uppercase tracking-widest py-4 px-8 rounded-2xl transition-all shadow-xl shadow-cyan-500/20 flex items-center gap-3 group active:scale-95"
+                 >
+                   <div className="p-1 bg-white/20 rounded group-hover:rotate-12 transition-transform">
+                      <Wifi size={16} className="animate-pulse" />
+                   </div>
+                   Identify My Laptop
+                 </button>
+                 
+                 <button 
+                   onClick={() => syncMutation.mutate()}
+                   disabled={syncMutation.isPending}
+                   className="p-4 bg-zinc-800/80 hover:bg-zinc-800 border border-white/5 rounded-2xl text-zinc-400 transition-all active:scale-95"
+                   title="Try Automatic Sync"
+                 >
+                   {syncMutation.isPending ? <RefreshCw className="animate-spin" size={16} /> : <Activity size={16} />}
+                 </button>
+               </div>
              )}
           </div>
         </div>
