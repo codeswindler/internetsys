@@ -3,19 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle, Monitor, Play } from 'lucide-react';
+import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle, Monitor, Play, Router } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const formRef = useRef<HTMLFormElement>(null);
-  const { fireInternet, currentUser } = useOutletContext<{ 
-    fireInternet: (u?: string, p?: string) => void,
-    currentUser: any 
-  }>();
-
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
@@ -23,7 +17,18 @@ export default function UserDashboard() {
   const [discoverySubId, setDiscoverySubId] = useState<string | null>(null);
   const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
   const [isScanning, setIsScanning] = useState(false);
-  
+  const [deviceLimitModal, setDeviceLimitModal] = useState<{ open: boolean; maxDevices: number; connectedDevices: any[]; pendingSubId: string }>({ 
+    open: false, 
+    maxDevices: 1, 
+    connectedDevices: [],
+    pendingSubId: ''
+  });
+
+  const { fireInternet, currentUser } = useOutletContext<{ 
+    fireInternet: (u?: string, p?: string) => void,
+    currentUser: any 
+  }>();
+
   // URL Parameter Capture (from Router Round-Trip)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -91,23 +96,7 @@ export default function UserDashboard() {
     ['active', 'paid', 'pending', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
   );
 
-  const isAnyLive = allActiveSubs.some((s: any) => 
-    s.status === 'ACTIVE' && s.expiresAt && new Date(s.expiresAt) > new Date()
-  );
-
-  const reviewPlans = allActiveSubs.filter((s: any) => 
-    s.status === 'AWAITING_APPROVAL' || s.status === 'VERIFYING'
-  );
-
   const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
-
-  // Multi-Device Slot Logic
-  const [deviceLimitModal, setDeviceLimitModal] = useState({ 
-    open: false, 
-    maxDevices: 1, 
-    connectedDevices: [],
-    pendingSubId: string;
-  });
 
   const startDiscovery = async (subId: string) => {
     setDiscoverySubId(subId);
@@ -164,7 +153,6 @@ export default function UserDashboard() {
     onSuccess: () => {
       toast.success('Device disconnected! You have a free slot.');
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
-      
       if (deviceLimitModal.connectedDevices.length <= deviceLimitModal.maxDevices) {
         setDeviceLimitModal(prev => ({ ...prev, open: false }));
         if (deviceLimitModal.pendingSubId) startMutation.mutate(deviceLimitModal.pendingSubId);
@@ -223,7 +211,7 @@ export default function UserDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
-      {/* ── 💎 ADAPTIVE WELCOME BANNER ── */}
+      {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 shadow-2xl p-8 md:p-12">
         <div className="absolute top-0 right-0 p-4 opacity-10 group">
           <Zap size={140} className="text-white transform group-hover:rotate-12 transition-transform duration-700" />
@@ -279,14 +267,11 @@ export default function UserDashboard() {
             {allActiveSubs.map((sub: any) => {
                const isSubLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > new Date();
                const isDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === localStorage.getItem('hotspot_mac') && ds.isActive);
-               const isLive = isSubLive;
-
+               
                return (
                 <div key={sub.id} className="relative group animate-fade-in">
-                  {/* Main Glass Card (Matches Screenshot 2) */}
                   <div className="glass-panel p-6 md:p-10 border-cyan-500/20 bg-opacity-40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
                     
-                    {/* Status Banner Row (Screenshot 2 Match) */}
                     <div className="flex flex-col lg:flex-row items-center justify-between mb-8 gap-4 px-2">
                        <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-10">
                          <div className="flex flex-col">
@@ -304,21 +289,19 @@ export default function UserDashboard() {
                            </div>
                          </div>
                          <div className="flex items-center gap-2 text-xs font-bold text-muted uppercase tracking-widest opacity-60">
-                           <RouterIcon size={14} className="text-cyan-500" />
+                           <Wifi size={14} className="text-cyan-500" />
                            Location: <span className="text-main">{sub.router?.name || 'Pulselynk'}</span>
                          </div>
                        </div>
                        <div className="flex flex-col items-center lg:items-end">
                           <p className="text-[10px] font-black text-muted uppercase tracking-[0.25em] mb-1">SESSION STATUS</p>
-                          <h4 className={`text-4xl font-black tracking-[0.1em] uppercase ${sub.status === 'ACTIVE' ? 'text-cyan-400' : 'text-main opacity-80'}`}>
+                          <h4 className={`text-4xl font-black tracking-[0.1em] uppercase ${isSubLive ? 'text-cyan-400' : 'text-main opacity-80'}`}>
                             {sub.status === 'PAID' ? 'READY' : sub.status}
                           </h4>
                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-                      
-                      {/* Left: Device Detail Box (Screenshot Match) */}
                       <div className="lg:col-span-4 h-full">
                         <div className="bg-opacity-20 border border-main/5 rounded-3xl p-6 h-full flex flex-col justify-center gap-6 backdrop-blur-md shadow-2xl group-hover:border-cyan-500/20 transition-colors" style={{ backgroundColor: 'var(--bg-input)' }}>
                           <div className="flex items-center gap-5">
@@ -339,9 +322,8 @@ export default function UserDashboard() {
                         </div>
                       </div>
 
-                      {/* Right: Live Connectivity Box (Screenshot 2 Match) */}
                       <div className="lg:col-span-8 space-y-4">
-                        {isLive ? (
+                        {isSubLive ? (
                           <>
                             <div className="w-full bg-cyan-950/10 border border-cyan-500/20 rounded-2xl py-6 px-10 flex items-center justify-between group-hover:bg-cyan-900/10 transition-all duration-700 relative overflow-hidden shadow-inner">
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
@@ -354,7 +336,6 @@ export default function UserDashboard() {
                                    e.stopPropagation();
                                    if (isDeviceLive) return;
                                    const gateway = sub.router?.localGateway || '10.5.50.1';
-                                   
                                    if (!isSynced) {
                                       const isNear = await checkRouterProximity(gateway);
                                       if (!isNear) {
@@ -391,7 +372,7 @@ export default function UserDashboard() {
                                    <Clock size={16} className="text-muted" />
                                    <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em]">EXPIRES IN</span>
                                  </div>
-                                 <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="pill" size="lg" />
+                                 <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="lg" />
                                </div>
                                <div className="px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center gap-3">
                                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
@@ -452,7 +433,7 @@ export default function UserDashboard() {
 
                              <div className="flex items-center justify-between w-full px-2 opacity-50">
                                 <div className="flex items-center gap-2">
-                                  <Link size={14} className="text-muted" />
+                                  <Router size={14} className="text-muted" />
                                   <span className="text-[9px] font-black text-muted uppercase tracking-widest">Router: {sub.router?.name}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -474,7 +455,7 @@ export default function UserDashboard() {
 
       {showDiscovery && (
         <div className="fixed inset-0 z-[110] flex items-start justify-center p-0 sm:p-6 backdrop-blur-xl bg-slate-950/80 animate-fade-in overflow-y-auto">
-          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 bg-opacity-95 shadow-[0_0_100px_rgba(34,211,238,0.3)] rounded-b-[2.5rem] sm:rounded-[2.5rem] mt-0" style={{ backgroundColor: 'var(--bg-panel)' }}>
+          <div className="glass-panel w-full max-w-lg overflow-hidden border-cyan-500/30 shadow-[0_0_100px_rgba(34,211,238,0.3)] rounded-b-[2.5rem] sm:rounded-[2.5rem] mt-0" style={{ backgroundColor: 'var(--bg-panel)' }}>
             <div className="p-8 border-b border-main/10 flex items-center justify-between bg-main/[0.03]">
               <div>
                 <h3 className="text-2xl font-black text-main tracking-tight uppercase mb-1">LINK THIS DEVICE</h3>
@@ -576,11 +557,9 @@ export default function UserDashboard() {
                 </p>
               </div>
             </div>
-
             <p className="text-sm text-muted mb-8 leading-relaxed font-bold uppercase tracking-wide opacity-80">
               Your plan is currently active on other devices. Please disconnect a device below to start surfing here.
             </p>
-
             <div className="space-y-4 mb-10">
               {deviceLimitModal.connectedDevices.map((device: any) => (
                 <div key={device.id} className="flex items-center justify-between p-5 bg-main/5 border border-main/5 rounded-2xl group hover:border-red-500/20 transition-all">
@@ -603,7 +582,6 @@ export default function UserDashboard() {
                 </div>
               ))}
             </div>
-
             <button
               onClick={() => setDeviceLimitModal(prev => ({ ...prev, open: false }))}
               className="w-full py-5 bg-main/5 border border-main/10 text-muted text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-main/10 hover:text-main transition-all"
