@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock, ArrowRight, Activity, ChevronRight } from 'lucide-react';
+import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock, ArrowRight, Activity, ChevronRight, Shield } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -292,6 +292,19 @@ export default function MainLayout({ role }: LayoutProps) {
     enabled: role === 'admin',
   });
 
+  const { data: smsBalance = 0 } = useQuery({
+    queryKey: ['admin-sms-balance'],
+    queryFn: async () => {
+      if (role !== 'admin') return 0;
+      const res = await axios.get(`${API_URL}/sms/balance`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data.balance;
+    },
+    refetchInterval: 30000,
+    enabled: role === 'admin',
+  });
+
   const prevUnreadRef = useRef<number>(0);
   const initialToastDone = useRef<boolean>(false);
 
@@ -346,17 +359,19 @@ export default function MainLayout({ role }: LayoutProps) {
     path: string;
     icon: React.ReactNode;
     onClick?: () => void;
+    permission?: string;
   }
 
   const adminLinks: SidebarLink[] = [
     { name: 'Dashboard', path: '/admin/dashboard', icon: <Wifi size={20} /> },
-    { name: 'Routers', path: '/admin/routers', icon: <Router size={20} /> },
-    { name: 'Packages', path: '/admin/packages', icon: <Package size={20} /> },
-    { name: 'Subscriptions', path: '/admin/subscriptions', icon: <Settings size={20} /> },
-    { name: 'Vouchers', path: '/admin/vouchers', icon: <Ticket size={20} /> },
-    { name: 'Users', path: '/admin/users', icon: <Users size={20} /> },
-    { name: 'Transactions', path: '/admin/transactions', icon: <Wifi size={20} /> }, 
-    { name: 'Support', path: '/admin/support', icon: <MessageCircle size={20} /> },
+    { name: 'Routers', path: '/admin/routers', icon: <Router size={20} />, permission: 'manage_routers' },
+    { name: 'Packages', path: '/admin/packages', icon: <Package size={20} />, permission: 'manage_packages' },
+    { name: 'Subscriptions', path: '/admin/subscriptions', icon: <Settings size={20} />, permission: 'view_revenue' },
+    { name: 'Vouchers', path: '/admin/vouchers', icon: <Ticket size={20} />, permission: 'manage_vouchers' },
+    { name: 'Users', path: '/admin/users', icon: <Users size={20} />, permission: 'manage_users' },
+    { name: 'Transactions', path: '/admin/transactions', icon: <Wifi size={20} />, permission: 'view_revenue' }, 
+    { name: 'Staff', path: '/admin/admins', icon: <Shield size={18} />, permission: 'manage_admins' },
+    { name: 'Support', path: '/admin/support', icon: <MessageCircle size={20} />, permission: 'support_chat' },
   ];
 
   const userLinks: SidebarLink[] = [
@@ -366,7 +381,13 @@ export default function MainLayout({ role }: LayoutProps) {
     { name: 'Redeem Voucher', path: '#', icon: <Ticket size={20} />, onClick: () => setIsRedeemModalOpen(true) },
   ];
 
-  const links = role === 'admin' ? adminLinks : userLinks;
+  const filteredAdminLinks = adminLinks.filter(link => {
+    if (!link.permission) return true;
+    if (currentUser?.role === 'superadmin') return true;
+    return currentUser?.permissions?.includes(link.permission);
+  });
+
+  const links = role === 'admin' ? filteredAdminLinks : userLinks;
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -391,12 +412,12 @@ export default function MainLayout({ role }: LayoutProps) {
         <div className="p-6 flex items-center justify-between border-b border-white/5 md:border-b-0">
           <Link 
             to={role === 'admin' ? '/admin/dashboard' : '/user/dashboard'} 
-            className="flex items-center gap-3 group px-2 py-1 -ml-2 rounded-lg hover:bg-white/5 transition-all"
+            className="flex items-center gap-3 group px-2 py-1 -ml-2 rounded-xl hover:bg-white/5 transition-all"
           >
-            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center font-bold text-white shadow-md group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-blue-600 flex items-center justify-center font-black text-white shadow-[0_0_20px_rgba(6,182,212,0.3)] group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
               PL
             </div>
-            <span className="font-bold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300">
+            <span className="font-extrabold text-xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
               PulseLynk
             </span>
           </Link>
@@ -424,72 +445,72 @@ export default function MainLayout({ role }: LayoutProps) {
           {links.map((link) => {
             const isActive = location.pathname.startsWith(link.path);
             return (
-              <Link
-                key={link.path}
-                to={link.path}
-                onClick={(e) => {
-                  if (link.onClick) {
-                    e.preventDefault();
-                    link.onClick();
-                  }
-                }}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all relative ${
-                  isActive 
-                  ? 'bg-gradient-to-r from-cyan-500/10 to-transparent text-cyan-400 border-l-2 border-cyan-400 font-bold' 
-                  : 'text-muted hover:bg-slate-500/5 hover:text-main'
-                } 
-                ${(link.name === 'Support' && unreadTotal > 0) || (link.name === 'Subscriptions' && pendingCount > 0) ? 'ring-1 ring-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.1)]' : ''}`}
-              >
-                <div className="relative">
-                  {link.icon}
+                <Link
+                  key={link.path}
+                  to={link.path}
+                  onClick={(e) => {
+                    if (link.onClick) {
+                      e.preventDefault();
+                      link.onClick();
+                    }
+                  }}
+                  className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all relative group ${
+                    isActive 
+                    ? 'bg-gradient-to-r from-cyan-500/15 via-cyan-500/5 to-transparent text-cyan-400 border-l-4 border-cyan-400 font-bold active-glow shadow-[inner_0_0_20px_rgba(6,182,212,0.05)]' 
+                    : 'text-muted hover:bg-white/5 hover:text-white hover:translate-x-1'
+                  } 
+                  ${(link.name === 'Support' && unreadTotal > 0) || (link.name === 'Subscriptions' && pendingCount > 0) ? 'ring-1 ring-cyan-500/30' : ''}`}
+                >
+                  <div className={`relative transition-transform duration-300 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
+                    {link.icon}
+                    {link.name === 'Support' && unreadTotal > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-950 animate-ping" />
+                    )}
+                    {link.name === 'Support' && unreadTotal > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-950" />
+                    )}
+                    {link.name === 'Subscriptions' && role === 'admin' && pendingCount > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-slate-950 animate-pulse" />
+                    )}
+                  </div>
+                  <span className="font-semibold flex-1 tracking-tight">{link.name}</span>
                   {link.name === 'Support' && unreadTotal > 0 && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-950 animate-ping" />
-                  )}
-                  {link.name === 'Support' && unreadTotal > 0 && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-slate-950" />
+                    <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-red-500/40">
+                      {unreadTotal}
+                    </span>
                   )}
                   {link.name === 'Subscriptions' && role === 'admin' && pendingCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-slate-950 animate-pulse" />
+                    <span className="bg-amber-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-amber-500/40">
+                      {pendingCount}
+                    </span>
                   )}
-                </div>
-                <span className="font-medium flex-1">{link.name}</span>
-                {link.name === 'Support' && unreadTotal > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-red-500/20">
-                    {unreadTotal}
-                  </span>
-                )}
-                {link.name === 'Subscriptions' && role === 'admin' && pendingCount > 0 && (
-                  <span className="bg-amber-500 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-amber-500/20">
-                    {pendingCount}
-                  </span>
-                )}
-              </Link>
+                </Link>
             )
           })}
         </nav>
 
         {role === 'user' && activeSub && (
-          <div className="p-4 mx-4 mb-2 glass-panel border-cyan-500/30 bg-panel">
-            <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="p-4 mx-4 mb-4 glass-panel border-cyan-500/30 bg-gradient-to-br from-cyan-950/40 to-transparent shadow-[0_8px_32px_rgba(6,182,212,0.15)]">
+            <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
-                <Zap size={14} className="text-cyan-400 fill-cyan-400 animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Session</span>
               </div>
               {allActiveSubs.length > 1 && (
-                <span className="px-2 py-0.5 rounded-full bg-slate-900 text-white text-[9px] font-black shadow-lg shadow-black/20 border border-white/10">
+                <span className="px-2 py-0.5 rounded-full bg-slate-900/80 text-white text-[9px] font-black border border-white/10 shadow-xl">
                    +{allActiveSubs.length - 1} MORE
                 </span>
               )}
             </div>
 
-            <div className="text-xs text-main font-medium truncate mb-2">
+            <div className="text-xs text-white font-bold truncate mb-3 tracking-tight">
               {activeSub.package?.name || 'Hotspot Plan'}
             </div>
             <button 
               onClick={() => navigate('/user/subscriptions')}
-              className="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold uppercase transition-colors flex items-center gap-1"
+              className="w-full py-2 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 text-[10px] font-black uppercase tracking-widest transition-all border border-cyan-500/20 flex items-center justify-center gap-2"
             >
-              Manage <ArrowRight size={10} />
+              Control Center <ChevronRight size={12} />
             </button>
           </div>
         )}
@@ -530,58 +551,64 @@ export default function MainLayout({ role }: LayoutProps) {
         className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth w-full main-content-scroll"
       >
         {/* Page Header (Desktop Header & Mobile Status) */}
-        <header className="flex items-center justify-between p-4 glass-panel mb-6 border border-white/5 md:bg-transparent md:border-none md:p-0">
+        <header className="flex items-center justify-between p-4 glass-panel mb-8 border border-white/10 md:bg-transparent md:border-none md:p-0 md:mb-10">
           {/* Mobile-Only Menu Button & PL Logo */}
           <div className="flex items-center gap-4 md:hidden">
             <button 
               onClick={() => setIsMenuOpen(true)}
-              className="p-2 -ml-2 text-slate-300 hover:text-white transition-colors"
+              className="p-2 -ml-2 text-slate-300 hover:text-white transition-colors active:scale-95"
             >
               <Menu size={24} />
             </button>
             <Link 
               to={role === 'admin' ? '/admin/dashboard' : '/user/dashboard'}
-              className="font-bold text-lg tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-300"
+              className="font-extrabold text-lg tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400"
             >
               PulseLynk
             </Link>
           </div>
 
           {/* Icons Stack: Right aligned on both views */}
-          <div className="flex-1 flex items-center justify-end gap-3">
+          <div className="flex-1 flex items-center justify-end gap-4">
+             {role === 'admin' && (
+               <div className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                 <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap">SMS: {smsBalance.toLocaleString()} Units</span>
+               </div>
+             )}
 
 
              <button 
                onClick={() => setIsRedeemModalOpen(true)}
-               className="p-1 px-2 text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-all flex items-center gap-1.5"
+               className="p-1 px-3 text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all flex items-center gap-2 border border-transparent hover:border-cyan-500/20 active:scale-95"
                title="Redeem Voucher"
              >
-               <Ticket size={16} />
-               <span className="hidden md:inline text-[11px] font-bold uppercase tracking-wider">Redeem</span>
+               <Ticket size={18} className="drop-shadow-[0_0_5px_rgba(6,182,212,0.5)]" />
+               <span className="hidden md:inline text-[11px] font-black uppercase tracking-widest">Redeem Voucher</span>
              </button>
 
               {role === 'user' && (
                 <div 
                   onClick={() => navigate('/user/dashboard')}
-                  className={`flex items-center gap-1 border px-2 py-0.5 rounded-full cursor-pointer transition-all font-medium ${
+                  className={`flex items-center gap-2 border px-3 py-1.5 rounded-full cursor-pointer transition-all font-bold ${
                     activeSub 
-                    ? (activeSub.startedAt ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan' : 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10')
-                    : 'bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20 animate-bounce shadow-lg shadow-amber-900/10 text-amber-400'
+                    ? (activeSub.startedAt ? 'bg-cyan-500/10 border-cyan-500/30 animate-pulse-cyan shadow-[0_0_20px_rgba(6,182,212,0.15)]' : 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-950/40')
+                    : 'bg-amber-500/10 border-amber-500/40 hover:bg-amber-500/20 animate-bounce shadow-xl shadow-amber-950/50 text-amber-400'
                   }`}
                 >
-                  <Zap size={10} className={activeSub ? (activeSub.startedAt ? 'text-cyan-400 fill-cyan-400' : 'text-emerald-400 fill-emerald-400 animate-pulse') : 'text-amber-400 fill-amber-400'} />
-                  <span className={`text-[10px] uppercase tracking-tighter ${activeSub?.startedAt ? 'text-cyan-400' : (activeSub ? 'text-emerald-400' : '')}`}>
+                  <Zap size={12} className={activeSub ? (activeSub.startedAt ? 'text-cyan-400 fill-cyan-400' : 'text-emerald-400 fill-emerald-400 animate-pulse') : 'text-amber-400 fill-amber-400'} />
+                  <span className={`text-[10px] uppercase tracking-widest ${activeSub?.startedAt ? 'text-cyan-400' : (activeSub ? 'text-emerald-400' : '')}`}>
                     {activeSub ? (
                       !activeSub.startedAt 
-                        ? 'CHOOSE PLAN' 
+                        ? 'SELECT YOUR PLAN' 
                         : new Date(activeSub.expiresAt).getTime() < Date.now() 
-                          ? 'RENEW NOW' 
-                          : 'ACTIVE SESSION •'
-                    ) : 'BUY NEW PACKAGE'}
+                          ? 'RENEW SESSION' 
+                          : 'LIVE SESSION •'
+                    ) : 'TOP-UP NOW'}
                   </span>
                   {allActiveSubs.length > 1 && (
-                    <span className="ml-1 px-2 py-0.5 bg-slate-900 text-white rounded-full text-[9px] font-black border border-white/10 shadow-lg shadow-black/20">
-                      +{allActiveSubs.length - 1} MORE
+                    <span className="ml-1 px-2 py-0.5 bg-slate-950 text-white rounded-full text-[9px] font-black border border-white/10 shadow-2xl">
+                      +{allActiveSubs.length - 1}
                     </span>
                   )}
                 </div>

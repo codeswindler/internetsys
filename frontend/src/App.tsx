@@ -15,6 +15,7 @@ import AdminSubscriptions from './pages/admin/Subscriptions';
 import AdminVouchers from './pages/admin/Vouchers';
 import AdminTransactions from './pages/admin/Transactions';
 import AdminSupport from './pages/admin/Support';
+import AdminAdmins from './pages/admin/AdminAdmins';
 import UserPackages from './pages/user/Packages';
 import UserSubscriptions from './pages/user/Subscriptions';
 import UserDashboard from './pages/user/UserDashboard';
@@ -45,6 +46,7 @@ function App() {
         <Route path="vouchers" element={<AdminVouchers />} />
         <Route path="transactions" element={<AdminTransactions />} />
         <Route path="support" element={<AdminSupport />} />
+        <Route path="admins" element={<AdminAdmins />} />
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
       </Route>
 

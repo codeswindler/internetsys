@@ -132,16 +132,17 @@ export default function Subscriptions() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
       {/* ── 🌓 PERMANENT ELITE DARK HEADER (FOR PEAK READABILITY) ── */}
-      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-900 to-slate-950 shadow-2xl p-10 md:p-14 transition-all duration-500 border border-white/5">
-        <div className="absolute top-0 right-0 p-4 opacity-10 group">
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-900 via-slate-950 to-black shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-10 md:p-14 transition-all duration-500 border border-white/10">
+        <div className="absolute inset-0 bg-noise opacity-5 pointer-events-none" />
+        <div className="absolute top-0 right-0 p-4 opacity-10 group pointer-events-none">
           <ShieldCheck size={140} className="text-white transform group-hover:-rotate-12 transition-transform duration-700" />
         </div>
         <div className="relative z-10">
-          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4 !text-white">
-             My <span className="text-cyan-400 !text-cyan-400">Subscriptions</span>
+          <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4 leading-none">
+             My <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">Subscriptions</span>
           </h1>
-          <p className="text-blue-200/80 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest leading-relaxed !text-blue-100/70">
-             Track your active sessions, traffic usage, and historical plans with PulseLynk precision.
+          <p className="text-blue-100/60 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest leading-relaxed">
+             Track your active sessions, traffic usage, and historical plans with <span className="text-cyan-400">PulseLynk</span> precision.
           </p>
         </div>
       </div>
@@ -173,7 +174,7 @@ export default function Subscriptions() {
 
               return (
                 <div key={sub.id} className="relative group animate-fade-in">
-                  <div className="glass-panel p-6 md:p-10 border-cyan-500/10 bg-opacity-40 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(34,211,238,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
+                  <div className="glass-panel p-6 md:p-10 relative overflow-hidden transition-all duration-500 hover:shadow-[0_0_50px_rgba(6,182,212,0.15)] rounded-[2.5rem] bg-gradient-to-br from-slate-900/40 to-transparent">
                     
                     <div className="flex flex-col lg:flex-row items-center justify-between mb-8 gap-4 px-2">
                       <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-10">
@@ -206,7 +207,7 @@ export default function Subscriptions() {
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
                       <div className="lg:col-span-4 h-full">
-                        <div className="bg-opacity-20 border border-main/5 rounded-3xl p-6 h-full flex flex-col justify-center gap-6 backdrop-blur-md shadow-2xl group-hover:border-cyan-500/20 transition-colors" style={{ backgroundColor: 'var(--bg-input)' }}>
+                        <div className="rounded-3xl p-6 h-full flex flex-col justify-center gap-6 backdrop-blur-md shadow-2xl group-hover:border-cyan-500/30 transition-all border border-white/5 bg-slate-950/30">
                           <div className="flex items-center gap-5">
                             <div className="w-14 h-14 rounded-2xl bg-main/5 flex items-center justify-center text-cyan-400 border border-main/10 shrink-0">
                                <Laptop size={28} />
@@ -311,12 +312,12 @@ export default function Subscriptions() {
                                  disabled={startMutation.isPending || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
                                  className={`w-full lg:flex-1 py-6 text-sm font-black tracking-[0.4em] uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-3xl ${
                                    startMutation.isPending ? 'opacity-70 cursor-not-allowed' : 
-                                   !isSynced ? 'shadow-cyan-500/40' : 'shadow-emerald-500/30'
-                                 }`}
+                                   !isSynced ? 'shadow-cyan-500/40 border-cyan-500/20' : 'shadow-emerald-500/30 border-emerald-500/20'
+                                 } border`}
                                  style={{ 
                                    background: startMutation.isPending ? '#333' : 
-                                              !isSynced ? 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)' :
-                                              'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                                               !isSynced ? 'linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%)' :
+                                               'linear-gradient(135deg, #10b981 0%, #059669 100%)'
                                  }}
                                >
                                 {startMutation.isPending ? <RefreshCw className="animate-spin text-white" size={24} /> : 
@@ -426,7 +427,7 @@ export default function Subscriptions() {
                         onClick={() => linkDevice(host.mac)}
                         className="w-full relative group transition-all duration-500 active:scale-95 text-left"
                       >
-                        <div className="p-8 rounded-[2rem] bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-white/5 group-hover:border-cyan-500/40 group-hover:bg-white dark:group-hover:bg-slate-800 transition-all shadow-xl group-hover:shadow-[0_20px_50px_rgba(6,182,212,0.15)] flex items-center justify-between">
+                        <div className="p-8 rounded-[2.5rem] bg-slate-900/40 border border-white/5 group-hover:border-cyan-500/40 group-hover:bg-slate-900 transition-all shadow-xl group-hover:shadow-[0_20px_50px_rgba(6,182,212,0.15)] flex items-center justify-between">
                           <div className="flex items-center gap-8">
                             <div className="w-20 h-20 rounded-3xl bg-white dark:bg-slate-950 flex items-center justify-center text-cyan-500 shadow-xl group-hover:scale-110 transition-transform border border-slate-100 dark:border-white/5">
                               {host.deviceName === 'Apple' ? <Smartphone size={36} /> : <Laptop size={36} />}

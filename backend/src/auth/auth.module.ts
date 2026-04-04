@@ -6,12 +6,14 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { Admin } from '../entities/admin.entity';
 import { User } from '../entities/user.entity';
+import { Otp } from '../entities/otp.entity';
 import { JwtStrategy } from './jwt.strategy';
 import { SeederService } from './seeder.service';
+import { SmsModule } from '../sms/sms.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Admin, User]),
+    TypeOrmModule.forFeature([Admin, User, Otp]),
     PassportModule,
     JwtModule.registerAsync({
       useFactory: () => ({
@@ -20,6 +22,7 @@ import { SeederService } from './seeder.service';
         signOptions: { expiresIn: '1d' },
       }),
     }),
+    SmsModule,
   ],
   providers: [AuthService, JwtStrategy, SeederService],
   controllers: [AuthController],

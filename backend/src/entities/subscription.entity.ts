@@ -62,6 +62,9 @@ export class Subscription {
   @Column({ type: 'timestamp', nullable: true })
   expiresAt: Date | null;
 
+  @Column({ default: false })
+  expiryNotified: boolean;
+
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   amountPaid: number;
 

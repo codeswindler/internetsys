@@ -14,13 +14,16 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { AdminRole } from '../entities/admin.entity';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { Permissions } from '../auth/permissions.decorator';
 
 @Controller('routers')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class RoutersController {
   constructor(private readonly routersService: RoutersService) {}
 
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Permissions('manage_routers')
   @Post()
   create(@Body() createDto: Partial<Router>) {
     return this.routersService.create(createDto);
@@ -55,12 +58,14 @@ export class RoutersController {
   }
 
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Permissions('manage_routers')
   @Put(':id')
   update(@Param('id') id: string, @Body() updateDto: Partial<Router>) {
     return this.routersService.update(id, updateDto);
   }
 
   @Roles(AdminRole.SUPERADMIN, AdminRole.ADMIN)
+  @Permissions('manage_routers')
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.routersService.remove(id);

@@ -35,6 +35,32 @@ export class AuthController {
     return this.authService.userLogin(identifier, body.password);
   }
 
+  // --- 📲 OTP FLOWS (ADVANTA SMS INTEGRATION) ---
+
+  @Post('user/request-otp')
+  @HttpCode(HttpStatus.OK)
+  requestUserOtp(@Body() body: { phone: string }) {
+    return this.authService.requestUserOtp(body.phone);
+  }
+
+  @Post('user/login-otp')
+  @HttpCode(HttpStatus.OK)
+  loginUserOtp(@Body() body: { phone: string; code: string }) {
+    return this.authService.loginWithUserOtp(body.phone, body.code);
+  }
+
+  @Post('admin/request-otp')
+  @HttpCode(HttpStatus.OK)
+  requestAdminOtp(@Body() body: { identifier: string; password?: string }) {
+    return this.authService.requestAdminOtp(body.identifier, body.password);
+  }
+
+  @Post('admin/login-otp')
+  @HttpCode(HttpStatus.OK)
+  loginAdminOtp(@Body() body: { adminId: string; code: string }) {
+    return this.authService.verifyAdminOtpAndLogin(body.adminId, body.code);
+  }
+
   @Post('user/register')
   userRegister(@Body() body: any) {
     return this.authService.userRegister(

@@ -9,13 +9,13 @@ export default function AuthLayout() {
 
   if (token) {
     if (role === 'admin' || role === 'superadmin') {
-      return <Navigate to="/admin/dashboard" search={location.search} replace />;
+      return <Navigate to={`/admin/dashboard${location.search}`} replace />;
     }
-    return <Navigate to="/user/dashboard" search={location.search} replace />;
+    return <Navigate to={`/user/dashboard${location.search}`} replace />;
   }
 
   return (
-    <div className="auth-wrapper">
+    <div className="auth-wrapper glass-noise">
       {/* Left Side - Image/Branding */}
       <div className="auth-left">
         <div className="auth-bg-overlay-1"></div>
@@ -26,14 +26,14 @@ export default function AuthLayout() {
           className="auth-bg-image"
         />
         
-        <div className="auth-brand-content">
-          <div className="auth-logo-large animate-pulse-slow">PL</div>
+        <div className="auth-brand-content animate-fade-in px-10">
+          <div className="auth-logo-large shadow-[0_0_60px_rgba(6,182,212,0.6)] border border-white/20">PL</div>
           <h1 className="auth-title-large">PulseLynk</h1>
-          <p className="auth-subtitle">
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400 font-bold">
-              Affordable. Reliable. Flexible. Convenient.
-            </span>
-          </p>
+          <div className="auth-subtitle">
+            <span className="text-cyan-400 font-black">PREMIUM</span>
+            <span className="opacity-40">•</span>
+            <span>ISP CONNECT</span>
+          </div>
         </div>
       </div>
 
@@ -45,18 +45,18 @@ export default function AuthLayout() {
             <img src={bgImage} alt="" className="auth-mobile-bg-img" />
             <div className="auth-mobile-overlay"></div>
           </div>
-          <div className="auth-logo-small animate-pulse-slow">PL</div>
+          <div className="auth-logo-small">PL</div>
           <h1 className="auth-title-small">PulseLynk</h1>
-          <p className="auth-subtitle-small">Affordable. Reliable. Flexible.</p>
+          <p className="auth-subtitle-small">Premium ISP Experience</p>
         </div>
 
         {/* Dynamic Outlet Form */}
-        <div className="auth-form-container animate-fade-in">
+        <div className="auth-form-container animate-fade-in shadow-2xl">
           <Outlet />
         </div>
         
         <div className="auth-footer">
-          &copy; {new Date().getFullYear()} PulseLynk ISP Management. All rights reserved.
+          &copy; {new Date().getFullYear()} PulseLynk ISP Management. <span className="text-cyan-500/50">v6.0</span>
         </div>
       </div>
     </div>

@@ -10,13 +10,17 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { Admin, AdminRole } from '../entities/admin.entity';
 import { User } from '../entities/user.entity';
+import { Otp, OtpType } from '../entities/otp.entity';
+import { SmsService } from '../sms/sms.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(Admin) private adminRepo: Repository<Admin>,
     @InjectRepository(User) private userRepo: Repository<User>,
+    @InjectRepository(Otp) private otpRepo: Repository<Otp>,
     private jwtService: JwtService,
+    private smsService: SmsService,
   ) {}
 
   async adminLogin(identifier: string, pass: string) {
@@ -26,6 +30,7 @@ export class AuthService {
         { username: identifier },
         { phone: identifier },
       ],
+      relations: ['permissions'],
     });
     if (!admin) {
       throw new UnauthorizedException('Invalid credentials');
@@ -34,8 +39,26 @@ export class AuthService {
     if (!isMatch) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const payload = { sub: admin.id, email: admin.email, role: admin.role };
-    return { access_token: this.jwtService.sign(payload) };
+
+    // 🛡️ 2FA ENFORCEMENT
+    if (admin.forceOtpLogin) {
+      if (!admin.phone) {
+        throw new BadRequestException('2FA is enabled but no phone number is set. Please contact a superadmin.');
+      }
+      // Trigger the challenge flow
+      return this.requestAdminOtp(identifier, pass);
+    }
+
+    const payload = { 
+      sub: admin.id, 
+      email: admin.email, 
+      role: admin.role,
+      permissions: admin.permissions?.map(p => p.name) || []
+    };
+    return { 
+      access_token: this.jwtService.sign(payload),
+      user: { id: admin.id, name: admin.name, role: admin.role }
+    };
   }
 
   async userLogin(identifier: string, pass: string) {
@@ -147,10 +170,16 @@ export class AuthService {
         return { ...result, role: 'user' };
       }
     } else {
-      const admin = await this.adminRepo.findOne({ where: { id: userId } });
+      const admin = await this.adminRepo.findOne({
+        where: { id: userId },
+        relations: ['permissions'],
+      });
       if (admin) {
         const { passwordHash: _, ...result } = admin;
-        return result; // admin already contains role
+        return {
+          ...result,
+          permissions: admin.permissions?.map((p) => p.name) || [],
+        };
       }
     }
     throw new NotFoundException('Profile not found');
@@ -250,5 +279,128 @@ export class AuthService {
       await this.userRepo.save(user);
     }
     return { success: true };
+  }
+
+  // --- 📲 OTP FLOWS (ADVANTA INTEGRATION) ---
+
+  async requestUserOtp(phone: string) {
+    const user = await this.userRepo.findOne({ where: { phone } });
+    if (!user) throw new NotFoundException('User not found');
+
+    // 1. Rate limiting (1 minute between requests)
+    if (user.lastOtpRequestedAt) {
+      const diff = Date.now() - new Date(user.lastOtpRequestedAt).getTime();
+      if (diff < 60000) {
+        throw new BadRequestException('Please wait 60 seconds before requesting another code');
+      }
+    }
+
+    // 2. Generate 4-digit OTP
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60000); // 5 minutes
+
+    // 3. Save to DB
+    const otp = this.otpRepo.create({
+      phone,
+      code,
+      type: OtpType.USER_RECOVERY,
+      expiresAt
+    });
+    await this.otpRepo.save(otp);
+
+    user.lastOtpRequestedAt = new Date();
+    await this.userRepo.save(user);
+
+    // 4. Send via Advanta
+    const success = await this.smsService.sendOtp(phone, code);
+    if (!success) {
+      throw new BadRequestException('Failed to send SMS. Please contact support.');
+    }
+
+    return { success: true, message: 'OTP sent successfully' };
+  }
+
+  async loginWithUserOtp(phone: string, code: string) {
+    const otp = await this.otpRepo.findOne({
+      where: { phone, code, type: OtpType.USER_RECOVERY, isUsed: false }
+    });
+
+    if (!otp || new Date() > otp.expiresAt) {
+      throw new UnauthorizedException('Invalid or expired code');
+    }
+
+    const user = await this.userRepo.findOne({ where: { phone } });
+    if (!user) throw new NotFoundException('User not found');
+
+    otp.isUsed = true;
+    await this.otpRepo.save(otp);
+
+    const payload = { sub: user.id, phone: user.phone, role: 'user' };
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: { id: user.id, name: user.name, phone: user.phone }
+    };
+  }
+
+  async requestAdminOtp(identifier: string, pass: string) {
+    const admin = await this.adminRepo.findOne({
+      where: [{ email: identifier }, { username: identifier }, { phone: identifier }]
+    });
+    
+    if (!admin) throw new UnauthorizedException('Invalid credentials');
+    const isMatch = await bcrypt.compare(pass, admin.passwordHash);
+    if (!isMatch) throw new UnauthorizedException('Invalid credentials');
+
+    if (!admin.phone) {
+      throw new BadRequestException('Phone number not set for this admin account. Login with password only.');
+    }
+
+    // Generate & Send
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    const expiresAt = new Date(Date.now() + 5 * 60000);
+
+    await this.otpRepo.save(this.otpRepo.create({
+      phone: admin.phone,
+      code,
+      type: OtpType.ADMIN_LOGIN,
+      expiresAt
+    }));
+
+    const success = await this.smsService.sendOtp(admin.phone, code);
+    if (!success) throw new BadRequestException('Failed to send admin 2FA code');
+
+    // Mask phone for frontend display (e.g. 2547****5678)
+    const masked = admin.phone.slice(0, 4) + '****' + admin.phone.slice(-4);
+    return { challengeRequired: true, message: '2FA code sent', adminId: admin.id, phone: masked };
+  }
+
+  async verifyAdminOtpAndLogin(adminId: string, code: string) {
+    const admin = await this.adminRepo.findOne({ 
+      where: { id: adminId },
+      relations: ['permissions'] 
+    });
+    if (!admin) throw new NotFoundException('Admin not found');
+
+    const otp = await this.otpRepo.findOne({
+      where: { phone: admin.phone, code, type: OtpType.ADMIN_LOGIN, isUsed: false }
+    });
+
+    if (!otp || new Date() > otp.expiresAt) {
+      throw new UnauthorizedException('Invalid or expired 2FA code');
+    }
+
+    otp.isUsed = true;
+    await this.otpRepo.save(otp);
+
+    const payload = { 
+      sub: admin.id, 
+      email: admin.email, 
+      role: admin.role,
+      permissions: admin.permissions?.map(p => p.name) || []
+    };
+    return { 
+      access_token: this.jwtService.sign(payload),
+      user: { id: admin.id, name: admin.name, role: admin.role }
+    };
   }
 }

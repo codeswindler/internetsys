@@ -44,6 +44,9 @@ export class User {
   @Column({ nullable: true })
   lastIp: string;
 
+  @Column({ nullable: true, type: 'timestamp' })
+  lastOtpRequestedAt: Date;
+
   @OneToMany(() => Subscription, (subscription) => subscription.user)
   subscriptions: Subscription[];
 

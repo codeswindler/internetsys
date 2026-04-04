@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
+import { Permission } from './permission.entity';
 
 export enum AdminRole {
   SUPERADMIN = 'superadmin',
@@ -40,6 +43,13 @@ export class Admin {
     default: AdminRole.ADMIN,
   })
   role: AdminRole;
+
+  @Column({ default: false })
+  forceOtpLogin: boolean;
+
+  @ManyToMany(() => Permission)
+  @JoinTable()
+  permissions: Permission[];
 
   @CreateDateColumn()
   createdAt: Date;

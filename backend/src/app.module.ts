@@ -11,6 +11,8 @@ import { RoutersModule } from './routers/routers.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { SupportModule } from './support/support.module';
+import { SmsModule } from './sms/sms.module';
+import { AdminsModule } from './admins/admins.module';
 import { Admin } from './entities/admin.entity';
 import { User } from './entities/user.entity';
 import { Router } from './entities/router.entity';
@@ -20,6 +22,8 @@ import { Voucher } from './entities/voucher.entity';
 import { Transaction } from './entities/transaction.entity';
 import { SupportMessage } from './entities/support-message.entity';
 import { DeviceSession } from './entities/device-session.entity';
+import { Permission } from './entities/permission.entity';
+import { Otp } from './entities/otp.entity';
 
 @Module({
   imports: [
@@ -41,6 +45,8 @@ import { DeviceSession } from './entities/device-session.entity';
         Transaction,
         SupportMessage,
         DeviceSession,
+        Permission,
+        Otp,
       ],
 
       synchronize: true, // Auto-create tables in development
@@ -53,6 +59,8 @@ import { DeviceSession } from './entities/device-session.entity';
     SchedulerModule,
     TransactionsModule,
     SupportModule,
+    SmsModule,
+    AdminsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -7,6 +7,7 @@ import { Subscription } from '../entities/subscription.entity';
 import { Router } from '../entities/router.entity';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { RoutersModule } from '../routers/routers.module';
+import { SmsModule } from '../sms/sms.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { RoutersModule } from '../routers/routers.module';
     ScheduleModule.forRoot(),
     SubscriptionsModule,
     RoutersModule,
+    SmsModule,
   ],
   providers: [ExpiryJob, RouterHealthJob],
 })
