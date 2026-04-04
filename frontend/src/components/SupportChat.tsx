@@ -88,7 +88,7 @@ const SupportChat: React.FC = () => {
           onClick={() => setIsOpen(true)}
           className={`w-14 h-14 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white shadow-lg hover:shadow-cyan-500/30 transition-all hover:scale-110 active:scale-95 relative ${unreadCount > 0 ? 'animate-bounce' : ''}`}
         >
-          <MessageCircle size={28} />
+          <MessageCircle size={28} fill="none" strokeWidth={2} />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-slate-900 animate-pulse">
               {unreadCount}

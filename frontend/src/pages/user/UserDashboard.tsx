@@ -371,12 +371,6 @@ export default function UserDashboard() {
                                <button 
                                  onClick={async () => {
                                    if (!isSynced) {
-                                      const gateway = sub.router?.localGateway || '10.5.50.1';
-                                      const isNear = await checkRouterProximity(gateway);
-                                      if (!isNear) {
-                                        toast.error("Not on PulseLynk Wi-Fi! Please connect your device to the 'PulseLynk' Wi-Fi network first.", { id: 'proximity', icon: '📡' });
-                                        return;
-                                      }
                                       startDiscovery(sub.id);
                                       return;
                                    }
@@ -476,9 +470,9 @@ export default function UserDashboard() {
       {/* ── 💎 ELITE CRYSTAL DISCOVERY MODAL (CENTERED RESTORATION) ── */}
       {showDiscovery && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in duration-500 overflow-y-auto">
-          <div className="relative w-full max-w-xl transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-[3rem]">
+          <div className="relative w-full max-w-xl mx-auto transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-3xl md:rounded-[3rem]">
             {/* Header / Top Shelf */}
-            <div className="p-10 pb-8 flex items-center justify-between relative overflow-hidden">
+            <div className="p-6 pb-4 md:p-10 md:pb-8 flex items-center justify-between relative overflow-hidden">
                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -translate-y-12 translate-x-12" />
                <div className="relative z-10">
                  <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase mb-2">LINK THIS DEVICE</h3>
@@ -486,15 +480,13 @@ export default function UserDashboard() {
                </div>
                <button 
                  onClick={() => setShowDiscovery(false)}
-                 className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center text-white hover:bg-red-500 hover:scale-110 transition-all shadow-[0_0_30px_rgba(220,38,38,0.4)] active:scale-95 group relative z-10"
+                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-500 hover:scale-110 transition-all active:scale-95 group relative z-10"
                >
-                 <svg viewBox="0 0 24 24" className="w-8 h-8 stroke-[4px] stroke-current fill-none">
-                   <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                 </svg>
+                 <X size={26} strokeWidth={2.5} />
                </button>
             </div>
 
-            <div className="p-10 pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            <div className="p-6 pt-0 md:p-10 md:pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar">
               {isScanning ? (
                 <div className="py-20 flex flex-col items-center justify-center gap-10">
                    <div className="relative">
