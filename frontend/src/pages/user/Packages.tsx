@@ -92,8 +92,21 @@ export default function Packages() {
           toast.success("Router Detected! You're on the right network.", { id: 'detect-toast' });
         }
       } catch (err: any) {
-        setDetectionError("Please connect to the Hotspot Wi-Fi first to purchase a package.");
-        // toast.error("Not connected to hotspot Wi-Fi.", { id: 'detect-toast' });
+        // If we can't find them, offer a manual refresh to the router
+        const routerGateway = routers?.[0]?.localGateway || '10.5.50.1';
+        const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/packages')}`;
+
+        setDetectionError(
+          <div className="flex flex-col gap-3 py-2">
+            <p>We can't find your device on the Wi-Fi. Browser privacy may be hiding your ID.</p>
+            <button 
+               onClick={() => window.location.href = redirectUrl}
+               className="bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] uppercase tracking-widest py-2 px-4 rounded-xl transition-all self-start flex items-center gap-2"
+            >
+               <RefreshCw size={12} /> Identify My Device
+            </button>
+          </div> as any
+        );
       } finally {
         setIsDetecting(false);
       }

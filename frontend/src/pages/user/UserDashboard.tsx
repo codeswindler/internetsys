@@ -185,7 +185,28 @@ export default function UserDashboard() {
         });
         toast.error(data.message || 'All device slots are full.', { id: 'limit-reached' });
       } else {
-        toast.error(data?.message || 'Sync failed. Are you on the Wi-Fi?', { id: 'syncing-toast' });
+        const routerGateway = activeSub?.router?.localGateway || '10.5.50.1';
+        const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard')}`;
+        
+        toast((t) => (
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">{data?.message || 'Connection NOT detected.'}</span>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => { window.location.href = redirectUrl; toast.dismiss(t.id); }}
+                className="bg-cyan-600 text-white text-[10px] uppercase font-bold py-1.5 px-3 rounded-lg hover:bg-cyan-500 transition-colors"
+              >
+                Identify My Device
+              </button>
+              <button 
+                onClick={() => toast.dismiss(t.id)}
+                className="bg-slate-800 text-slate-400 text-[10px] uppercase font-bold py-1.5 px-3 rounded-lg"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ), { id: 'syncing-toast', duration: 8000 });
       }
     },
   });
