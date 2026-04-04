@@ -31,6 +31,8 @@ export class SubscriptionsController {
   @Post('sync-device')
   @HttpCode(200)
   syncDevice(@Request() req: any, @Ip() ip: string, @Body('ip') bodyIp?: string) {
+    // DEBUG: PulseLynk-only identification
+    this.logger.log(`[DEBUG] Sync Headers for user ${req.user.id}: ${JSON.stringify(req.headers)}`);
     return this.subscriptionsService.syncDevice(req.user.id, bodyIp || ip);
   }
 
