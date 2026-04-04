@@ -31,8 +31,9 @@ export class SubscriptionsController {
   @Post('sync-device')
   @HttpCode(200)
   syncDevice(@Request() req: any, @Ip() ip: string, @Body('ip') bodyIp?: string) {
-    // DEBUG: PulseLynk-only identification
-    this.logger.log(`[DEBUG] Sync Headers for user ${req.user.id}: ${JSON.stringify(req.headers)}`);
+    // PulseLynk-only debug: Identify why sync fails on laptops
+    this.logger.log(`[DEBUG] Sync Attempt | User: ${req.user.id} | Body IP: ${bodyIp || 'None'} | Server IP: ${ip} | UA: ${req.headers['user-agent']}`);
+    
     return this.subscriptionsService.syncDevice(req.user.id, bodyIp || ip);
   }
 
