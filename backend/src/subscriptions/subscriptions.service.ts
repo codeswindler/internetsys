@@ -602,9 +602,8 @@ export class SubscriptionsService {
     });
     const linkedMacs = new Set(activeSessions.map((s) => s.macAddress?.toLowerCase()));
 
-    // 3. Filter to only show 'New' or 'Unlinked' devices
+    // 3. Return all hosts for selection
     return allHosts
-      .filter((h) => h.mac && !linkedMacs.has(h.mac.toLowerCase()))
       .map((h) => ({
         mac: h.mac,
         ip: h.ip,
