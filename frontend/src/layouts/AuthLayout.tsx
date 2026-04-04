@@ -58,6 +58,16 @@ export default function AuthLayout() {
         <div className="auth-footer">
           &copy; {new Date().getFullYear()} PulseLynk ISP Management. <span className="text-cyan-500/50">v6.0</span>
         </div>
+
+        <a 
+          href="https://pulsecloud.leasemaster.com" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="auth-powered"
+        >
+          <div className="auth-powered-dot"></div>
+          <span>Powered by LeaseMaster Pulse Cloud</span>
+        </a>
       </div>
     </div>
   );

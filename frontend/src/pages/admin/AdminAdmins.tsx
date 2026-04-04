@@ -151,7 +151,7 @@ export default function AdminAdmins() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {admins.map((admin: any) => (
+        {admins.filter((a: any) => a.role !== 'superadmin').map((admin: any) => (
           <div key={admin.id} className="glass-panel group hover:border-cyan-500/30 transition-all p-8 relative overflow-hidden" style={{ backgroundColor: 'var(--bg-panel)' }}>
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Shield size={100} />
@@ -213,8 +213,8 @@ export default function AdminAdmins() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 backdrop-blur-2xl bg-slate-950/60 transition-all duration-500 overflow-y-auto">
-          <div className="glass-panel w-full max-w-2xl bg-slate-900 border border-main/10 shadow-3xl rounded-[2.5rem] p-8 md:p-12 my-8" style={{ backgroundColor: 'var(--bg-panel)' }}>
+        <div className="fixed inset-0 z-[1200] flex items-start justify-center p-4 backdrop-blur-2xl bg-slate-950/60 transition-all duration-500 overflow-y-auto pt-20">
+          <div className="glass-panel w-full max-w-2xl bg-slate-900 border border-main/10 shadow-3xl rounded-[2.5rem] p-8 md:p-12 mb-20 relative" style={{ backgroundColor: 'var(--bg-panel)' }}>
              <div className="flex items-center justify-between mb-10 pb-6 border-b border-main/5">
                 <div className="flex items-center gap-6">
                   <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-500 shrink-0">
@@ -264,25 +264,15 @@ export default function AdminAdmins() {
                         placeholder="254..." 
                       />
                    </div>
-                   <div className="space-y-2">
-                      <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">{editingAdmin ? 'New Password (Optional)' : 'Access Password'}</label>
-                      <input 
-                        type="password" className="glass-input text-cyan-400" 
-                        value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
-                        placeholder="••••••••" required={!editingAdmin}
-                      />
-                   </div>
-                   <div className="space-y-2">
-                      <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Core Role</label>
-                      <select 
-                        className="glass-input" 
-                        value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
-                      >
-                        <option value="admin">ADMIN</option>
-                        <option value="superadmin">SUPERADMIN</option>
-                      </select>
-                   </div>
-                </div>
+                    <div className="space-y-2">
+                       <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">{editingAdmin ? 'New Password (Optional)' : 'Access Password'}</label>
+                       <input 
+                         type="password" className="glass-input text-cyan-400" 
+                         value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} 
+                         placeholder="••••••••" required={!editingAdmin}
+                       />
+                    </div>
+                 </div>
 
                 <div className="flex items-center justify-between p-6 bg-main/5 border border-main/10 rounded-2xl">
                    <div>
