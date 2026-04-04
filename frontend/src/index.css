@@ -71,8 +71,13 @@ body {
     radial-gradient(at 100% 100%, hsla(217, 91%, 60%, 0.05) 0px, transparent 50%);
   color: var(--text-main);
   min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  body {
+    zoom: 0.8;
+  }
 }
 
 /* Typography Enhancements */
