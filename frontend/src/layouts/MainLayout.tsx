@@ -450,6 +450,7 @@ export default function MainLayout({ role }: LayoutProps) {
                   key={link.path}
                   to={link.path}
                   onClick={(e) => {
+                    setIsMenuOpen(false);
                     if (link.onClick) {
                       e.preventDefault();
                       link.onClick();
