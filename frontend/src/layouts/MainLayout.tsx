@@ -397,12 +397,13 @@ export default function MainLayout({ role }: LayoutProps) {
   return (
     <div className="flex min-h-screen md:h-screen overflow-hidden bg-[var(--bg-main)]">
       {/* Mobile Backdrop */}
-      {isMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] md:hidden transition-opacity duration-300 pointer-events-auto"
-          onClick={() => setIsMenuOpen(false)}
-        />
-      )}
+      <div 
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] md:hidden transition-all duration-300 ${
+          isMenuOpen ? 'opacity-100 pointer-events-auto cursor-pointer' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsMenuOpen(false)}
+        title="Tap to close menu"
+      />
 
       {/* Sidebar */}
       <aside className={`
@@ -425,7 +426,9 @@ export default function MainLayout({ role }: LayoutProps) {
 
           <div className="flex items-center gap-2">
             <button 
-              onClick={toggleTheme}
+              onClick={() => {
+                toggleTheme();
+              }}
               className="p-2 rounded-lg bg-white/5 text-muted hover:text-cyan-400 transition-all border border-white/5 active:scale-95"
               title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
@@ -521,7 +524,10 @@ export default function MainLayout({ role }: LayoutProps) {
         <div className="p-4 border-t border-white/5 space-y-2">
           <div className="flex items-center gap-2 w-full">
             <button 
-              onClick={() => setIsProfileModalOpen(true)}
+              onClick={() => {
+                setIsMenuOpen(false);
+                setIsProfileModalOpen(true);
+              }}
               className="hidden md:flex items-center gap-3 px-4 py-3 flex-1 text-left rounded-lg text-muted hover:bg-white/5 hover:text-main transition-all overflow-hidden"
             >
               {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8 flex-shrink-0")}
@@ -533,7 +539,10 @@ export default function MainLayout({ role }: LayoutProps) {
 
           
           <button 
-            onClick={handleLogout}
+            onClick={() => {
+              setIsMenuOpen(false);
+              handleLogout();
+            }}
             className="flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg text-muted hover:bg-red-500/10 hover:text-red-400 transition-all font-medium"
           >
             <LogOut size={20} />
@@ -581,7 +590,10 @@ export default function MainLayout({ role }: LayoutProps) {
 
 
              <button 
-               onClick={() => setIsRedeemModalOpen(true)}
+               onClick={() => {
+                 setIsMenuOpen(false);
+                 setIsRedeemModalOpen(true);
+               }}
                className="p-1 px-3 text-cyan-400 hover:bg-cyan-500/10 rounded-xl transition-all flex items-center gap-2 border border-transparent hover:border-cyan-500/20 active:scale-95"
                title="Redeem Voucher"
              >
@@ -617,7 +629,10 @@ export default function MainLayout({ role }: LayoutProps) {
               )}
 
              <button 
-               onClick={() => setIsProfileModalOpen(true)}
+               onClick={() => {
+                 setIsMenuOpen(false);
+                 setIsProfileModalOpen(true);
+               }}
                className="md:hidden flex items-center justify-center rounded-full border border-white/10 p-0.5 overflow-hidden"
              >
                {renderAvatar(currentUser?.avatar, userInitials, "w-8 h-8")}
