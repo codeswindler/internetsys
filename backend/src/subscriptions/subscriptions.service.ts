@@ -42,10 +42,9 @@ export class SubscriptionsService {
    * Instead, we get ALL hosts from the user's associated router and filter out
    * MACs that are already bound to active sessions.
    */
-  async syncDevice(userId: string): Promise<{ mac: string; ip: string }> {
-    this.logger.log(`[SYNC] Attempting to sync device for user ${userId}`);
+  async syncDevice(userId: string, clientIp: string): Promise<{ mac: string; ip: string }> {
+    this.logger.log(`[SYNC] Syncing device for user ${userId} | Client IP: ${clientIp}`);
 
-    // Step 1: Find the user's most recent subscription to determine which router to query
     const userSub = await this.subRepo.findOne({
       where: { user: { id: userId } },
       relations: ['router', 'package'],
@@ -57,65 +56,36 @@ export class SubscriptionsService {
     }
 
     const router = userSub.router;
-    this.logger.log(`[SYNC] Using router: ${router.name} (${router.host})`);
-
-    // Step 2: Get ALL hosts currently on the router's hotspot
     const allHosts = await this.mikrotikService.getAllHosts(router);
-    if (allHosts.length === 0) {
-      this.logger.warn(`[SYNC] No hosts detected on router ${router.name}. Might be a false network error or router delay.`);
-      return { mac: null, ip: null } as any; 
+    
+    // 1. Try to find the host matching the client's current IP
+    const host = allHosts.find(h => h.ip === clientIp);
+    if (host) {
+      this.logger.log(`[SYNC] Found host by IP: ${host.mac} (${host.ip})`);
+      return host;
     }
 
-    this.logger.log(`[SYNC] Found ${allHosts.length} hosts on ${router.name}: ${allHosts.map(h => h.mac).join(', ')}`);
-
-    // Step 3: Get all MACs that are already bound to active device sessions
-    const activeSessions = await this.sessionRepo.find({
-      where: { isActive: true },
-      relations: ['subscription', 'subscription.user'],
+    // Fallback: If IP not found directly (e.g. NAT), check if this user ALREADY has an active session on this router
+    const mySessions = await this.sessionRepo.find({
+      where: { subscription: { user: { id: userId } }, isActive: true },
+      relations: ['subscription', 'subscription.router'],
     });
-    const boundMacs = new Set(
-      activeSessions
-        .map(s => s.macAddress?.toUpperCase())
-        .filter(Boolean)
-    );
 
-    // Step 4: Filter out already-bound hosts
-    const available = allHosts.filter(h => !boundMacs.has(h.mac.toUpperCase()));
-
-    if (available.length === 0) {
-      // If all hosts are bound, maybe the user's own device IS one of the bound ones
-      // Try to find this user's own session MAC
-      const ownSession = activeSessions.find(s => s.subscription?.user?.id === userId);
-      if (ownSession?.macAddress) {
-        const ownHost = allHosts.find(h => h.mac.toUpperCase() === ownSession.macAddress.toUpperCase());
-        if (ownHost) return ownHost;
+    if (mySessions.length > 0) {
+      const activeMacs = mySessions.map(s => s.macAddress?.toUpperCase()).filter(Boolean);
+      const existingHost = allHosts.find(h => activeMacs.includes(h.mac?.toUpperCase()));
+      if (existingHost) {
+        this.logger.log(`[SYNC] Resuming existing host for user: ${existingHost.mac}`);
+        return existingHost;
       }
-
-      // If still no luck, return all active sessions for this user so they can disconnect
-      const myActiveSessions = activeSessions.filter(s => s.subscription?.user?.id === userId);
-      throw new BadRequestException({
-        message: 'All detected devices already have active sessions. Disconnect other devices or try again.',
-        error: 'DEVICE_LIMIT_REACHED',
-        connectedDevices: myActiveSessions.map(s => ({
-          id: s.id,
-          mac: s.macAddress,
-          model: s.deviceModel || 'Unknown Device',
-        })),
-        maxDevices: userSub.package.maxDevices,
-      });
     }
 
-    // Step 5: If only one available host, auto-assign it
-    if (available.length === 1) {
-      this.logger.log(`[SYNC] Auto-assigned MAC: ${available[0].mac}`);
-      return available[0];
-    }
-
-    // Step 6: Multiple available hosts — return the first one (most recent)
-    // In practice, for small hotspots this is usually correct
-    this.logger.log(`[SYNC] Multiple available hosts (${available.length}), picking first: ${available[0].mac}`);
-    return available[0];
+    this.logger.warn(`[SYNC] Device with IP ${clientIp} not found on router ${router.name}`);
+    throw new BadRequestException(
+      'Could not find your device on the hotspot Wi-Fi. Make sure you are connected to the hotspot and visit the login page first.',
+    );
   }
+ Elephant
 
 
   async purchase(
@@ -705,15 +675,24 @@ export class SubscriptionsService {
         const maxAllowed = sub.package.maxDevices || 1;
 
         if (activeDeviceCount >= maxAllowed) {
-          const connectedDevices = sub.deviceSessions
-            .filter((s) => s.isActive)
-            .map((s) => ({
-              id: s.id,
-              mac: s.macAddress,
-              ip: s.ipAddress,
-              model: s.deviceModel || 'Unknown Device',
-              connectedAt: s.createdAt,
-            }));
+          // Robust fallback: Query all active sessions for this user on this specific router
+          // to ensure the user can always see what to disconnect.
+          const allUserSessions = await this.sessionRepo.find({
+            where: { 
+              subscription: { user: { id: sub.user.id } },
+              isActive: true 
+            },
+            relations: ['subscription', 'subscription.package'],
+          });
+
+          const connectedDevices = allUserSessions.map((s) => ({
+            id: s.id,
+            mac: s.macAddress,
+            ip: s.ipAddress,
+            model: `${s.subscription?.package?.name || 'Device'} (${s.deviceModel || 'Matched'})`,
+            connectedAt: s.createdAt,
+          }));
+
           throw new BadRequestException({
             message: `You've reached your limit of ${maxAllowed} device(s). Disconnect one below to continue.`,
             error: 'DEVICE_LIMIT_REACHED',

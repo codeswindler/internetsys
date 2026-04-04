@@ -30,16 +30,13 @@ export class SubscriptionsController {
 
   @Post('sync-device')
   @HttpCode(200)
-  async syncDevice(@Request() req: any) {
-    this.logger.log(`[SYNC] Sync device request from user ${req.user.id}`);
-    return this.subscriptionsService.syncDevice(req.user.id);
+  syncDevice(@Request() req: any, @Ip() ip: string) {
+    return this.subscriptionsService.syncDevice(req.user.id, ip);
   }
 
   @Get('detect-router')
-  async detectRouter(@Request() req: any) {
-    // This is a lighter version of sync-device that just returns the router info if they are on ANY router
-    return this.subscriptionsService.syncDevice(req.user.id); 
-    // Reusing syncDevice because it already searches for the user's presence on connected routers.
+  detectRouter(@Request() req: any, @Ip() ip: string) {
+    return this.subscriptionsService.syncDevice(req.user.id, ip);
   }
 
   @Post('purchase')

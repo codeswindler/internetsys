@@ -162,11 +162,17 @@ export default function UserDashboard() {
     },
     onSuccess: (res) => {
       const { mac, ip } = res.data;
-      if (mac) localStorage.setItem('hotspot_mac', mac);
-      if (ip) localStorage.setItem('hotspot_ip', ip);
-      setIsSynced(true);
-      toast.success(`Device synced! MAC: ${mac}`, { id: 'syncing-toast', icon: '📱' });
-      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+      if (mac) {
+        localStorage.setItem('hotspot_mac', mac);
+        if (ip) localStorage.setItem('hotspot_ip', ip);
+        setIsSynced(true);
+        toast.success(`Device synced! MAC: ${mac}`, { id: 'syncing-toast', icon: '📱' });
+        queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+      } else {
+        // This case should now be handled by onError since the backend throws 400,
+        // but adding safety here just in case.
+        toast.error('Could not find your device. Are you on the Wi-Fi?', { id: 'syncing-toast' });
+      }
     },
     onError: (err: any) => {
       const data = err.response?.data;
@@ -175,7 +181,7 @@ export default function UserDashboard() {
           open: true,
           maxDevices: data.maxDevices || 1,
           connectedDevices: data.connectedDevices || [],
-          pendingSubId: '', // Sync doesn't have a specific sub yet
+          pendingSubId: '', 
         });
         toast.error(data.message || 'All device slots are full.', { id: 'limit-reached' });
       } else {
