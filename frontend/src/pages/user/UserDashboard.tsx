@@ -171,7 +171,11 @@ export default function UserDashboard() {
   const syncMutation = useMutation({
     mutationFn: () => {
       const existingIp = localStorage.getItem('hotspot_ip');
-      return api.post('/subscriptions/sync-device', { ip: existingIp || undefined });
+      const existingMac = localStorage.getItem('hotspot_mac');
+      return api.post('/subscriptions/sync-device', { 
+        ip: existingIp || undefined,
+        mac: existingMac || undefined
+      });
     },
     onSuccess: (res) => {
       const { mac, ip } = res.data;
@@ -179,12 +183,8 @@ export default function UserDashboard() {
         localStorage.setItem('hotspot_mac', mac);
         if (ip) localStorage.setItem('hotspot_ip', ip);
         setIsSynced(true);
-        toast.success(`Device synced! MAC: ${mac}`, { id: 'syncing-toast', icon: '📱' });
+        toast.success(`Connected!`, { id: 'syncing-toast', icon: '📱' });
         queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
-      } else {
-        // This case should now be handled by onError since the backend throws 400,
-        // but adding safety here just in case.
-        toast.error('Could not find your device. Are you on the Wi-Fi?', { id: 'syncing-toast' });
       }
     },
     onError: (err: any) => {
@@ -199,23 +199,23 @@ export default function UserDashboard() {
         toast.error(data.message || 'All device slots are full.', { id: 'limit-reached' });
       } else {
         const routerGateway = activeSub?.router?.localGateway || '10.5.50.1';
-        const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard')}`;
+        const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect')}`;
         
         toast((t) => (
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">{data?.message || 'Connection NOT detected.'}</span>
+            <span className="text-sm font-medium">Auto-Sync Failed. Link this device?</span>
             <div className="flex gap-2">
               <button 
                 onClick={() => { window.location.href = redirectUrl; toast.dismiss(t.id); }}
                 className="bg-cyan-600 text-white text-[10px] uppercase font-bold py-1.5 px-3 rounded-lg hover:bg-cyan-500 transition-colors"
               >
-                Identify My Device
+                Yes, Link Device
               </button>
               <button 
                 onClick={() => toast.dismiss(t.id)}
                 className="bg-slate-800 text-slate-400 text-[10px] uppercase font-bold py-1.5 px-3 rounded-lg"
               >
-                Cancel
+                Try Later
               </button>
             </div>
           </div>
@@ -249,36 +249,26 @@ export default function UserDashboard() {
                 </div>
              </div>
              
-             {!isSynced && (
-               <div className="flex items-center gap-3">
-                 <div className="px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-xl hidden md:flex items-center gap-2">
-                   <Activity size={12} className="text-orange-500 animate-pulse" />
-                   <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Action Needed</span>
-                 </div>
-                 
-                 <button 
-                   onClick={() => {
-                      const gateway = activeSub?.router?.localGateway || '10.5.50.1';
-                      window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect')}`;
-                   }}
-                   className="bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] uppercase tracking-widest py-4 px-8 rounded-2xl transition-all shadow-xl shadow-cyan-500/20 flex items-center gap-3 group active:scale-95"
-                 >
-                   <div className="p-1 bg-white/20 rounded group-hover:rotate-12 transition-transform">
-                      <Wifi size={16} className="animate-pulse" />
-                   </div>
-                   Identify My Laptop
-                 </button>
-                 
-                 <button 
-                   onClick={() => syncMutation.mutate()}
-                   disabled={syncMutation.isPending}
-                   className="p-4 bg-zinc-800/80 hover:bg-zinc-800 border border-white/5 rounded-2xl text-zinc-400 transition-all active:scale-95"
-                   title="Try Automatic Sync"
-                 >
-                   {syncMutation.isPending ? <RefreshCw className="animate-spin" size={16} /> : <Activity size={16} />}
-                 </button>
-               </div>
-             )}
+             <button 
+               onClick={() => syncMutation.mutate()}
+               disabled={syncMutation.isPending}
+               className={`p-4 rounded-2xl flex flex-col items-center gap-1 min-w-[120px] transition-all active:scale-95 group 
+                 ${isSynced ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-orange-500/10 border-orange-500/30 text-orange-500'}`}
+             >
+               {syncMutation.isPending ? (
+                 <RefreshCw className="animate-spin text-orange-500" size={20} />
+               ) : isSynced ? (
+                 <>
+                   <ShieldCheck size={20} className="group-hover:scale-110 transition-transform" />
+                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500/70">Synced</span>
+                 </>
+               ) : (
+                 <>
+                   <Activity size={20} className="group-hover:rotate-12 transition-transform animate-pulse" />
+                   <span className="text-[10px] font-black uppercase tracking-widest text-orange-500/70">Sync Link</span>
+                 </>
+               )}
+             </button>
           </div>
         </div>
       </div>
