@@ -8,11 +8,13 @@ export class SmsService {
   private readonly partnerId: string;
   private readonly apiKey: string;
   private readonly shortCode: string;
+  private readonly baseUrl: string;
 
   constructor(private configService: ConfigService) {
     this.partnerId = this.configService.get<string>('ADVANTA_PARTNER_ID') || '';
     this.apiKey = this.configService.get<string>('ADVANTA_API_KEY') || '';
     this.shortCode = this.configService.get<string>('ADVANTA_SHORTCODE') || '';
+    this.baseUrl = this.configService.get<string>('ADVANTA_BASE_URL') || 'https://quicksms.advantasms.com/api/v2';
   }
 
   /**
@@ -21,15 +23,13 @@ export class SmsService {
    */
   async sendOtp(phone: string, otp: string): Promise<boolean> {
     const cleanPhone = this.formatPhone(phone);
-    // Advanta specific: The API expects the OTP code in a 'passcode' field or within the message.
-    // Based on standard Advanta v2 API, we use the standard send-otp endpoint.
-    const url = 'https://quicksms.advantasms.com/api/v2/send/otp';
+    const url = `${this.baseUrl}/send/otp`;
     const data = {
       partnerID: this.partnerId,
       apikey: this.apiKey,
       mobile: cleanPhone,
       shortcode: this.shortCode,
-      passcode: otp, // Some implementations use this field
+      passcode: otp,
       message: `Your PulseLynk code is: ${otp}. Valid for 5 minutes.`,
     };
 
@@ -54,7 +54,7 @@ export class SmsService {
    */
   async sendSms(phone: string, message: string): Promise<boolean> {
     const cleanPhone = this.formatPhone(phone);
-    const url = 'https://quicksms.advantasms.com/api/v2/send/sms';
+    const url = `${this.baseUrl}/send/sms`;
     const data = {
       partnerID: this.partnerId,
       apikey: this.apiKey,
@@ -84,7 +84,7 @@ export class SmsService {
    * Ref: https://developers.advantasms.com/sms-api/balance.html
    */
   async getBalance(): Promise<number> {
-    const url = 'https://quicksms.advantasms.com/api/v2/balance';
+    const url = `${this.baseUrl}/balance`;
     const data = {
       partnerID: this.partnerId,
       apikey: this.apiKey,

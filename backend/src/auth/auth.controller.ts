@@ -52,7 +52,7 @@ export class AuthController {
   @Post('admin/request-otp')
   @HttpCode(HttpStatus.OK)
   requestAdminOtp(@Body() body: { identifier: string; password?: string }) {
-    return this.authService.requestAdminOtp(body.identifier, body.password);
+    return this.authService.requestAdminOtp(body.identifier, body.password || '');
   }
 
   @Post('admin/login-otp')

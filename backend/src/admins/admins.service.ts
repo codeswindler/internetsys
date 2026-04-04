@@ -58,7 +58,11 @@ export class AdminsService implements OnModuleInit {
     });
 
     const admin = this.adminRepo.create({
-      ...data,
+      name: data.name,
+      email: data.email,
+      username: data.username,
+      phone: data.phone,
+      role: data.role,
       passwordHash,
       permissions
     });
