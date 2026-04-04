@@ -36,7 +36,7 @@ export class SmsService {
 
     try {
       this.logger.log(`[SMS] Sending OTP to ${cleanPhone}...`);
-      const response = await axios.post(url, data);
+      const response = await axios.post(url, data, { timeout: 10000 });
       
       // Official Advanta OTP response is wrapped in 'responses' array
       const success = response.data?.responses?.[0]?.['response-code'] == 200 || response.data?.['response-code'] == 200;
@@ -67,7 +67,7 @@ export class SmsService {
 
     try {
       this.logger.log(`[SMS] Sending Notification...`);
-      const response = await axios.post(url, data);
+      const response = await axios.post(url, data, { timeout: 10000 });
       
       const success = response.data?.['response-code'] == 200 || response.data?.responses?.[0]?.['response-code'] == 200;
       if (success) return true;
@@ -91,7 +91,7 @@ export class SmsService {
     };
 
     try {
-      const response = await axios.post(url, data);
+      const response = await axios.post(url, data, { timeout: 10000 });
       if (response.data?.['response-code'] == 200) {
         // Success response uses "credit" field
         return parseFloat(response.data?.credit || '0');
