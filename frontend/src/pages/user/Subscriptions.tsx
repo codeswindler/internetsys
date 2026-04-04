@@ -81,6 +81,13 @@ export default function Subscriptions() {
     toast.success('Device linked successfully! Ready to start.', { icon: '🔗' });
   };
 
+  const fireInternet = () => {
+    window.location.href = "intent://google.com/#Intent;scheme=https;package=com.android.chrome;end";
+    setTimeout(() => {
+        window.location.href = "https://google.com/generate_204";
+    }, 500);
+  };
+
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
       const mac = localStorage.getItem('hotspot_mac');
@@ -90,6 +97,9 @@ export default function Subscriptions() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
       toast.success('Internet Connection Established!', { icon: '🚀' });
+      setTimeout(() => {
+        fireInternet();
+      }, 1000);
     },
     onError: (err: any) => {
       if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
