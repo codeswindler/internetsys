@@ -19,6 +19,19 @@ export default function UserDashboard() {
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
   
+  // URL Parameter Capture (from Router Round-Trip)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mac = params.get('mac');
+    const ip = params.get('ip');
+    if (mac) {
+      localStorage.setItem('hotspot_mac', mac);
+      if (ip) localStorage.setItem('hotspot_ip', ip);
+      setIsSynced(true);
+      toast.success("Device Identified Successfully!", { id: 'url-sync' });
+    }
+  }, [location.search]);
+  
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   useEffect(() => {
     const ua = navigator.userAgent;

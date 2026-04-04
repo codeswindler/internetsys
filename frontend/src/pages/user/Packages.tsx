@@ -79,6 +79,25 @@ export default function Packages() {
 
   useEffect(() => {
     const detectRouter = async () => {
+      // 1. Check URL Params (from Round-Trip)
+      const params = new URLSearchParams(window.location.search);
+      const urlMac = params.get('mac');
+      const urlIp = params.get('ip');
+      if (urlMac) {
+        localStorage.setItem('hotspot_mac', urlMac);
+        if (urlIp) localStorage.setItem('hotspot_ip', urlIp);
+        setIsDetecting(false);
+        setDetectionError(null);
+        return;
+      }
+
+      // 2. Check Static Storage
+      if (localStorage.getItem('hotspot_mac')) {
+        setIsDetecting(false);
+        setDetectionError(null);
+        return;
+      }
+
       try {
         setIsDetecting(true);
         setDetectionError(null);
@@ -86,9 +105,6 @@ export default function Packages() {
         const { mac } = res.data;
         if (mac) {
           localStorage.setItem('hotspot_mac', mac);
-          // If routers are loaded, finding the one that was returned or sync'd
-          // For now, syncDevice in backend returns router info if we update it.
-          // Let's assume for now we still pick the first router if the user is on ANY router.
           toast.success("Router Detected! You're on the right network.", { id: 'detect-toast' });
         }
       } catch (err: any) {
