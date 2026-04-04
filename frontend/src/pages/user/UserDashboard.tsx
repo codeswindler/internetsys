@@ -695,9 +695,9 @@ export default function UserDashboard() {
               </div>
               <button 
                 onClick={() => setShowDiscovery(false)}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-red-500 hover:bg-red-500/10 hover:scale-110 transition-all active:scale-95"
+                className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center text-white hover:bg-red-500 hover:scale-110 transition-all shadow-[0_0_20px_rgba(220,38,38,0.4)] active:scale-95 group"
               >
-                <X size={28} strokeWidth={2.5} />
+                <X size={26} strokeWidth={4} className="group-hover:rotate-90 transition-transform duration-300" />
               </button>
             </div>
 
