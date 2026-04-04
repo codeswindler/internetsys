@@ -24,13 +24,23 @@ export default function UserDashboard() {
     const params = new URLSearchParams(window.location.search);
     const mac = params.get('mac');
     const ip = params.get('ip');
-    if (mac) {
-      localStorage.setItem('hotspot_mac', mac);
+    const autoStartId = params.get('auto_start');
+
+    if (mac || ip) {
+      if (mac) localStorage.setItem('hotspot_mac', mac);
       if (ip) localStorage.setItem('hotspot_ip', ip);
       setIsSynced(true);
-      toast.success("Device Identified Successfully!", { id: 'url-sync' });
+      
+      // Auto-start if requested
+      if (autoStartId) {
+        startMutation.mutate(autoStartId);
+         // Clean URL
+         window.history.replaceState({}, '', window.location.pathname);
+      } else {
+        toast.success("Device Identified Successfully!", { id: 'url-sync' });
+      }
     }
-  }, [location.search]);
+  }, [window.location.search]);
   
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   useEffect(() => {
@@ -249,26 +259,7 @@ export default function UserDashboard() {
                 </div>
              </div>
              
-             <button 
-               onClick={() => syncMutation.mutate()}
-               disabled={syncMutation.isPending}
-               className={`p-4 rounded-2xl flex flex-col items-center gap-1 min-w-[120px] transition-all active:scale-95 group 
-                 ${isSynced ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-orange-500/10 border-orange-500/30 text-orange-500'}`}
-             >
-               {syncMutation.isPending ? (
-                 <RefreshCw className="animate-spin text-orange-500" size={20} />
-               ) : isSynced ? (
-                 <>
-                   <ShieldCheck size={20} className="group-hover:scale-110 transition-transform" />
-                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500/70">Synced</span>
-                 </>
-               ) : (
-                 <>
-                   <Activity size={20} className="group-hover:rotate-12 transition-transform animate-pulse" />
-                   <span className="text-[10px] font-black uppercase tracking-widest text-orange-500/70">Sync Link</span>
-                 </>
-               )}
-             </button>
+             {/* Cleaned up sync icon as per user request */}
           </div>
         </div>
       </div>
@@ -437,29 +428,24 @@ export default function UserDashboard() {
                                     <span className="text-sm font-black text-white font-mono">{traffic.uploadSpeed}</span>
                                   </div>
                                </div>
-                               {!isSynced ? (
-                                 <button 
-                                   onClick={(e) => { e.stopPropagation(); syncMutation.mutate(); }}
-                                   disabled={syncMutation.isPending}
-                                   className="bg-slate-900 border border-orange-500/30 hover:bg-[#1a1206] hover:border-orange-400/50 rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn shadow-lg"
-                                 >
-                                   {syncMutation.isPending ? <RefreshCw size={16} className="text-orange-400 animate-spin" /> : <Link size={16} className="text-orange-400 group-hover/btn:animate-pulse" />}
-                                   <span className="text-[10px] font-black text-orange-400 uppercase tracking-[0.2em]">
-                                     {syncMutation.isPending ? 'Syncing...' : 'Sync Device First'}
-                                   </span>
-                                 </button>
-                               ) : (
-                                 <button 
-                                   onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
-                                   disabled={startMutation.isPending}
-                                   className="bg-slate-900 border border-cyan-500/20 hover:bg-[#0c1a1f] hover:border-cyan-400/40 rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn shadow-lg"
-                                 >
-                                   {startMutation.isPending ? <RefreshCw size={16} className="text-cyan-400 animate-spin" /> : <Wifi size={16} className="text-cyan-400 group-hover/btn:animate-pulse" />}
-                                   <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em]">
-                                     {startMutation.isPending ? 'Connecting...' : 'Connect This Device'}
-                                   </span>
-                                 </button>
-                               )}
+                               <button 
+                                 onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    if (!isSynced) {
+                                       const gateway = sub.router?.localGateway || '10.5.50.1';
+                                       window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect&auto_start=' + sub.id)}`;
+                                       return;
+                                    }
+                                    startMutation.mutate(sub.id); 
+                                 }}
+                                 disabled={startMutation.isPending}
+                                 className="bg-white hover:bg-zinc-100 text-black rounded-2xl py-3 px-6 flex items-center justify-center gap-3 transition-all duration-300 w-full active:scale-95 group/btn"
+                               >
+                                 {startMutation.isPending ? <RefreshCw size={16} className="animate-spin text-orange-500" /> : <Zap size={16} className="text-orange-500 group-hover/btn:animate-pulse" />}
+                                 <span className="text-[10px] font-black uppercase tracking-[0.2em]">
+                                   {startMutation.isPending ? 'Connecting...' : 'Start Session'}
+                                 </span>
+                               </button>
                             </div>
                           </>
                         ) : (
@@ -470,36 +456,27 @@ export default function UserDashboard() {
                                  {sub.status === 'PAID' ? 'READY' : 'WAITING'}
                                </h4>
                              </div>
-                             {!isSynced ? (
-                               <button 
-                                onClick={(e) => { e.stopPropagation(); syncMutation.mutate(); }}
-                                disabled={syncMutation.isPending || isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
-                                className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
-                                  isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING' ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-orange-500/30'
-                                }`}
-                                style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }}
-                               >
-                                {syncMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
-                                 sub.status === 'AWAITING_APPROVAL' ? 'WAITING FOR ADMIN' :
-                                 sub.status === 'VERIFYING' ? 'VERIFYING PAY' :
-                                 isAnyLive ? 'SESSION LOCKED' : 'SYNC DEVICE FIRST'}
-                               </button>
-                             ) : (
-                               <button 
-                                onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
-                                disabled={startMutation.isPending || isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
-                                className={`btn-primary w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
-                                  isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING' ? 'opacity-30 cursor-not-allowed grayscale' : 
-                                  sub.status === 'PAID' ? 'shadow-emerald-500/30' : 'shadow-cyan-500/30'
-                                }`}
-                                style={sub.status === 'PAID' ? { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' } : {}}
-                               >
-                                {startMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
-                                 sub.status === 'AWAITING_APPROVAL' ? 'LOCKED' :
-                                 sub.status === 'VERIFYING' ? 'LOCKED' :
-                                 isAnyLive ? 'SESSION LOCKED' : 'ACTIVATE INTERNET'}
-                               </button>
-                             )}
+                              {sub.status === 'PAID' && (
+                                <button 
+                                  onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    if (!isSynced) {
+                                       const gateway = sub.router?.localGateway || '10.5.50.1';
+                                       window.location.href = `http://${gateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?mac=detect&auto_start=' + sub.id)}`;
+                                       return;
+                                    }
+                                    startMutation.mutate(sub.id); 
+                                  }}
+                                  disabled={startMutation.isPending || isAnyLive}
+                                  className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
+                                    isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-emerald-500/30'
+                                  }`}
+                                  style={{ background: isAnyLive ? '#333' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+                                >
+                                   {startMutation.isPending ? <RefreshCw size={20} className="animate-spin text-white" /> : <Zap size={20} className="text-white" />}
+                                   {isAnyLive ? 'SESSION LOCKED' : 'START SESSION'}
+                                </button>
+                              )}
                           </div>
                         )}
                         
