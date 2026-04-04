@@ -7,6 +7,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const SupportChat: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [message, setMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -95,7 +96,11 @@ const SupportChat: React.FC = () => {
           )}
         </button>
       ) : (
-        <div className="w-80 h-[450px] bg-slate-900 border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className={`
+          fixed bottom-6 right-6 ${isExpanded ? 'w-[450px] h-[650px] md:w-[600px] md:h-[750px] max-w-[90vw] max-h-[85vh]' : 'w-80 h-[450px]'} 
+          bg-slate-900 border border-white/10 ${isExpanded ? 'rounded-3xl' : 'rounded-2xl'} 
+          shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300 transition-all
+        `}>
           {/* Header */}
           <div className="p-4 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-white/5 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -104,9 +109,22 @@ const SupportChat: React.FC = () => {
               </div>
               <span className="font-bold text-white">Support Chat</span>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white transition-colors">
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-1">
+               <button 
+                 onClick={() => setIsExpanded(!isExpanded)} 
+                 className="p-1.5 text-slate-400 hover:text-white transition-all hover:bg-white/5 rounded-lg"
+                 title={isExpanded ? 'Minimize' : 'Maximize'}
+               >
+                 {isExpanded ? (
+                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v5H3M21 8h-5V3M3 16h5v5M16 21v-5h5"/></svg>
+                 ) : (
+                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                 )}
+               </button>
+               <button onClick={() => setIsOpen(false)} className="p-1.5 text-slate-400 hover:text-red-400 transition-all hover:bg-white/5 rounded-lg">
+                 <X size={20} />
+               </button>
+            </div>
           </div>
 
           {/* Messages */}

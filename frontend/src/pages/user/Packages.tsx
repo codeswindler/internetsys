@@ -534,14 +534,16 @@ export default function Packages() {
             <p className="text-muted mb-6 font-medium">Total: KES {selectedPkg.price}</p>
             
             <form onSubmit={handleSubscribe} className="flex flex-col gap-5">
-              <div className="bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
-                <label className="block text-sm font-semibold text-slate-300 mb-3">Payment Method</label>
-                <div className="flex bg-[rgba(0,0,0,0.2)] rounded-lg p-1 mb-4">
+              <div className="bg-slate-100/50 dark:bg-[rgba(255,255,255,0.02)] p-5 rounded-2xl border border-slate-200 dark:border-[rgba(255,255,255,0.05)]">
+                <label className="block text-sm font-black text-slate-500 dark:text-slate-300 mb-3 uppercase tracking-widest">Payment Method</label>
+                <div className="flex bg-slate-200/50 dark:bg-[rgba(0,0,0,0.2)] rounded-xl p-1.5 mb-4 border border-slate-300/30 dark:border-none">
                   <button
                     type="button"
                     onClick={() => setPaymentType('mpesa')}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                      paymentType === 'mpesa' ? 'bg-green-500/20 text-green-400 shadow translate-y-[0px]' : 'text-slate-400 hover:text-white'
+                    className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
+                      paymentType === 'mpesa' 
+                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 active:scale-95' 
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'
                     }`}
                   >
                     M-Pesa STK
@@ -549,30 +551,32 @@ export default function Packages() {
                   <button
                     type="button"
                     onClick={() => setPaymentType('manual')}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                      paymentType === 'manual' ? 'bg-amber-500/20 text-amber-400 shadow translate-y-[0px]' : 'text-slate-400 hover:text-white'
+                    className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
+                      paymentType === 'manual' 
+                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20 active:scale-95' 
+                        : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'
                     }`}
                   >
-                    Request Admin Activation
+                    Admin Activation
                   </button>
                 </div>
 
                 {paymentType === 'mpesa' && (
-                  <div className="p-4 bg-green-500/10 rounded-xl border border-green-500/20 animate-fade-in relative">
-                    <p className="font-bold text-green-300 mb-3 block text-sm">Pay with M-Pesa</p>
-                    <div className="flex items-center gap-3">
-                      <span className="text-slate-400 text-sm font-medium">Phone:</span>
+                  <div className="p-5 bg-emerald-500/5 dark:bg-green-500/10 rounded-2xl border border-emerald-500/20 animate-in slide-in-from-top-2 duration-300">
+                    <p className="font-black text-emerald-700 dark:text-green-300 mb-4 block text-[10px] uppercase tracking-[0.2em]">Pay with M-Pesa</p>
+                    <div className="flex flex-col gap-2">
+                      <span className="text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">Phone Number:</span>
                       <input 
                         type="tel"
-                        className="flex-1 bg-[rgba(15,23,42,0.8)] border border-[rgba(255,255,255,0.1)] focus:border-green-400 rounded-lg p-2.5 text-white font-mono"
-                        placeholder="e.g. 254712345678"
+                        className="w-full bg-white dark:bg-[rgba(15,23,42,0.8)] border border-slate-300 dark:border-[rgba(255,255,255,0.1)] focus:border-emerald-500 dark:focus:border-green-400 rounded-xl p-3 text-slate-900 dark:text-white font-mono text-lg tracking-widest shadow-inner outline-none transition-all"
+                        placeholder="254712345678"
                         value={stkPhone}
                         onChange={(e) => setStkPhone(e.target.value)}
                         required
                       />
                     </div>
-                    <p className="text-[11px] text-green-200/60 mt-3 leading-relaxed">
-                      Confirm or edit the phone number above. An M-Pesa prompt will be sent to this number to complete the payment of KES {selectedPkg.price}.
+                    <p className="text-[10px] text-slate-500 dark:text-green-200/60 mt-4 leading-relaxed font-medium capitalize italic">
+                      Confirm or edit the phone number above. An M-Pesa prompt will be sent immediately to complete your payment of KES {selectedPkg.price}.
                     </p>
                   </div>
                 )}

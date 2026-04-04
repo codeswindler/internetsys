@@ -476,7 +476,7 @@ export default function MainLayout({ role }: LayoutProps) {
                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Active Session</span>
               </div>
               {allActiveSubs.length > 1 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 text-[9px] font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-slate-900 dark:bg-cyan-500/20 text-white dark:text-cyan-400 text-[9px] font-black shadow-lg shadow-black/10">
                    +{allActiveSubs.length - 1} MORE
                 </span>
               )}
@@ -580,7 +580,7 @@ export default function MainLayout({ role }: LayoutProps) {
                     ) : 'BUY NEW PACKAGE'}
                   </span>
                   {allActiveSubs.length > 1 && (
-                    <span className="ml-1 px-1.5 bg-white/10 rounded text-[9px] font-bold text-white/80 border border-white/5 shadow-sm">
+                    <span className="ml-1 px-2 py-0.5 bg-slate-900 dark:bg-white/10 rounded-full text-[9px] font-black text-white dark:text-white/80 border border-white/5 shadow-lg shadow-black/10">
                       +{allActiveSubs.length - 1} MORE
                     </span>
                   )}
