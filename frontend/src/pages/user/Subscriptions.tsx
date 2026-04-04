@@ -63,7 +63,7 @@ export default function Subscriptions() {
   });
 
   const allActiveSubs = allActiveSubsRaw.filter((s: any) => 
-    ['active', 'pending', 'paid', 'verified', 'allocated'].includes(s.status?.toLowerCase())
+    ['active', 'pending', 'paid', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
   );
 
   const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
@@ -180,7 +180,20 @@ export default function Subscriptions() {
                   {/* Status Banner Row (Screenshot 2 Match) */}
                   <div className="flex flex-col lg:flex-row items-center justify-between mb-8 gap-4 px-2">
                     <div className="flex flex-col lg:flex-row items-center gap-4 lg:gap-10">
-                      <h3 className="text-4xl font-black text-white tracking-tight leading-none capitalize">{sub.package?.name}</h3>
+                      <div className="flex flex-col">
+                        <h3 className="text-4xl font-black text-white tracking-tight leading-none capitalize">{sub.package?.name}</h3>
+                        <div className="flex items-center gap-3 mt-2">
+                           <div className="flex items-center gap-1.5 font-bold text-[10px] text-slate-500 uppercase tracking-widest">
+                             <Clock size={12} className="text-cyan-500/50" />
+                             Acquired: <span className="text-slate-400">{sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, HH:mm') : 'Unknown'}</span>
+                           </div>
+                           <div className="w-1 h-1 rounded-full bg-slate-800" />
+                           <div className="flex items-center gap-1.5 font-bold text-[10px] text-slate-500 uppercase tracking-widest">
+                             <CreditCard size={12} className="text-emerald-500/50" />
+                             Via: <span className="text-emerald-400 opacity-60">{sub.paymentMethod || 'Manual'}</span>
+                           </div>
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2 text-xs font-bold text-muted uppercase tracking-widest opacity-60">
                         <RouterIcon size={14} className="text-cyan-500" />
                         Location: <span className="text-white">{sub.router?.name || 'Pulselynk'}</span>
@@ -275,9 +288,29 @@ export default function Subscriptions() {
                            </div>
                            <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="md" />
                         </div>
-                        <div className="bg-cyan-500/10 px-5 py-2 rounded-full border border-cyan-500/20 flex items-center gap-3">
-                           <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-                           <span className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">STATUS: CONNECTED</span>
+                        <div className={`px-5 py-2 rounded-full border flex items-center gap-3 ${
+                           isLive ? 'bg-cyan-500/10 border-cyan-500/20' : 
+                           sub.status === 'AWAITING_APPROVAL' ? 'bg-amber-500/10 border-amber-500/20' :
+                           sub.status === 'VERIFYING' ? 'bg-blue-500/10 border-blue-500/20' :
+                           'bg-slate-500/10 border-slate-500/20'
+                        }`}>
+                           <div className={`w-1.5 h-1.5 rounded-full ${
+                             isLive ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : 
+                             sub.status === 'AWAITING_APPROVAL' ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]' :
+                             sub.status === 'VERIFYING' ? 'bg-blue-400 shadow-[0_0_8px_#3b82f6]' :
+                             'bg-slate-400'
+                           }`} />
+                           <span className={`text-[9px] font-black uppercase tracking-widest ${
+                             isLive ? 'text-cyan-400' : 
+                             sub.status === 'AWAITING_APPROVAL' ? 'text-amber-400' :
+                             sub.status === 'VERIFYING' ? 'text-blue-400' :
+                             'text-slate-400'
+                           }`}>
+                             STATUS: {isLive ? 'CONNECTED' : 
+                                     sub.status === 'AWAITING_APPROVAL' ? 'AWAITING ADMIN' :
+                                     sub.status === 'VERIFYING' ? 'VERIFYING PAY' :
+                                     'READY TO START'}
+                           </span>
                         </div>
                       </div>
                     </div>

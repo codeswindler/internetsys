@@ -1,11 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wifi, MapPin, Clock, ArrowRight, Activity, ExternalLink, Zap, RefreshCw, Download, Upload, Smartphone, Lock, Laptop, Monitor, Globe, Cpu, ChevronRight, Play } from 'lucide-react';
-import { useRef } from 'react';
+import { 
+  Wifi, 
+  MapPin, 
+  Clock, 
+  ArrowRight, 
+  Activity, 
+  ExternalLink, 
+  Zap, 
+  RefreshCw, 
+  Download, 
+  Upload, 
+  Smartphone, 
+  Lock, 
+  Laptop, 
+  Monitor, 
+  Globe, 
+  Cpu, 
+  ChevronRight, 
+  Play,
+  CheckCircle2,
+  ShieldCheck,
+  CreditCard
+} from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
+import { format } from 'date-fns';
 
 export default function Packages() {
   const navigate = useNavigate();
@@ -21,6 +44,9 @@ export default function Packages() {
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [showScroll, setShowScroll] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyingSubId, setVerifyingSubId] = useState<string | null>(null);
+  const [pollCount, setPollCount] = useState(0);
 
   useEffect(() => {
     const handleScroll = () => setShowScroll(window.scrollY > 300);
@@ -45,6 +71,34 @@ export default function Packages() {
     queryFn: () => api.get('/subscriptions/my').then(res => res.data),
     refetchInterval: 10000,
   });
+
+  // NEW: Auto-detect Router from Connected Network
+  const [isDetecting, setIsDetecting] = useState(true);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const detectRouter = async () => {
+      try {
+        setIsDetecting(true);
+        setDetectionError(null);
+        const res = await api.get('/subscriptions/detect-router');
+        const { mac } = res.data;
+        if (mac) {
+          localStorage.setItem('hotspot_mac', mac);
+          // If routers are loaded, finding the one that was returned or sync'd
+          // For now, syncDevice in backend returns router info if we update it.
+          // Let's assume for now we still pick the first router if the user is on ANY router.
+          toast.success("Router Detected! You're on the right network.", { id: 'detect-toast' });
+        }
+      } catch (err: any) {
+        setDetectionError("Please connect to the Hotspot Wi-Fi first to purchase a package.");
+        // toast.error("Not connected to hotspot Wi-Fi.", { id: 'detect-toast' });
+      } finally {
+        setIsDetecting(false);
+      }
+    };
+    detectRouter();
+  }, []);
 
   // Auto-select router silently
   useEffect(() => {
@@ -158,31 +212,53 @@ export default function Packages() {
 
   const stkPushMutation = useMutation({
     mutationFn: (data: { subId: string, phone: string, amount: number }) => api.post('/subscriptions/stk-push', data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       
-      setIsLaunching(true);
-      toast.success('Internet Flowing! Launching in 3s...', { 
-        icon: '🚀',
-        duration: 3000 
-      });
-
-      // The "Fluid Magic" Redirect: Satisfies the phone's OS that we are now UNBLOCKED
-      // We use HTTP first (pulselynk.co.ke) to avoid SSL-intercept errors
-      setTimeout(() => {
-        window.location.href = 'http://pulselynk.co.ke';
-      }, 3000);
-      
-      // If we have identity, trigger the local login form simultaneously
-      setTimeout(() => {
-        if (formRef.current) formRef.current.submit();
-      }, 500);
-      
-      navigate('/user/subscriptions');
+      setVerifyingSubId(variables.subId);
+      setIsVerifying(true);
+      toast.success('STK Push Sent! Enter your M-Pesa PIN.', { icon: '📲' });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Payment simulation failed')
   });
+
+  // Polling logic for STK success
+  useEffect(() => {
+    if (!isVerifying || !verifyingSubId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await api.get(`/subscriptions/${verifyingSubId}/status`);
+        const { status } = res.data;
+
+        if (status?.toLowerCase() === 'active' || status?.toLowerCase() === 'paid') {
+          setIsVerifying(false);
+          setVerifyingSubId(null);
+          toast.success('Payment Verified! Head to Dashboard to Activate.', { icon: '✅', duration: 5000 });
+          
+          // Small delay for the "Fluid Magic" effect before dashboard
+          setTimeout(() => {
+            navigate('/user/dashboard');
+          }, 2000);
+          
+          clearInterval(pollInterval);
+        }
+
+        setPollCount(prev => prev + 1);
+        if (pollCount > 30) { // Timeout after ~60s
+          setIsVerifying(false);
+          setVerifyingSubId(null);
+          toast.error('Payment timeout. If you paid, it will appear in your subscriptions shortly.');
+          clearInterval(pollInterval);
+        }
+      } catch (e) {
+        console.error('Polling failed', e);
+      }
+    }, 2000);
+
+    return () => clearInterval(pollInterval);
+  }, [isVerifying, verifyingSubId, pollCount, navigate]);
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,6 +285,18 @@ export default function Packages() {
         <h2 className="text-3xl font-bold text-main mb-2">Available Hotspot Plans</h2>
         <p className="text-muted">Select a plan to start browsing the internet instantly.</p>
       </div>
+
+      {detectionError && (
+        <div className="mb-8 p-6 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-4 duration-500">
+           <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400">
+              <Lock size={24} />
+           </div>
+           <div>
+              <p className="text-xs font-black text-red-500 uppercase tracking-widest mb-1">Network Protection Active</p>
+              <p className="text-sm font-bold text-white uppercase">{detectionError}</p>
+           </div>
+        </div>
+      )}
 
       {isAnyLive && (
         <div className="mb-8 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl flex items-center justify-between">
@@ -285,16 +373,46 @@ export default function Packages() {
         ))}
       </div>
 
+      {/* STK Verification Modal */}
+      {isVerifying && createPortal(
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[10002] flex items-center justify-center p-4">
+          <div className="glass-panel w-full max-w-sm bg-slate-900 border border-cyan-500/30 p-10 text-center rounded-[2.5rem] shadow-[0_0_50px_rgba(34,211,238,0.2)] animate-in zoom-in-95 duration-300">
+            <div className="relative w-24 h-24 mx-auto mb-8">
+              <div className="absolute inset-0 bg-cyan-500/20 rounded-full animate-ping" />
+              <div className="relative w-full h-full bg-slate-800 rounded-full flex items-center justify-center border border-cyan-500/30">
+                <RefreshCw size={40} className="text-cyan-400 animate-spin" />
+              </div>
+            </div>
+            
+            <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Verifying Payment</h3>
+            <p className="text-slate-400 text-sm mb-8 leading-relaxed">
+              We've sent an STK push to <span className="text-white font-bold">{stkPhone}</span>. 
+              Please enter your PIN. This window will update automatically.
+            </p>
+            
+            <div className="space-y-4">
+              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-cyan-500 transition-all duration-500" 
+                  style={{ width: `${Math.min((pollCount / 30) * 100, 100)}%` }} 
+                />
+              </div>
+              <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
+                Waiting for callback... ({60 - pollCount * 2}s)
+              </p>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {selectedPkg && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedPkg(null); }}>
           <div className="glass-panel p-8 w-full max-w-lg animate-fade-in relative z-50 bg-panel shadow-2xl overflow-y-auto max-h-[90vh]">
             <h3 className="text-2xl font-bold mb-2 text-main">Purchase {selectedPkg.name}</h3>
             <p className="text-muted mb-6 font-medium">Total: KES {selectedPkg.price}</p>
-
             
             <form onSubmit={handleSubscribe} className="flex flex-col gap-5">
-
-
               <div className="bg-[rgba(255,255,255,0.02)] p-4 rounded-xl border border-[rgba(255,255,255,0.05)]">
                 <label className="block text-sm font-semibold text-slate-300 mb-3">Payment Method</label>
                 <div className="flex bg-[rgba(0,0,0,0.2)] rounded-lg p-1 mb-4">
@@ -341,7 +459,8 @@ export default function Packages() {
 
               <div className="flex justify-end gap-3 mt-4">
                 <button type="button" className="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-[rgba(255,255,255,0.05)] font-medium transition-colors" onClick={() => setSelectedPkg(null)}>Cancel</button>
-                <button type="submit" className="btn-primary text-base px-8 py-2.5 shadow-lg shadow-cyan-500/30" disabled={purchaseMutation.isPending || stkPushMutation.isPending}>
+                <button type="submit" className="btn-primary text-base px-8 py-2.5 shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2" disabled={purchaseMutation.isPending || stkPushMutation.isPending}>
+                  {(purchaseMutation.isPending || stkPushMutation.isPending) ? <RefreshCw className="animate-spin" size={18} /> : null}
                   {paymentType === 'mpesa' ? 'Send STK Prompt' : 'Submit Request'}
                 </button>
               </div>

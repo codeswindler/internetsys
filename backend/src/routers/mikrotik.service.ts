@@ -228,6 +228,10 @@ export class MikrotikService {
       );
       throw e;
     } finally {
+      // FINAL STAGE: Forced ARP/Host Reset to trigger the hardware logout
+      try {
+        if (username) await this.forceLogoutHotspot(router, undefined, undefined, username);
+      } catch (e) {}
       api.close();
     }
   }

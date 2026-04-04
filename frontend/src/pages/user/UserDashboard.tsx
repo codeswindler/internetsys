@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link } from 'lucide-react';
+import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
@@ -44,7 +44,7 @@ export default function UserDashboard() {
   
   // Filter for ONLY actionable types: active, pending, or allocated
   const allActiveSubs = subHistory.filter((s: any) => 
-    ['active', 'pending', 'paid', 'verified', 'allocated'].includes(s.status?.toLowerCase())
+    ['active', 'paid', 'pending', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
   );
 
   const liveSession = allActiveSubs.find((s: any) => 
@@ -52,7 +52,11 @@ export default function UserDashboard() {
   );
   
   const pendingPlans = allActiveSubs.filter((s: any) => 
-    !s.startedAt || !s.expiresAt || new Date(s.expiresAt) <= new Date()
+    s.status === 'PAID' || s.status === 'PENDING' || (s.status === 'ACTIVE' && (!s.expiresAt || new Date(s.expiresAt) <= new Date()))
+  );
+
+  const reviewPlans = allActiveSubs.filter((s: any) => 
+    s.status === 'AWAITING_APPROVAL' || s.status === 'VERIFYING'
   );
 
   const isAnyLive = !!liveSession;
@@ -222,9 +226,33 @@ export default function UserDashboard() {
           )}
         </div>
 
-        {allActiveSubs.length > 0 ? (
+        {/* ── PENDING APPROVALS SECTION ── */}
+        {reviewPlans.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {reviewPlans.map((sub: any) => (
+              <div key={sub.id} className="p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                    <RefreshCw className="animate-spin" size={18} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-white uppercase tracking-widest">{sub.package?.name}</h4>
+                    <p className="text-[9px] font-bold text-amber-500/70 uppercase">
+                      {sub.status === 'AWAITING_APPROVAL' ? 'Awaiting Human Review' : 'Verifying M-Pesa Transaction'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest bg-slate-900 px-3 py-1 rounded-lg">
+                  LOCKED
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {allActiveSubs.filter(s => !['AWAITING_APPROVAL', 'VERIFYING'].includes(s.status)).length > 0 ? (
           <div className="grid grid-cols-1 gap-6">
-            {allActiveSubs.map((sub: any) => {
+            {allActiveSubs.filter(s => !['AWAITING_APPROVAL', 'VERIFYING'].includes(s.status)).map((sub: any) => {
               const isLive = sub.startedAt && new Date(sub.expiresAt) > new Date();
               
               return (
@@ -244,10 +272,22 @@ export default function UserDashboard() {
 
                         <div className="space-y-2">
                           <div className="flex items-center gap-3">
-                            <span className={`text-[10px] font-black uppercase tracking-[0.4em] ${isLive ? 'text-cyan-400' : 'text-slate-500'}`}>
-                              {isLive ? 'SYSTEM LIVE' : 'AWAITING START'}
-                            </span>
-                            {isLive && <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-500/20" />}
+                            <span className={`text-[10px] font-black uppercase tracking-[0.4em] ${
+                               sub.status === 'AWAITING_APPROVAL' ? 'text-amber-500' :
+                               sub.status === 'VERIFYING' ? 'text-blue-400' :
+                               sub.status === 'PAID' ? 'text-emerald-400' :
+                               'text-slate-500'
+                             }`}>
+                               {isLive ? 'SYSTEM LIVE' : 
+                                sub.status === 'AWAITING_APPROVAL' ? 'AWAITING ADMIN' :
+                                sub.status === 'VERIFYING' ? 'VERIFYING PAYMENT' :
+                                sub.status === 'PAID' ? 'READY TO START' :
+                                'AWAITING START'}
+                             </span>
+                             {isLive && <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-500/20" />}
+                             {(sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING') && (
+                               <RefreshCw size={12} className="text-current animate-spin opacity-50" />
+                             )}
                           </div>
                           <h3 className="text-5xl font-black text-white tracking-tighter uppercase leading-none">{sub.package?.name || 'Hotspot'}</h3>
                           <div className="flex flex-col gap-1.5">
@@ -278,18 +318,27 @@ export default function UserDashboard() {
 
                              {/* Connected Devices List */}
                              {(sub.deviceSessions?.filter((s: any) => s.isActive).length > 0) ? (
-                               <div className="flex flex-col gap-1 mt-1">
-                                 <div className="flex items-center gap-1.5 mb-0.5">
+                               <div className="flex flex-col gap-1.5 mt-2">
+                                 <div className="flex items-center gap-1.5 mb-1">
                                    <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">
                                      DEVICES: {sub.deviceSessions.filter((s: any) => s.isActive).length}/{sub.package?.maxDevices || 1}
                                    </span>
                                  </div>
                                  {sub.deviceSessions.filter((s: any) => s.isActive).map((ds: any) => (
-                                   <div key={ds.id} className="flex items-center gap-2 px-2 py-1 bg-slate-900/50 border border-emerald-500/10 rounded-md max-w-fit">
-                                     <Smartphone size={10} className="text-emerald-400" />
-                                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                                       {ds.deviceModel || 'Unknown'} <span className="text-slate-600 ml-1">({ds.macAddress?.slice(-8)})</span>
-                                     </span>
+                                   <div key={ds.id} className="flex items-center justify-between gap-4 px-3 py-1.5 bg-slate-950/50 border border-emerald-500/10 rounded-xl group/device hover:border-emerald-500/30 transition-all max-w-sm">
+                                      <div className="flex items-center gap-2">
+                                        <Smartphone size={10} className="text-emerald-400" />
+                                        <span className="text-[8px] font-black text-slate-300 uppercase tracking-widest leading-none">
+                                          {ds.deviceModel || 'Matched Device'} <span className="text-slate-600 ml-1">({ds.macAddress?.slice(-8)})</span>
+                                        </span>
+                                      </div>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); disconnectMutation.mutate(ds.id); }}
+                                        className="w-5 h-5 flex items-center justify-center bg-red-500/10 hover:bg-red-500/30 border border-red-500/20 rounded-lg transition-all"
+                                        title="Disconnect Device"
+                                      >
+                                        <X size={8} className="text-red-400" />
+                                      </button>
                                    </div>
                                  ))}
                                </div>
@@ -356,29 +405,37 @@ export default function UserDashboard() {
                           <div className="flex flex-col items-center lg:items-end gap-6">
                             <div className="text-center lg:text-right">
                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.4em] mb-2">SESSION STATUS</p>
-                               <h4 className="text-4xl font-black text-cyan-400 tracking-widest">READY</h4>
+                               <h4 className={`text-4xl font-black tracking-widest ${sub.status === 'PAID' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                                 {sub.status === 'PAID' ? 'READY' : 'WAITING'}
+                               </h4>
                              </div>
                              {!isSynced ? (
                                <button 
                                 onClick={(e) => { e.stopPropagation(); syncMutation.mutate(); }}
-                                disabled={syncMutation.isPending || isAnyLive}
+                                disabled={syncMutation.isPending || isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
                                 className={`w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
-                                  isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-orange-500/30'
+                                  isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING' ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-orange-500/30'
                                 }`}
                                 style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }}
                                >
                                 {syncMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
+                                 sub.status === 'AWAITING_APPROVAL' ? 'WAITING FOR ADMIN' :
+                                 sub.status === 'VERIFYING' ? 'VERIFYING PAY' :
                                  isAnyLive ? 'SESSION LOCKED' : 'SYNC DEVICE FIRST'}
                                </button>
                              ) : (
                                <button 
                                 onClick={(e) => { e.stopPropagation(); startMutation.mutate(sub.id); }}
-                                disabled={startMutation.isPending || isAnyLive}
+                                disabled={startMutation.isPending || isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
                                 className={`btn-primary w-full lg:w-64 py-5 text-sm font-black tracking-widest uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-2xl ${
-                                  isAnyLive ? 'opacity-30 cursor-not-allowed grayscale' : 'shadow-cyan-500/30'
+                                  isAnyLive || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING' ? 'opacity-30 cursor-not-allowed grayscale' : 
+                                  sub.status === 'PAID' ? 'shadow-emerald-500/30' : 'shadow-cyan-500/30'
                                 }`}
+                                style={sub.status === 'PAID' ? { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' } : {}}
                                >
                                 {startMutation.isPending ? <RefreshCw className="animate-spin" size={20} /> : 
+                                 sub.status === 'AWAITING_APPROVAL' ? 'LOCKED' :
+                                 sub.status === 'VERIFYING' ? 'LOCKED' :
                                  isAnyLive ? 'SESSION LOCKED' : 'ACTIVATE INTERNET'}
                                </button>
                              )}

@@ -15,6 +15,9 @@ import { DeviceSession } from './device-session.entity';
 
 export enum SubscriptionStatus {
   PENDING = 'PENDING',
+  AWAITING_APPROVAL = 'AWAITING_APPROVAL',
+  VERIFYING = 'VERIFYING',
+  PAID = 'PAID',
   ACTIVE = 'ACTIVE',
   EXPIRED = 'EXPIRED',
   CANCELLED = 'CANCELLED',

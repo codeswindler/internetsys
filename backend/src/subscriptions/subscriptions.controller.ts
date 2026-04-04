@@ -34,6 +34,13 @@ export class SubscriptionsController {
     return this.subscriptionsService.syncDevice(req.user.id);
   }
 
+  @Get('detect-router')
+  async detectRouter(@Request() req: any) {
+    // This is a lighter version of sync-device that just returns the router info if they are on ANY router
+    return this.subscriptionsService.syncDevice(req.user.id); 
+    // Reusing syncDevice because it already searches for the user's presence on connected routers.
+  }
+
   @Post('purchase')
   purchase(
     @Request() req: any,
@@ -158,6 +165,11 @@ export class SubscriptionsController {
     return this.subscriptionsService.countPending();
   }
 
+  @Get(':id/status')
+  getStatus(@Param('id') id: string) {
+    return this.subscriptionsService.getStatus(id);
+  }
+
   @Post('stk-push')
   async stkPush(
     @Request() req: any,
@@ -168,6 +180,9 @@ export class SubscriptionsController {
     );
 
     try {
+      // 0. Update status to VERIFYING immediately
+      await this.subscriptionsService.setStatus(body.subId, 'VERIFYING' as any);
+
       // 1. Trigger STK Push to the user's phone via Daraja API
       const mpesaRes = await this.mpesaService.stkPush(
         body.phone,
@@ -176,14 +191,14 @@ export class SubscriptionsController {
         'Internet Subscription',
       );
 
-      // The subscription stays pending for now, wait for callback webhook to hit to activate it.
-      // But if Daraja isn't setup fully, you might still want manual fallback.
       return { success: true, message: 'STK push sent', daraja: mpesaRes };
     } catch (e: any) {
       this.logger.error(
         'Daraja STK push failed: ' + e?.response?.data?.errorMessage ||
           e.message,
       );
+      // Fallback: If push fails initially, maybe keep it AWAITING_APPROVAL/PENDING
+      await this.subscriptionsService.setStatus(body.subId, 'AWAITING_APPROVAL' as any);
       throw e;
     }
   }

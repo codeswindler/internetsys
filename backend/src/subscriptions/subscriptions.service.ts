@@ -46,7 +46,7 @@ export class SubscriptionsService {
     // Step 1: Find the user's most recent subscription to determine which router to query
     const userSub = await this.subRepo.findOne({
       where: { user: { id: userId } },
-      relations: ['router'],
+      relations: ['router', 'package'],
       order: { createdAt: 'DESC' },
     });
 
@@ -144,11 +144,24 @@ export class SubscriptionsService {
       user,
       package: pkg,
       router,
-      status: SubscriptionStatus.PENDING,
+      status: SubscriptionStatus.AWAITING_APPROVAL, // Default to awaiting approval for manual requests
       amountPaid: pkg.price,
       paymentMethod: PaymentMethod.MANUAL,
     });
 
+    return this.subRepo.save(sub);
+  }
+
+  async getStatus(subId: string): Promise<{ status: SubscriptionStatus }> {
+    const sub = await this.subRepo.findOne({ where: { id: subId } });
+    if (!sub) throw new NotFoundException('Subscription not found');
+    return { status: sub.status };
+  }
+
+  async setStatus(subId: string, status: SubscriptionStatus): Promise<Subscription> {
+    const sub = await this.subRepo.findOne({ where: { id: subId } });
+    if (!sub) throw new NotFoundException('Subscription not found');
+    sub.status = status;
     return this.subRepo.save(sub);
   }
 
@@ -163,44 +176,21 @@ export class SubscriptionsService {
     });
 
     if (!sub) throw new NotFoundException('Subscription not found');
-    if (sub.status !== SubscriptionStatus.PENDING) {
+    if (
+      sub.status !== SubscriptionStatus.PENDING &&
+      sub.status !== SubscriptionStatus.AWAITING_APPROVAL &&
+      sub.status !== SubscriptionStatus.VERIFYING
+    ) {
       throw new BadRequestException(`Subscription is in ${sub.status} state`);
     }
 
-    // Connect to Mikrotik
-    const username = `net_${sub.user.phone.substring(sub.user.phone.length - 6)}_${Date.now().toString().substring(7)}`;
-    const password = Math.random().toString(36).slice(-6);
-
-    try {
-      if (sub.router.connectionMode === 'pppoe') {
-        await this.mikrotikService.createPppoeSecret(
-          sub.router,
-          username,
-          password,
-          sub.package.bandwidthProfile,
-        );
-      } else {
-        await this.mikrotikService.createHotspotUser(
-          sub.router,
-          username,
-          password,
-          sub.package.bandwidthProfile,
-        );
-      }
-    } catch (error: any) {
-      this.logger.error(
-        `Activation failed for sub ${subId}: ${error.message || JSON.stringify(error)}`,
-      );
-      throw new BadRequestException(
-        `MikroTik Error: ${error.message || JSON.stringify(error)}`,
-      );
-    }
-
-    sub.status = SubscriptionStatus.ACTIVE;
+    // PAYMENT CONFIRMED: Mark as PAID, but don't provision yet (Lazy Provisioning)
+    sub.status = SubscriptionStatus.PAID;
     sub.paymentMethod = paymentMethod;
     sub.paymentRef = paymentRef || '';
-    sub.mikrotikUsername = username;
-    sub.mikrotikPassword = password;
+    // Generate credentials now, but don't send to router until startSession
+    sub.mikrotikUsername = `net_${sub.user.phone.substring(sub.user.phone.length - 6)}_${Date.now().toString().substring(7)}`;
+    sub.mikrotikPassword = Math.random().toString(36).slice(-6);
     sub.startedAt = null;
     sub.expiresAt = null;
 
@@ -287,7 +277,7 @@ export class SubscriptionsService {
       const status = sub.status?.toString().toLowerCase().trim();
       
       // Even more robust check: If it's physically active or explicitly allocated/pending
-      const isActionable = ['active', 'pending', 'paid', 'verified', 'processing', 'allocated'].includes(status);
+      const isActionable = ['active', 'paid', 'pending', 'verified', 'processing', 'allocated', 'awaiting_approval', 'verifying'].includes(status);
       
       const isExpired = sub.expiresAt && new Date(sub.expiresAt) < new Date();
       
@@ -329,7 +319,7 @@ export class SubscriptionsService {
       .leftJoinAndSelect('sub.package', 'package')
       .leftJoinAndSelect('sub.router', 'router')
       .where('user.phone LIKE :phone', { phone: `%${phoneSuffix}` })
-      .andWhere('sub.status = :status', { status: SubscriptionStatus.PENDING })
+      .andWhere('sub.status IN (:...statuses)', { statuses: [SubscriptionStatus.PENDING, SubscriptionStatus.VERIFYING] })
       .orderBy('sub.createdAt', 'DESC')
       .getOne();
 
@@ -546,10 +536,38 @@ export class SubscriptionsService {
     // Capture and Save Device Model if missing
     const model = userAgent ? this.parseUserAgent(userAgent) : 'Unknown Device';
 
-    if (sub.status !== SubscriptionStatus.ACTIVE && sub.status !== SubscriptionStatus.PENDING) {
-      throw new BadRequestException(
-        `Subscription is in ${sub.status} state, cannot start`,
-      );
+    if (sub.status !== SubscriptionStatus.ACTIVE && sub.status !== SubscriptionStatus.PAID) {
+      const msg = sub.status === SubscriptionStatus.AWAITING_APPROVAL 
+        ? 'Awaiting Administrator Approval' 
+        : sub.status === SubscriptionStatus.VERIFYING 
+        ? 'Payment Verification in Progress' 
+        : `Subscription is ${sub.status}. Please ensure payment is confirmed.`;
+      throw new BadRequestException(msg);
+    }
+
+    // LAZY PROVISIONING: Create on MikroTik ONLY if it's the first time (status was PAID)
+    if (sub.status === SubscriptionStatus.PAID) {
+      this.logger.log(`[LAZY-PROV] Provisioning router ${sub.router.name} for sub ${sub.id}...`);
+      try {
+        if (sub.router.connectionMode === 'pppoe') {
+          await this.mikrotikService.createPppoeSecret(
+            sub.router,
+            sub.mikrotikUsername,
+            sub.mikrotikPassword,
+            sub.package.bandwidthProfile,
+          );
+        } else {
+          await this.mikrotikService.createHotspotUser(
+            sub.router,
+            sub.mikrotikUsername,
+            sub.mikrotikPassword,
+            sub.package.bandwidthProfile,
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(`[LAZY-PROV] Provisioning failed: ${error.message}`);
+        throw new BadRequestException(`Router connection failed: ${error.message}`);
+      }
     }
 
     // VERIFY PHYSICAL CONNECTION TO AP
