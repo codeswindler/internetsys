@@ -369,7 +369,7 @@ export class SubscriptionsService {
   async expireSubscription(subId: string): Promise<void> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
-      relations: ['router'],
+      relations: ['router', 'deviceSessions'],
     });
     if (!sub) return;
 
@@ -395,6 +395,21 @@ export class SubscriptionsService {
       }
     }
 
+    // Force hardware logout for all associated devices to trigger captive portal popup in other apps
+    if (sub.deviceSessions && sub.deviceSessions.length > 0) {
+      for (const session of sub.deviceSessions) {
+        try {
+          await this.mikrotikService.forceLogoutHotspot(
+            sub.router,
+            session.ipAddress,
+            session.macAddress,
+          );
+        } catch (e) {
+          this.logger.warn(`Secondary hardware logout failed for ${session.macAddress}: ${e.message}`);
+        }
+      }
+    }
+
     sub.status = SubscriptionStatus.EXPIRED;
     await this.subRepo.save(sub);
   }
@@ -402,7 +417,7 @@ export class SubscriptionsService {
   async cancelSubscription(subId: string): Promise<Subscription> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
-      relations: ['user', 'package', 'router'],
+      relations: ['user', 'package', 'router', 'deviceSessions'],
     });
     if (!sub) throw new NotFoundException('Subscription not found');
     if (sub.status !== SubscriptionStatus.ACTIVE) {
@@ -432,6 +447,21 @@ export class SubscriptionsService {
       }
     }
 
+    // Force hardware logout for all associated devices
+    if (sub.deviceSessions && sub.deviceSessions.length > 0) {
+      for (const session of sub.deviceSessions) {
+        try {
+          await this.mikrotikService.forceLogoutHotspot(
+            sub.router,
+            session.ipAddress,
+            session.macAddress,
+          );
+        } catch (e) {
+          this.logger.warn(`Hardware logout failed for session ${session.id}: ${e.message}`);
+        }
+      }
+    }
+
     sub.status = SubscriptionStatus.CANCELLED;
     return this.subRepo.save(sub);
   }
@@ -439,7 +469,7 @@ export class SubscriptionsService {
   async reactivateSubscription(subId: string): Promise<Subscription> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
-      relations: ['user', 'package', 'router'],
+      relations: ['user', 'package', 'router', 'deviceSessions'],
     });
     if (!sub) throw new NotFoundException('Subscription not found');
     if (sub.status !== SubscriptionStatus.CANCELLED) {

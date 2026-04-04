@@ -453,6 +453,13 @@ export class MikrotikService {
         for (const host of hosts) {
           await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
         }
+        // Remove from IP Bindings
+        const bindings = await api.write('/ip/hotspot/ip-binding/print', [
+          `?mac-address=${mac}`,
+        ]);
+        for (const bind of bindings) {
+          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${bind['.id']}`]);
+        }
       }
       if (ip) {
         this.logger.log(
@@ -463,6 +470,13 @@ export class MikrotikService {
         ]);
         for (const act of actives) {
           await api.write('/ip/hotspot/active/remove', [`=.id=${act['.id']}`]);
+        }
+        // Remove from IP Bindings
+        const bindings = await api.write('/ip/hotspot/ip-binding/print', [
+          `?address=${ip}`,
+        ]);
+        for (const bind of bindings) {
+          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${bind['.id']}`]);
         }
       }
     } catch (e) {

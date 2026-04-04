@@ -24,7 +24,9 @@ import {
   Laptop,
   Monitor,
   Cpu,
+  CreditCard,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useRef, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
@@ -63,10 +65,24 @@ export default function Subscriptions() {
   });
 
   const allActiveSubs = allActiveSubsRaw.filter((s: any) => 
-    ['active', 'pending', 'paid', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
+    ['active', 'paid', 'pending', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
   );
 
   const activeSub = allActiveSubs.length > 0 ? allActiveSubs[0] : null;
+  const lastActiveId = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Detect when an active session disappears (Exited/Expired/Cancelled)
+    if (lastActiveId.current && !activeSub && !isLoading) {
+      toast.error('Session ended. Please renew to continue.', { 
+        icon: '🛑',
+        duration: 6000 
+      });
+      // Force a refresh of the lists
+      queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+    }
+    lastActiveId.current = activeSub?.id || null;
+  }, [activeSub, isLoading, queryClient]);
 
   const startMutation = useMutation({
     mutationFn: (id: string) => api.post(`/subscriptions/${id}/start`, { 
@@ -265,18 +281,19 @@ export default function Subscriptions() {
                            <Play size={40} className="text-slate-700 mb-2 opacity-30" />
                            <h4 className="text-2xl font-black text-slate-500 tracking-[0.2em] mb-2 uppercase">TIMER READY</h4>
                            <p className="text-[10px] text-muted font-bold uppercase tracking-widest mb-4">Queued and verified</p>
-                           <button 
-                             onClick={() => startMutation.mutate(sub.id)}
-                             disabled={startMutation.isPending || !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date())}
-                             className={`btn-primary px-10 py-4 text-xs font-black tracking-widest uppercase shadow-lg transition-all transform hover:scale-105 ${
-                               !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) 
-                               ? 'opacity-30 cursor-not-allowed grayscale' 
-                               : 'shadow-cyan-900/20 hover:shadow-cyan-400/20'
-                             }`}
-                           >
-                            {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : 
-                             !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) ? 'LOCKED' : 'START BROWSING'}
-                           </button>
+                            <button 
+                              onClick={() => startMutation.mutate(sub.id)}
+                              disabled={startMutation.isPending || !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
+                              className={`btn-primary px-10 py-4 text-xs font-black tracking-widest uppercase shadow-lg transition-all transform hover:scale-105 ${
+                                (!!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING') 
+                                ? 'opacity-30 cursor-not-allowed grayscale' 
+                                : 'bg-gradient-to-r from-emerald-600 to-teal-600 shadow-emerald-900/20 hover:shadow-emerald-400/20'
+                              }`}
+                            >
+                             {startMutation.isPending ? <RefreshCw className="animate-spin" size={18} /> : 
+                              (sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING') ? 'LOCKED' : 
+                              !!allActiveSubs.find((s: any) => s.startedAt && new Date(s.expiresAt) > new Date()) ? 'LOCKED' : 'ACTIVATE INTERNET'}
+                            </button>
                         </div>
                       )}
                       
@@ -292,23 +309,27 @@ export default function Subscriptions() {
                            isLive ? 'bg-cyan-500/10 border-cyan-500/20' : 
                            sub.status === 'AWAITING_APPROVAL' ? 'bg-amber-500/10 border-amber-500/20' :
                            sub.status === 'VERIFYING' ? 'bg-blue-500/10 border-blue-500/20' :
+                           sub.status === 'PAID' ? 'bg-emerald-500/10 border-emerald-500/20' :
                            'bg-slate-500/10 border-slate-500/20'
                         }`}>
                            <div className={`w-1.5 h-1.5 rounded-full ${
                              isLive ? 'bg-cyan-400 shadow-[0_0_8px_#22d3ee]' : 
                              sub.status === 'AWAITING_APPROVAL' ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]' :
                              sub.status === 'VERIFYING' ? 'bg-blue-400 shadow-[0_0_8px_#3b82f6]' :
+                             sub.status === 'PAID' ? 'bg-emerald-400 shadow-[0_0_8px_#10b981]' :
                              'bg-slate-400'
                            }`} />
                            <span className={`text-[9px] font-black uppercase tracking-widest ${
                              isLive ? 'text-cyan-400' : 
                              sub.status === 'AWAITING_APPROVAL' ? 'text-amber-400' :
                              sub.status === 'VERIFYING' ? 'text-blue-400' :
+                             sub.status === 'PAID' ? 'text-emerald-400' :
                              'text-slate-400'
                            }`}>
                              STATUS: {isLive ? 'CONNECTED' : 
                                      sub.status === 'AWAITING_APPROVAL' ? 'AWAITING ADMIN' :
                                      sub.status === 'VERIFYING' ? 'VERIFYING PAY' :
+                                     sub.status === 'PAID' ? 'READY' : 
                                      'READY TO START'}
                            </span>
                         </div>

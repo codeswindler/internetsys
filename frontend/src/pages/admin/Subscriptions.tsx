@@ -9,7 +9,10 @@ import { ConfirmModal } from '../../components/ConfirmModal';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'badge-success',
+  paid: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
   pending: 'badge-warning',
+  awaiting_approval: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+  verifying: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
   expired: 'badge-danger',
   cancelled: 'bg-slate-700/50 text-slate-400 border border-slate-600',
 };
@@ -229,14 +232,14 @@ export default function Subscriptions() {
 
                   {/* Status */}
                   <td className="p-4">
-                    <span className={`badge text-[11px] ${STATUS_STYLES[s.status?.toString().toLowerCase()] ?? 'badge-danger'}`}>
-                      {s.status}
+                    <span className={`badge text-[11px] uppercase tracking-widest ${STATUS_STYLES[s.status?.toString().toLowerCase()] ?? 'badge-danger'}`}>
+                      {s.status === 'PAID' ? 'READY' : s.status}
                     </span>
                   </td>
 
                   {/* Countdown */}
                   <td className="p-4">
-                    {s.status?.toString().toLowerCase() === 'active' && s.expiresAt ? (
+                    {s.status?.toString().toLowerCase() === 'active' && s.startedAt && s.expiresAt ? (
                       <CountdownBadge expiresAt={s.expiresAt} startedAt={s.startedAt} variant="inline" />
                     ) : (
                       <span className="text-xs text-slate-600">—</span>
@@ -245,7 +248,7 @@ export default function Subscriptions() {
 
                   {/* Speed */}
                   <td className="p-4">
-                    {s.status?.toString().toLowerCase() === 'active' ? (
+                    {s.status?.toString().toLowerCase() === 'active' && s.startedAt ? (
                       <TrafficIndicator subId={s.id} />
                     ) : (
                       <span className="text-xs text-slate-600">—</span>
