@@ -63,6 +63,12 @@ html {
   scroll-behavior: smooth;
 }
 
+@media (max-width: 768px) {
+  html {
+    font-size: 80%;
+  }
+}
+
 body {
   font-family: 'Inter', sans-serif;
   background-color: var(--bg-main);
@@ -74,11 +80,7 @@ body {
   overflow-x: hidden;
 }
 
-@media (max-width: 768px) {
-  body {
-    zoom: 0.8;
-  }
-}
+
 
 /* Typography Enhancements */
 h1, h2, h3, h4, h5, h6 {
