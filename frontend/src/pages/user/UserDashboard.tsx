@@ -303,7 +303,9 @@ export default function UserDashboard() {
         {allActiveSubs.filter(s => !['AWAITING_APPROVAL', 'VERIFYING'].includes(s.status)).length > 0 ? (
           <div className="grid grid-cols-1 gap-6">
             {allActiveSubs.filter(s => !['AWAITING_APPROVAL', 'VERIFYING'].includes(s.status)).map((sub: any) => {
-              const isLive = sub.startedAt && new Date(sub.expiresAt) > new Date();
+              // Robust check: If status is ACTIVE and haven't reached expiresAt, it is LIVE.
+              const now = new Date();
+              const isLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > now;
               
               return (
                 <div key={sub.id} className="relative group animate-in fade-in slide-in-from-bottom-5 duration-700">
