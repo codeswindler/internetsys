@@ -786,6 +786,10 @@ export class SubscriptionsService {
 
     // 3. Mark subscription as STARTED if first time
     if (!sub.startedAt) {
+      // ⏱️ Grace period: wait 3s after MikroTik confirms login before starting timer
+      // This ensures internet is actually flowing before the countdown begins
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
       sub.startedAt = new Date();
       sub.status = SubscriptionStatus.ACTIVE;
 
