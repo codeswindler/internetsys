@@ -119,17 +119,17 @@ export default function MainLayout({ role }: LayoutProps) {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        let identifier = null;
+        // 1. Initial Load from Cache (For instant UI responsiveness)
         const userStr = localStorage.getItem('user');
-        
         if (userStr) {
           const u = JSON.parse(userStr);
           setCurrentUser(u);
-          identifier = u.username || u.name || u.firstName || u.phone;
+          const identifier = u.username || u.name || u.firstName || u.phone;
+          if (identifier) setUserInitials(identifier.substring(0, 2).toUpperCase());
         }
 
-        // If local storage lacks the real name, fetch from backend to heal the cache
-        if (!identifier && token) {
+        // 2. Always fetch fresh data from backend to ensure state sync
+        if (token) {
           const profileRes = await axios.get(`${API_URL}/auth/profile`, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -138,15 +138,18 @@ export default function MainLayout({ role }: LayoutProps) {
             localStorage.setItem('user', JSON.stringify(profileRes.data));
             const u = profileRes.data;
             setCurrentUser(u);
-            identifier = u.username || u.name || u.firstName || u.phone;
+            const identifier = u.username || u.name || u.firstName || u.phone;
+            if (identifier) {
+               setUserInitials(identifier.substring(0, 2).toUpperCase());
+            }
           }
         }
-        
-        if (identifier) {
-          setUserInitials(identifier.substring(0, 2).toUpperCase());
-        }
       } catch (err) {
-        console.error('Failed to load full profile initials', err);
+        console.error('Failed to sync profile from backend', err);
+        // If profile fetch fails (e.g. token expired), we should probably logout
+        if (axios.isAxiosError(err) && err.response?.status === 401) {
+          handleLogout();
+        }
       }
     };
     fetchProfile();
