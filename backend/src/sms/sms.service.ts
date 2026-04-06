@@ -22,26 +22,35 @@ export class SmsService {
   /**
    * Send OTP via Advanta SMS API
    */
-  async sendOtp(phone: string, otp: string): Promise<boolean> {
+  async sendOtp(phone: string, otp: string, isFlash = false): Promise<boolean> {
     const cleanPhone = this.formatPhone(phone);
     // Official OTP endpoint for transactional/OTP messages
     const url = `${this.baseUrl}/api/services/sendotp`;
-    const data = {
+    const message = this.sanitizeGsm7(`Your PulseLynk code is: ${otp}. Valid for 5 minutes.`);
+    
+    const data: any = {
       apikey: this.apiKey,
       partnerID: this.partnerId,
       mobile: cleanPhone,
-      message: `Your PulseLynk code is: ${otp}. Valid for 5 minutes.`,
+      message: message,
       shortcode: this.shortCode,
     };
 
+    if (isFlash) {
+      data.isFlash = 1; // Support Flash delivery if account is enabled
+    }
+
     try {
-      this.logger.log(`[SMS] Sending OTP to ${cleanPhone}...`);
+      this.logger.log(`[SMS] Sending OTP to ${cleanPhone}${isFlash ? ' (FLASH)' : ''}...`);
       const response = await axios.post(url, data, { timeout: 10000 });
       
       // Official Advanta OTP response is wrapped in 'responses' array
       const success = response.data?.responses?.[0]?.['response-code'] == 200 || response.data?.['response-code'] == 200;
       
-      if (success) return true;
+      if (success) {
+        this.logger.log(`[SMS] OTP Sent Successfully to ${cleanPhone}`);
+        return true;
+      }
       
       this.logger.error(`[SMS] Advanta Error: ${JSON.stringify(response.data)}`);
       return false;
@@ -61,7 +70,7 @@ export class SmsService {
       apikey: this.apiKey,
       partnerID: this.partnerId,
       mobile: cleanPhone,
-      message: message,
+      message: this.sanitizeGsm7(message),
       shortcode: this.shortCode,
     };
 
@@ -104,7 +113,8 @@ export class SmsService {
     }
   }
 
-  private formatPhone(phone: string): string {
+  public formatPhone(phone: string): string {
+    if (!phone) return '';
     // Advanta requires 254... format for Kenya
     let clean = phone.replace(/\D/g, '');
     if (clean.startsWith('0')) {
@@ -113,5 +123,22 @@ export class SmsService {
       clean = clean.substring(1);
     }
     return clean;
+  }
+
+  /**
+   * Ensure the message only contains GSM-7 compatible characters 
+   * to avoid Advanta delivery failures.
+   */
+  private sanitizeGsm7(text: string): string {
+    const gsm7Chars = "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+    return text.split('').map(char => {
+      if (gsm7Chars.indexOf(char) !== -1) return char;
+      // Replace common non-GSM characters with safe alternatives
+      if (char === '⚡') return 'FLASH';
+      if (char === '🚀') return 'READY';
+      if (char === '🔐') return 'CODE';
+      // Fallback for others (strip them)
+      return '';
+    }).join('');
   }
 }

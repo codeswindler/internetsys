@@ -12,9 +12,11 @@ import { Admin, AdminRole } from '../entities/admin.entity';
 import { User } from '../entities/user.entity';
 import { Otp, OtpType } from '../entities/otp.entity';
 import { SmsService } from '../sms/sms.service';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     @InjectRepository(Admin) private adminRepo: Repository<Admin>,
     @InjectRepository(User) private userRepo: Repository<User>,
@@ -304,8 +306,13 @@ export class AuthService {
   // --- 📲 OTP FLOWS (ADVANTA INTEGRATION) ---
 
   async requestUserOtp(phone: string) {
-    const user = await this.userRepo.findOne({ where: { phone } });
-    if (!user) throw new NotFoundException('User not found');
+    const formattedPhone = this.smsService.formatPhone(phone);
+    const user = await this.userRepo.findOne({ where: { phone: formattedPhone } });
+    
+    if (!user) {
+      this.logger.warn(`[OTP] Request failed: User not found for phone ${phone} (formatted: ${formattedPhone})`);
+      throw new NotFoundException('User not found. Please register first.');
+    }
 
     // 1. Rate limiting (1 minute between requests)
     if (user.lastOtpRequestedAt) {
@@ -321,7 +328,7 @@ export class AuthService {
 
     // 3. Save to DB
     const otp = this.otpRepo.create({
-      phone,
+      phone: formattedPhone,
       code,
       type: OtpType.USER_RECOVERY,
       expiresAt
@@ -331,8 +338,8 @@ export class AuthService {
     user.lastOtpRequestedAt = new Date();
     await this.userRepo.save(user);
 
-    // 4. Send via Advanta
-    const success = await this.smsService.sendOtp(phone, code);
+    // 4. Send via Advanta (Enabled Flash support)
+    const success = await this.smsService.sendOtp(formattedPhone, code, true);
     if (!success) {
       throw new BadRequestException('Failed to send SMS. Please contact support.');
     }
@@ -341,8 +348,9 @@ export class AuthService {
   }
 
   async loginWithUserOtp(phone: string, code: string) {
+    const formattedPhone = this.smsService.formatPhone(phone);
     const otp = await this.otpRepo.findOne({
-      where: { phone, code, type: OtpType.USER_RECOVERY, isUsed: false }
+      where: { phone: formattedPhone, code, type: OtpType.USER_RECOVERY, isUsed: false }
     });
 
     if (!otp || new Date() > otp.expiresAt) {
@@ -386,7 +394,7 @@ export class AuthService {
       expiresAt
     }));
 
-    const success = await this.smsService.sendOtp(admin.phone, code);
+    const success = await this.smsService.sendOtp(admin.phone, code, false); // Admin 2FA is standard SMS
     if (!success) throw new BadRequestException('Failed to send admin 2FA code');
 
     // Mask phone for frontend display (e.g. 2547****5678)
