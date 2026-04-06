@@ -229,6 +229,7 @@ export class MikrotikService {
       throw e;
     } finally {
       // FINAL STAGE: Forced ARP/Host Reset to trigger the hardware logout
+      // This is the most crucial step for forcing the "Sign In" popup to reappear.
       try {
         if (username) await this.forceLogoutHotspot(router, undefined, undefined, username);
       } catch (e) {}
@@ -476,6 +477,15 @@ export class MikrotikService {
         for (const act of actives) {
           await api.write('/ip/hotspot/active/remove', [`=.id=${act['.id']}`]);
         }
+        
+        // CRITICAL: Also remove from Hosts list by IP. This forces the device to re-trigger CPD.
+        const hosts = await api.write('/ip/hotspot/host/print', [
+          `?address=${ip}`,
+        ]);
+        for (const host of hosts) {
+          await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+        }
+
         // Remove from IP Bindings
         const bindings = await api.write('/ip/hotspot/ip-binding/print', [
           `?address=${ip}`,
