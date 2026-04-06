@@ -307,10 +307,17 @@ export class AuthService {
 
   async requestUserOtp(phone: string) {
     const formattedPhone = this.smsService.formatPhone(phone);
-    const user = await this.userRepo.findOne({ where: { phone: formattedPhone } });
+    
+    // Robust lookup: try both formatted and raw input
+    const user = await this.userRepo.findOne({ 
+      where: [
+        { phone: formattedPhone },
+        { phone: phone.trim() }
+      ] 
+    });
     
     if (!user) {
-      this.logger.warn(`[OTP] Request failed: User not found for phone ${phone} (formatted: ${formattedPhone})`);
+      this.logger.warn(`[OTP] Request failed: User not found for phone ${phone} (Attempted: ${formattedPhone} and ${phone})`);
       throw new NotFoundException('User not found. Please register first.');
     }
 
@@ -357,7 +364,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired code');
     }
 
-    const user = await this.userRepo.findOne({ where: { phone } });
+    // Robust lookup for verifying the user after OTP is valid
+    const user = await this.userRepo.findOne({ 
+      where: [
+        { phone: formattedPhone },
+        { phone: phone.trim() }
+      ]
+    });
     if (!user) throw new NotFoundException('User not found');
 
     otp.isUsed = true;
