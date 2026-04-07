@@ -86,8 +86,6 @@ export class SubscriptionsService {
       'Could not find your device on the hotspot Wi-Fi. Make sure you are connected to the hotspot and visit the login page first.',
     );
   }
- Elephant
-
 
   async purchase(
     userId: string,
