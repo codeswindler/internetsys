@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle, Monitor, Play, Router } from 'lucide-react';
+import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle, Monitor, Play, Router, Settings, Activity as ActivityIcon } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 
@@ -376,22 +376,37 @@ export default function UserDashboard() {
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
                               <div className="flex items-center gap-4 relative z-10">
                                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                                <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">SURFING LIVE</span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">SURFING LIVE</span>
+                                  <button 
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (isDeviceLive) return;
+                                      if (!isSynced) {
+                                         startDiscovery(sub.id);
+                                         return;
+                                      }
+                                      startMutation.mutate(sub.id);
+                                    }}
+                                    className={`text-left text-[9px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400/50 opacity-50 cursor-default no-underline' : 'text-cyan-500 hover:text-main'}`}
+                                  >
+                                    {isDeviceLive ? 'DEVICE CONNECTED' : 'CONNECT THIS DEVICE'}
+                                  </button>
+                                </div>
                               </div>
-                               <button 
-                                 onClick={async (e) => {
-                                   e.stopPropagation();
-                                   if (isDeviceLive) return;
-                                   if (!isSynced) {
-                                      startDiscovery(sub.id);
-                                      return;
-                                   }
-                                   startMutation.mutate(sub.id);
-                                 }}
-                                 className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : 'text-cyan-500 hover:text-main'}`}
-                               >
-                                 {isDeviceLive ? 'DEVICE CONNECTED' : 'CONNECT THIS DEVICE'}
-                               </button>
+
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startDiscovery(sub.id);
+                                }}
+                                className="relative z-20 flex items-center gap-2 px-4 py-2.5 bg-main/5 border border-main/10 rounded-xl hover:bg-main/10 hover:border-cyan-500/30 transition-all group/btn"
+                              >
+                                <Settings size={14} className="text-muted group-hover/btn:text-cyan-400 transition-colors" />
+                                <span className="text-[10px] font-black text-muted group-hover/btn:text-main uppercase tracking-widest">
+                                  MANAGE DEVICES
+                                </span>
+                              </button>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -415,9 +430,22 @@ export default function UserDashboard() {
                                  </div>
                                  <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="lg" />
                                </div>
-                               <div className="px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center gap-3">
-                                 <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
-                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">SYSTEM LIVE</span>
+                               <div className="flex items-center gap-2">
+                                 <div className="px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center gap-3">
+                                   <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
+                                   <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">SYSTEM LIVE</span>
+                                 </div>
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     fireInternet(sub.mikrotikUsername, sub.mikrotikPassword);
+                                     toast.success('Refreshing Handshake...');
+                                   }}
+                                   title="Refresh Connection Handshake"
+                                   className="p-2.5 rounded-full bg-main/5 border border-main/10 hover:bg-main/10 hover:border-cyan-500/30 text-muted hover:text-cyan-400 transition-all flex items-center justify-center group"
+                                  >
+                                   <RefreshCw size={14} className="group-active:rotate-180 transition-transform duration-500" />
+                                 </button>
                                </div>
                             </div>
                           </>
