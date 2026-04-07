@@ -608,19 +608,38 @@ export class SubscriptionsService {
       .map((h) => ({
         mac: h.mac,
         ip: h.ip,
-        deviceName: this.getVendorFromMac(h.mac),
+        deviceName: h.hostName || this.getVendorFromMac(h.mac),
       }));
   }
 
   private getVendorFromMac(mac: string): string {
     if (!mac) return 'Generic Device';
-    // Simple vendor hints for UI clarity
+    // Elite Vendor Mapping (OUI Prefixes)
     const m = mac.toUpperCase();
-    if (m.startsWith('00:0C:29') || m.startsWith('00:50:56')) return 'VMware';
-    if (m.startsWith('BC:6A:40') || m.startsWith('B0:C0:90')) return 'Laptop/PC';
-    if (m.startsWith('A4:77:33')) return 'Samsung';
-    if (m.startsWith('DC:A6:32')) return 'Raspberry Pi';
-    if (m.startsWith('00:23:24')) return 'Apple';
+    
+    // Apple
+    if (m.startsWith('00:23:24') || m.startsWith('00:25:00') || m.startsWith('00:03:93') || 
+        m.startsWith('00:1E:52') || m.startsWith('F0:D1:A9')) return 'Apple Device';
+    
+    // Samsung
+    if (m.startsWith('A4:77:33') || m.startsWith('B0:C0:90') || m.startsWith('00:00:F0') || 
+        m.startsWith('00:15:99')) return 'Samsung Galaxy';
+        
+    // Huawei
+    if (m.startsWith('00:18:82') || m.startsWith('00:25:68') || m.startsWith('00:46:4B')) return 'Huawei Device';
+    
+    // Xiaomi
+    if (m.startsWith('00:9E:C8') || m.startsWith('18:F0:E4') || m.startsWith('0C:1D:AF')) return 'Xiaomi Device';
+    
+    // Transsion (Tecno/Infinix/Itel) - Extremely common in Kenya
+    if (m.startsWith('00:08:22') || m.startsWith('14:2D:27') || m.startsWith('38:D2:CA')) return 'Tecno/Infinix';
+    
+    // PC/Workstations
+    if (m.startsWith('BC:6A:40') || m.startsWith('00:0C:29') || m.startsWith('00:50:56')) return 'Laptop/PC';
+    
+    // Raspberry Pi / IoT
+    if (m.startsWith('DC:A6:32') || m.startsWith('B8:27:EB')) return 'Smart Device';
+    
     return 'Hotspot Device';
   }
 

@@ -82,28 +82,40 @@ export class MikrotikService {
     }
   }
 
-  /**
-   * Get all hotspot hosts from a router that are NOT already 
-   * assigned to active device sessions. Used for Sync Device.
-   * This works through NAT because it doesn't search by IP —
-   * instead it returns all available hosts for the frontend to pick.
-   */
-  async getAllHosts(router: Router): Promise<Array<{ mac: string; ip: string }>> {
+  async getAllHosts(router: Router): Promise<Array<{ mac: string; ip: string; hostName?: string }>> {
     try {
       const api = await this.connect(router);
       try {
-        // Get all hosts from the hotspot host table
+        // 1. Get all active hotspot hosts
         const hosts = await api.write('/ip/hotspot/host/print');
+        
+        // 2. Get all DHCP leases to find hostnames
+        const leases = await api.write('/ip/dhcp-server/lease/print');
+        const leaseMap = new Map();
+        if (leases && leases.length > 0) {
+          leases.forEach((l: any) => {
+            if (l['active-mac-address'] && l['host-name']) {
+              leaseMap.set(l['active-mac-address'].toLowerCase(), l['host-name']);
+            } else if (l['mac-address'] && l['host-name']) {
+              leaseMap.set(l['mac-address'].toLowerCase(), l['host-name']);
+            }
+          });
+        }
+
         this.logger.log(`[SYNC] Found ${hosts?.length || 0} total hosts on ${router.name}`);
         
         if (!hosts || hosts.length === 0) return [];
 
         return hosts
           .filter((h: any) => h['mac-address'])
-          .map((h: any) => ({
-            mac: h['mac-address'],
-            ip: h['address'] || '',
-          }));
+          .map((h: any) => {
+            const mac = h['mac-address'];
+            return {
+              mac: mac,
+              ip: h['address'] || '',
+              hostName: leaseMap.get(mac.toLowerCase()),
+            };
+          });
       } finally {
         api.close();
       }
