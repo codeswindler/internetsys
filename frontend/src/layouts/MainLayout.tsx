@@ -201,8 +201,8 @@ export default function MainLayout({ role }: LayoutProps) {
 
     // DIRECT-THRUST: Force the browser to hit the router directly (HTTP)
     // This dismisses the "Sign In" bar on iPhones/Androids 100% of the time.
-    const dashboardUrl = window.location.origin + '/user/dashboard?success=true';
-    const loginUrl = `http://${routerIp}/login?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(dashboardUrl)}`;
+    const googleEscapeUrl = 'http://connectivitycheck.gstatic.com/generate_204';
+    const loginUrl = `http://${routerIp}/login?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(googleEscapeUrl)}`;
 
     console.log('🚀 PREPARING IRONCLAD POST-LOGIN...', loginUrl);
     setAuthData({ user, pass, gateway: routerIp });
@@ -860,7 +860,7 @@ export default function MainLayout({ role }: LayoutProps) {
                 >
                   <input type="hidden" name="username" value={authData.user} />
                   <input type="hidden" name="password" value={authData.pass} />
-                  <input type="hidden" name="dst" value={window.location.origin + '/user/dashboard?success=true'} />
+                  <input type="hidden" name="dst" value="http://connectivitycheck.gstatic.com/generate_204" />
                 </form>
               )}
 
