@@ -715,16 +715,40 @@ export class SubscriptionsService {
       );
     }
 
-    // MULTI-DEVICE LOGIC
+    // MULTI-DEVICE LOGIC: GHOST-BUSTER - Purge any existing active sessions globally for this MAC
     if (mac) {
-      const existingSession = sub.deviceSessions?.find(
-        (s) => s.macAddress === mac,
-      );
+      this.logger.log(`[GHOST-BUSTER] Investigating MAC ${mac} for ghost sessions...`);
+      
+      const existingGlobalSessions = await this.sessionRepo.find({
+        where: { 
+          macAddress: mac,
+          isActive: true,
+          subscription: { user: { id: sub.user.id } }
+        },
+        relations: ['subscription']
+      });
 
-      if (!existingSession) {
+      if (existingGlobalSessions.length > 0) {
+        this.logger.log(`[GHOST-BUSTER] Purging ${existingGlobalSessions.length} stale sessions for MAC ${mac}`);
+        for (const s of existingGlobalSessions) {
+          s.isActive = false;
+          await this.sessionRepo.save(s);
+        }
+      }
+
+      // Re-fetch current sub active sessions to ensure accurate limit check
+      const currentSubActiveSessions = await this.sessionRepo.find({
+        where: { 
+          subscription: { id: sub.id },
+          isActive: true 
+        }
+      });
+
+      const existingSessionInSub = currentSubActiveSessions.find((s) => s.macAddress === mac);
+
+      if (!existingSessionInSub) {
         // Check Limit
-        const activeDeviceCount =
-          sub.deviceSessions?.filter((s) => s.isActive).length || 0;
+        const activeDeviceCount = currentSubActiveSessions.length;
         const maxAllowed = sub.package.maxDevices || 1;
 
         if (activeDeviceCount >= maxAllowed) {
