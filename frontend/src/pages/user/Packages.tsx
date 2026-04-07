@@ -479,7 +479,11 @@ export default function Packages() {
                 Dismiss
               </button>
               <button 
-                onClick={() => { setShowConnectionModal(false); navigate('/user/dashboard'); }}
+                onClick={() => {
+                  const routerGateway = routers?.[0]?.localGateway || '10.5.50.1';
+                  const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/packages')}`;
+                  window.location.href = redirectUrl;
+                }}
                 className="flex-1 py-4 bg-orange-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 hover:bg-orange-400 transition-all active:scale-95"
               >
                 Go to Sync

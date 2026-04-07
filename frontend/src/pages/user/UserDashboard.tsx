@@ -593,10 +593,23 @@ export default function UserDashboard() {
               )}
 
               {/* SECTION 2: DISCOVERY */}
-              <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-1 rounded-full bg-cyan-500" />
-                  <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Nearby Hardware</h4>
+              <div className="space-y-6 mt-10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-1 rounded-full bg-cyan-500" />
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Nearby Hardware</h4>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const routerGateway = activeSub?.router?.localGateway || '10.5.50.1';
+                      const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?success=true')}`;
+                      window.location.href = redirectUrl;
+                    }}
+                    className="text-[10px] font-black text-cyan-500 uppercase tracking-widest hover:underline flex items-center gap-2"
+                  >
+                    <RefreshCw size={12} />
+                    MANUAL IDENTIFY
+                  </button>
                 </div>
 
                 {deviceManager.isScanning ? (
