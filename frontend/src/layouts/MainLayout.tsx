@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Outlet, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
-import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock, ArrowRight, Activity, ChevronRight, Shield } from 'lucide-react';
+import { Wifi, Router, Package, Users, LogOut, Ticket, Settings, Menu, X, MessageCircle, Sun, Moon, RefreshCw, Zap, Clock, ArrowRight, Activity, ChevronRight, Shield, ShieldCheck } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -41,6 +41,8 @@ export default function MainLayout({ role }: LayoutProps) {
 
   // Expiry Monitor State
   const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  const [pendingRedirectUrl, setPendingRedirectUrl] = useState('');
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
 
@@ -201,8 +203,9 @@ export default function MainLayout({ role }: LayoutProps) {
     const dashboardUrl = window.location.origin + '/user/dashboard?success=true';
     const loginUrl = `http://${routerIp}/login?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(dashboardUrl)}`;
 
-    console.log('🚀 INITIATING DIRECT-THRUST LOGIN...', loginUrl);
-    window.location.href = loginUrl;
+    console.log('🚀 PREPARING DIRECT-THRUST LOGIN...', loginUrl);
+    setPendingRedirectUrl(loginUrl);
+    setShowSuccessOverlay(true);
   };
 
   // ── SESSION EXPIRY MONITOR ──
@@ -812,6 +815,36 @@ export default function MainLayout({ role }: LayoutProps) {
           }}
         />
       </main>
+
+      {/* High-Fidelity Success Overlay for Android/iOS Captive Portal Satisfaction */}
+      {showSuccessOverlay && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="max-w-sm w-full bg-slate-900 border border-white/10 rounded-3xl p-8 text-center shadow-2xl shadow-blue-500/10">
+            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <ShieldCheck className="w-10 h-10 text-green-400 animate-pulse" />
+            </div>
+            
+            <h2 className="text-2xl font-bold text-white mb-2">Network Ready!</h2>
+            <p className="text-slate-400 mb-8 text-sm leading-relaxed">
+              Your device is now authorized. Click the button below to complete the setup and start browsing.
+            </p>
+
+            <button
+              onClick={() => {
+                window.location.href = pendingRedirectUrl;
+              }}
+              className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+              COMPLETE SETUP
+              <ArrowRight className="w-5 h-5" />
+            </button>
+            
+            <p className="mt-6 text-[10px] text-slate-500 uppercase tracking-widest font-medium">
+              PulseLynk Elite Connectivity
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

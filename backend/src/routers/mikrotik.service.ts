@@ -556,26 +556,27 @@ export class MikrotikService {
           `[PROVISIONING SUCCESS] User ${username} created with profile ${profile || 'default'}`,
         );
       }
-
       try {
-        // Cleanup old bindings
-        const macQuery = finalMac
-          ? `?mac-address=${finalMac}`
-          : (ip && this.isPrivateIp(ip))
-            ? `?address=${ip}`
-            : null;
-            
-        if (macQuery) {
-          const existing = await api.write('/ip/hotspot/ip-binding/print', [
-            macQuery,
-          ]);
+        // Stage 1 Deep-Clean: Forcefully remove existing active sessions & bindings
+        const cleanupQuery = finalMac ? `?mac-address=${finalMac}` : (ip ? `?address=${ip}` : null);
+
+        if (cleanupQuery) {
+          // 1. Cleave Active Hotspot Sessions
+          const actives = await api.write('/ip/hotspot/active/print', [cleanupQuery]);
+          for (const a of actives) {
+            if (a['.id']) await api.write('/ip/hotspot/active/remove', [`=.id=${a['.id']}`]);
+          }
+          
+          // 2. Cleave Hardware Hosts table
+          const hosts = await api.write('/ip/hotspot/host/print', [cleanupQuery]);
+          for (const h of hosts) {
+            if (h['.id']) await api.write('/ip/hotspot/host/remove', [`=.id=${h['.id']}`]);
+          }
+
+          // 3. Cleave IP-Bindings
+          const existing = await api.write('/ip/hotspot/ip-binding/print', [cleanupQuery]);
           for (const b of existing) {
-            // ONLY if .id is present!
-            if (b['.id']) {
-              await api.write('/ip/hotspot/ip-binding/remove', [
-                `=.id=${b['.id']}`,
-              ]);
-            }
+            if (b['.id']) await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
           }
         }
 
