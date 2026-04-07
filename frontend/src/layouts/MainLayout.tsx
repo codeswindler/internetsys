@@ -157,16 +157,17 @@ export default function MainLayout({ role }: LayoutProps) {
 
   // Global Sync Sentinal: Monitor Recent/Active Subscription for Banner & Auto-Redirect
   const { data: allSubsData = [] } = useQuery({
-    queryKey: ['active-all-subscriptions'],
+    queryKey: ['active-all-subscriptions', currentUser?.id],
     queryFn: async () => {
-      if (role !== 'user' || !token) return [];
+      // Use the actual user ID to ensure we never cross-cache sessions
+      if (role !== 'user' || !token || !currentUser?.id) return [];
       const res = await axios.get(`${API_URL}/subscriptions/my`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
     },
     refetchInterval: 10000,
-    enabled: role === 'user' && !!token,
+    enabled: role === 'user' && !!token && !!currentUser?.id,
   });
 
   // Pick the most relevant one for the quick-actions banner

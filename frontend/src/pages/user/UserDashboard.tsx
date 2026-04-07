@@ -42,6 +42,14 @@ export default function UserDashboard() {
     const mac = params.get('mac');
     const ip = params.get('ip');
     const autoStartId = params.get('auto_start');
+    const isReturningSuccess = params.get('success');
+
+    if (isReturningSuccess && currentUser?.id) {
+       console.log('Returning from Router Success. Invalidating Cache...');
+       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser.id] });
+       // Clean URL
+       window.history.replaceState({}, '', window.location.pathname);
+    }
 
     if (mac || ip) {
       if (mac) localStorage.setItem('hotspot_mac', mac);
@@ -49,18 +57,20 @@ export default function UserDashboard() {
       setIsSynced(true);
       
       // CRITICAL: Force a full dashboard refresh because we just mapped a new hardware ID!
-      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+      if (currentUser?.id) {
+        queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser.id] });
+      }
       
       // Auto-start if requested
       if (autoStartId) {
         startMutation.mutate(autoStartId);
          // Clean URL
          window.history.replaceState({}, '', window.location.pathname);
-      } else {
+      } else if (!isReturningSuccess) {
         toast.success("Device Identified Successfully!", { id: 'url-sync' });
       }
     }
-  }, [window.location.search]);
+  }, [window.location.search, currentUser?.id]);
   
   const startDiscovery = async (subId: string) => {
     setDeviceManager(prev => ({ ...prev, open: true, subId, isScanning: true, discoveredHosts: [] }));
@@ -89,9 +99,10 @@ export default function UserDashboard() {
 
   // Unified Query Key: Centralizes the ACTIVE timer/status
   const { data: activeSubsData, isLoading: activeSubsLoading } = useQuery({
-    queryKey: ['active-all-subscriptions'],
+    queryKey: ['active-all-subscriptions', currentUser?.id],
     queryFn: () => api.get('/subscriptions/my').then(res => res.data),
     refetchInterval: 5000,
+    enabled: !!currentUser?.id,
   });
 
   const subHistory = Array.isArray(activeSubsData) ? activeSubsData : [];
@@ -116,7 +127,7 @@ export default function UserDashboard() {
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
     onSuccess: (res) => {
-      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
       toast.success('Internet Connection Established!', { icon: '🚀' });
       setDeviceManager(prev => ({ ...prev, open: false })); // Close manager if open
       
@@ -153,7 +164,7 @@ export default function UserDashboard() {
     mutationFn: (sessionId: string) => api.post(`/subscriptions/session/${sessionId}/disconnect`),
     onSuccess: (data, sessionId) => {
       toast.success('Device disconnected! Slot cleared.', { icon: '🔓' });
-      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
       
       // Update local state for immediate UI feedback
       setDeviceManager(prev => ({
