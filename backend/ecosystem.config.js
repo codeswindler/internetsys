@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'pulselynk-api',
-      script: 'dist/main.js',
+      script: 'dist/src/main.js',
       cwd: './',
       instances: 1,
       autorestart: true,
