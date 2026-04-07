@@ -167,23 +167,6 @@ export default function UserDashboard() {
     }
   });
 
-  const [deviceManager, setDeviceManager] = useState<{ 
-    open: boolean; 
-    subId: string | null;
-    isScanning: boolean;
-    connectedDevices: any[];
-    discoveredHosts: any[];
-    maxDevices: number;
-    pendingSubId: string | null;
-  }>({
-    open: false,
-    subId: null,
-    isScanning: false,
-    connectedDevices: [],
-    discoveredHosts: [],
-    maxDevices: 1,
-    pendingSubId: null
-  });
 
   const openDeviceManager = async (sub: any) => {
     setDeviceManager({
