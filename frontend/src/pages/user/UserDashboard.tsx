@@ -115,14 +115,15 @@ export default function UserDashboard() {
       const ip = localStorage.getItem('hotspot_ip');
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       toast.success('Internet Connection Established!', { icon: '🚀' });
       setDeviceManager(prev => ({ ...prev, open: false })); // Close manager if open
       
+      const sub = res.data;
       setTimeout(() => {
-        fireInternet();
-      }, 1000);
+        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword);
+      }, 500);
     },
     onError: (err: any) => {
       if (err.response?.status === 409 && err.response?.data?.connectedDevices) {

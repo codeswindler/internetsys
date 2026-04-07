@@ -63,7 +63,7 @@ export default function MainLayout({ role }: LayoutProps) {
       setIsRedeemModalOpen(false);
       setVoucherCode('');
       // Auto-Fire Internet after redemption success
-      setTimeout(() => fireInternet(), 1000);
+      setTimeout(() => fireInternet(data?.mikrotikUsername, data?.mikrotikPassword), 1000);
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Voucher redemption failed');
@@ -186,33 +186,22 @@ export default function MainLayout({ role }: LayoutProps) {
 
 
   const fireInternet = (customUser?: string, customPass?: string) => {
-    if (!activeSub && !customUser) {
-       console.log('No active sub to fire');
+    const user = customUser || activeSub?.mikrotikUsername;
+    const pass = customPass || activeSub?.mikrotikPassword;
+    const routerIp = activeSub?.router?.localGateway || '10.5.50.1';
+
+    if (!user || !pass) {
+       console.log('Direct-Thrust aborted: Missing credentials');
        return;
     }
-    
-    // Trigger the hidden MikroTik login form
-    if (formRef.current) {
-      console.log('FIRING MIKROTIK LOGIN FORM...');
-      formRef.current.submit();
-    }
 
-    // Capture current context
-    const routerIp = activeSub.router?.localGateway || '10.5.50.1';
+    // DIRECT-THRUST: Force the browser to hit the router directly (HTTP)
+    // This dismisses the "Sign In" bar on iPhones/Androids 100% of the time.
+    const dashboardUrl = window.location.origin + '/user/dashboard?success=true';
+    const loginUrl = `http://${routerIp}/login?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(dashboardUrl)}`;
 
-    // Satisfy the phone's OS that we are now UNBLOCKED
-    // We use multiple triggers to ensure the OS dismisses the "Sign In" prompt
-    setTimeout(() => {
-      // 1. Connectivity Check (Standard Android/iPhone trigger)
-      window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
-      
-      // 2. Backup: Redirect to router's own success page
-      setTimeout(() => {
-        if (window.location.hostname !== routerIp) {
-            window.location.href = `http://${routerIp}/status`;
-        }
-      }, 1000);
-    }, 2000);
+    console.log('🚀 INITIATING DIRECT-THRUST LOGIN...', loginUrl);
+    window.location.href = loginUrl;
   };
 
   // ── SESSION EXPIRY MONITOR ──
