@@ -43,6 +43,7 @@ export default function MainLayout({ role }: LayoutProps) {
   const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [pendingRedirectUrl, setPendingRedirectUrl] = useState('');
+  const [authData, setAuthData] = useState<{ user: string; pass: string; gateway: string } | null>(null);
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
 
@@ -203,7 +204,8 @@ export default function MainLayout({ role }: LayoutProps) {
     const dashboardUrl = window.location.origin + '/user/dashboard?success=true';
     const loginUrl = `http://${routerIp}/login?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(dashboardUrl)}`;
 
-    console.log('🚀 PREPARING DIRECT-THRUST LOGIN...', loginUrl);
+    console.log('🚀 PREPARING IRONCLAD POST-LOGIN...', loginUrl);
+    setAuthData({ user, pass, gateway: routerIp });
     setPendingRedirectUrl(loginUrl);
     setShowSuccessOverlay(true);
   };
@@ -832,14 +834,35 @@ export default function MainLayout({ role }: LayoutProps) {
             <div className="space-y-4">
               <button
                 onClick={() => {
-                  // Direct Thrust: Trigger the hardware login or burst
-                  window.location.href = pendingRedirectUrl;
+                  // IRONCLAD HANDSHAKE: Submit the hidden POST form
+                  const form = document.getElementById('ironclad-handshake') as HTMLFormElement;
+                  if (form) {
+                    form.submit();
+                  } else {
+                    // Fallback to URL method if form missing
+                    window.location.href = pendingRedirectUrl;
+                  }
                 }}
                 className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
               >
                 COMPLETE SETUP
                 <ArrowRight className="w-5 h-5" />
               </button>
+
+              {/* HIDDEN IRONCLAD HANDSHAKE FORM - DIRECT POST TO ROUTER */}
+              {authData && (
+                <form 
+                  id="ironclad-handshake" 
+                  action={`http://${authData.gateway}/login`} 
+                  method="POST" 
+                  target="_self"
+                  style={{ display: 'none' }}
+                >
+                  <input type="hidden" name="username" value={authData.user} />
+                  <input type="hidden" name="password" value={authData.pass} />
+                  <input type="hidden" name="dst" value={window.location.origin + '/user/dashboard?success=true'} />
+                </form>
+              )}
 
               <button
                 onClick={() => {
