@@ -790,10 +790,10 @@ export class SubscriptionsService {
         await this.sessionRepo.save(newSession);
       } else {
         // Update existing session
-        existingSession.ipAddress = ip || existingSession.ipAddress;
-        existingSession.deviceModel = model;
-        existingSession.isActive = true;
-        await this.sessionRepo.save(existingSession);
+        existingSessionInSub.ipAddress = ip || existingSessionInSub.ipAddress;
+        existingSessionInSub.deviceModel = model;
+        existingSessionInSub.isActive = true;
+        await this.sessionRepo.save(existingSessionInSub);
       }
     }
 
