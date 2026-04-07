@@ -13,15 +13,22 @@ export default function UserDashboard() {
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
-  const [showDiscovery, setShowDiscovery] = useState(false);
-  const [discoverySubId, setDiscoverySubId] = useState<string | null>(null);
-  const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
-  const [isScanning, setIsScanning] = useState(false);
-  const [deviceLimitModal, setDeviceLimitModal] = useState<{ open: boolean; maxDevices: number; connectedDevices: any[]; pendingSubId: string }>({ 
-    open: false, 
-    maxDevices: 1, 
+  const [deviceManager, setDeviceManager] = useState<{ 
+    open: boolean; 
+    subId: string | null;
+    isScanning: boolean;
+    connectedDevices: any[];
+    discoveredHosts: any[];
+    maxDevices: number;
+    pendingSubId: string | null;
+  }>({
+    open: false,
+    subId: null,
+    isScanning: false,
     connectedDevices: [],
-    pendingSubId: ''
+    discoveredHosts: [],
+    maxDevices: 1,
+    pendingSubId: null
   });
 
   const { fireInternet, currentUser } = useOutletContext<{ 
@@ -41,6 +48,9 @@ export default function UserDashboard() {
       if (ip) localStorage.setItem('hotspot_ip', ip);
       setIsSynced(true);
       
+      // CRITICAL: Force a full dashboard refresh because we just mapped a new hardware ID!
+      queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+      
       // Auto-start if requested
       if (autoStartId) {
         startMutation.mutate(autoStartId);
@@ -53,17 +63,13 @@ export default function UserDashboard() {
   }, [window.location.search]);
   
   const startDiscovery = async (subId: string) => {
-    setDiscoverySubId(subId);
-    setShowDiscovery(true);
-    setIsScanning(true);
-    setDiscoveredHosts([]);
+    setDeviceManager(prev => ({ ...prev, open: true, subId, isScanning: true, discoveredHosts: [] }));
     try {
       const res = await api.get(`/subscriptions/${subId}/discover-hosts`);
-      setDiscoveredHosts(res.data);
+      setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false }));
     } catch (e) {
       toast.error('Failed to scan for devices. Make sure you are on Wi-Fi!');
-    } finally {
-      setIsScanning(false);
+      setDeviceManager(prev => ({ ...prev, isScanning: false }));
     }
   };
 
@@ -99,7 +105,7 @@ export default function UserDashboard() {
   const linkDevice = (mac: string) => {
     localStorage.setItem('hotspot_mac', mac);
     setIsSynced(true);
-    setShowDiscovery(false);
+    setDeviceManager(prev => ({ ...prev, open: false }));
     toast.success('Device linked successfully! Ready to start.', { icon: '🔗' });
   };
 
@@ -112,6 +118,7 @@ export default function UserDashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       toast.success('Internet Connection Established!', { icon: '🚀' });
+      setDeviceManager(prev => ({ ...prev, open: false })); // Close manager if open
       
       setTimeout(() => {
         fireInternet();
@@ -119,12 +126,22 @@ export default function UserDashboard() {
     },
     onError: (err: any) => {
       if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
-        setDeviceLimitModal({
+        // Open the device manager in 'Limit Reached' mode
+        setDeviceManager({
           open: true,
-          maxDevices: err.response.data.maxDevices,
+          subId: err.response.data.subId,
+          isScanning: true, // We still scan because maybe they want to link a different device
           connectedDevices: err.response.data.connectedDevices,
+          discoveredHosts: [],
+          maxDevices: err.response.data.maxDevices,
           pendingSubId: err.response.data.subId
         });
+        
+        // Background scan for nearby devices too
+        api.get(`/subscriptions/${err.response.data.subId}/discover-hosts`)
+           .then(res => setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
+           .catch(() => setDeviceManager(prev => ({ ...prev, isScanning: false })));
+
       } else {
         toast.error(err.response?.data?.message || 'Failed to start session');
       }
@@ -133,15 +150,60 @@ export default function UserDashboard() {
 
   const disconnectMutation = useMutation({
     mutationFn: (sessionId: string) => api.post(`/subscriptions/session/${sessionId}/disconnect`),
-    onSuccess: () => {
-      toast.success('Device disconnected! You have a free slot.');
+    onSuccess: (data, sessionId) => {
+      toast.success('Device disconnected! Slot cleared.', { icon: '🔓' });
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
-      if (deviceLimitModal.connectedDevices.length <= deviceLimitModal.maxDevices) {
-        setDeviceLimitModal(prev => ({ ...prev, open: false }));
-        if (deviceLimitModal.pendingSubId) startMutation.mutate(deviceLimitModal.pendingSubId);
+      
+      // Update local state for immediate UI feedback
+      setDeviceManager(prev => ({
+        ...prev,
+        connectedDevices: prev.connectedDevices.filter(d => d.id !== sessionId)
+      }));
+
+      // If we were waiting to start a session after a kick
+      if (deviceManager.pendingSubId) {
+        startMutation.mutate(deviceManager.pendingSubId);
       }
     }
   });
+
+  const [deviceManager, setDeviceManager] = useState<{ 
+    open: boolean; 
+    subId: string | null;
+    isScanning: boolean;
+    connectedDevices: any[];
+    discoveredHosts: any[];
+    maxDevices: number;
+    pendingSubId: string | null;
+  }>({
+    open: false,
+    subId: null,
+    isScanning: false,
+    connectedDevices: [],
+    discoveredHosts: [],
+    maxDevices: 1,
+    pendingSubId: null
+  });
+
+  const openDeviceManager = async (sub: any) => {
+    setDeviceManager({
+      open: true,
+      subId: sub.id,
+      isScanning: true,
+      connectedDevices: sub.deviceSessions?.filter((s: any) => s.isActive) || [],
+      discoveredHosts: [],
+      maxDevices: sub.package?.maxDevices || 1,
+      pendingSubId: null
+    });
+
+    try {
+      const res = await api.get(`/subscriptions/${sub.id}/discover-hosts`);
+      setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false }));
+    } catch (e) {
+      setDeviceManager(prev => ({ ...prev, isScanning: false }));
+      toast.error('Scan failed. Ensure you are on Wi-Fi!');
+    }
+  };
 
   // Poll traffic for active session
   useEffect(() => {
@@ -240,9 +302,16 @@ export default function UserDashboard() {
              </div>
              <button 
                 onClick={() => navigate('/user/packages')}
-                className="mt-4 px-10 py-5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.3em] shadow-xl hover:shadow-cyan-500/20 active:scale-95 transition-all"
+                className="px-10 py-5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.3em] shadow-xl hover:shadow-cyan-500/20 active:scale-95 transition-all"
              >
                 BROWSE PACKAGES
+             </button>
+             <button 
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] })}
+                className="px-10 py-5 bg-white/5 border border-white/10 text-white/40 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-white/10 active:scale-95 transition-all flex items-center gap-3"
+             >
+                <RefreshCw size={14} />
+                SYNC STATUS
              </button>
           </div>
         ) : (
@@ -396,10 +465,16 @@ export default function UserDashboard() {
                                  'JOIN NETWORK'}
                                </button>
 
-                               <div className="w-full lg:w-48 bg-main/5 border border-main/5 rounded-3xl px-8 py-4 text-center">
-                                  <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">TOTAL TIME</p>
-                                  <span className="text-xl font-black text-main">{sub.package?.durationText || 'Ready'}</span>
-                               </div>
+                               <button 
+                                 onClick={() => openDeviceManager(sub)}
+                                 className="w-full lg:w-48 bg-main/5 border border-main/10 rounded-3xl px-8 py-6 text-center hover:bg-main/10 transition-all flex flex-col items-center justify-center"
+                               >
+                                  <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">MANAGE</p>
+                                  <div className="flex items-center gap-2">
+                                     <Smartphone size={16} className="text-cyan-500" />
+                                     <span className="text-xs font-black text-main">DEVICES</span>
+                                  </div>
+                               </button>
                              </div>
 
                              <div className="flex items-center justify-between w-full px-2 opacity-50">
@@ -467,159 +542,119 @@ export default function UserDashboard() {
         </button>
       </div>
 
-      {/* ── 💎 ELITE CRYSTAL DISCOVERY MODAL (CENTERED RESTORATION) ── */}
-      {showDiscovery && (
+      {/* ── 💎 UNIFIED DEVICE MANAGER MODAL ── */}
+      {deviceManager.open && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in duration-500 overflow-y-auto">
           <div className="relative w-full max-w-xl mx-auto transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-3xl md:rounded-[3rem]">
-            {/* Header / Top Shelf */}
+            {/* Header */}
             <div className="p-6 pb-4 md:p-10 md:pb-8 flex items-center justify-between relative overflow-hidden">
                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-3xl -translate-y-12 translate-x-12" />
                <div className="relative z-10">
-                 <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase mb-2">LINK THIS DEVICE</h3>
-                 <p className="text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.3em] opacity-80">Hardware Identification Active</p>
+                 <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase mb-2">DEVICE MANAGER</h3>
+                 <p className="text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.3em] opacity-80">
+                   {deviceManager.connectedDevices.length} / {deviceManager.maxDevices} Devices Active
+                 </p>
                </div>
                <button 
-                 onClick={() => setShowDiscovery(false)}
+                 onClick={() => setDeviceManager(prev => ({ ...prev, open: false }))}
                  className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-500 hover:scale-110 transition-all active:scale-95 group relative z-10"
                >
                  <X size={26} strokeWidth={2.5} />
                </button>
             </div>
 
-            <div className="p-6 pt-0 md:p-10 md:pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              {isScanning ? (
-                <div className="py-20 flex flex-col items-center justify-center gap-10">
-                   <div className="relative">
-                      <div className="w-32 h-32 rounded-full border-[6px] border-cyan-500/20 border-t-cyan-500 animate-[spin_1.5s_linear_infinite]" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                         <div className="w-20 h-20 rounded-full bg-cyan-500/10 flex items-center justify-center animate-pulse">
-                           <Search className="text-cyan-500" size={40} />
-                         </div>
-                      </div>
-                      <div className="absolute -inset-4 rounded-full border border-cyan-500/10 animate-[ping_3s_infinite]" />
-                   </div>
-                   <div className="text-center space-y-3">
-                     <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-[0.2em] animate-pulse">Scanning Router OS...</h4>
-                     <p className="text-[10px] text-slate-400 dark:text-muted font-black uppercase tracking-widest leading-relaxed max-w-[300px] mx-auto opacity-70">
-                       Direct Router Integration: Searching for active hardware signatures on your local network.
-                     </p>
-                   </div>
-                </div>
-              ) : discoveredHosts.length === 0 ? (
-                <div className="py-24 text-center">
-                  <div className="w-24 h-24 bg-amber-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-8 rotate-12">
-                    <AlertTriangle size={48} className="text-amber-500 animate-pulse" />
-                  </div>
-                  <h4 className="text-2xl font-black text-slate-900 dark:text-white mb-4 uppercase tracking-[0.1em]">Signal Not Detected</h4>
-                  <p className="text-xs text-slate-400 dark:text-muted mb-10 leading-relaxed max-w-[320px] mx-auto font-bold uppercase tracking-widest opacity-60 px-4">
-                    PulseLynk couldn't detect your hardware signature. Verify you are connected to the <span className="text-cyan-500 font-black">PulseLynk Wi-Fi</span> network.
-                  </p>
-                  <button 
-                    onClick={() => discoverySubId && startDiscovery(discoverySubId)}
-                    className="group px-12 py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-black uppercase tracking-[0.4em] rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-2xl flex items-center gap-4 mx-auto"
-                  >
-                    <RefreshCw size={18} className="group-hover:rotate-180 transition-transform duration-700" />
-                    RE-SCAN NETWORK
-                  </button>
-                </div>
-              ) : (
+            <div className="p-6 pt-0 md:p-10 md:pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar space-y-10">
+              
+              {/* SECTION 1: CONNECTED DEVICES */}
+              {deviceManager.connectedDevices.length > 0 && (
                 <div className="space-y-6">
-                  <div className="flex items-center gap-4 px-6 py-4 bg-cyan-500/5 dark:bg-cyan-500/10 rounded-2xl border border-cyan-500/20 mb-8">
-                     <ShieldCheck className="text-cyan-500 shrink-0" size={24} />
-                     <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest leading-none">Select your detected device to bind with this plan</p>
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-1 rounded-full bg-emerald-500" />
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Active Sessions</h4>
                   </div>
-                  <div className="grid gap-6">
-                    {discoveredHosts.map((host) => (
+                  <div className="grid gap-4">
+                    {deviceManager.connectedDevices.map((device: any) => (
+                      <div key={device.id} className="flex items-center justify-between p-5 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-2xl group hover:border-red-500/20 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                            <Smartphone size={24} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">{device.model || 'Connected Device'}</p>
+                            <p className="text-[10px] text-slate-400 dark:text-muted font-mono tracking-widest">{device.macAddress || device.mac || 'No MAC'}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => disconnectMutation.mutate(device.id)}
+                          disabled={disconnectMutation.isPending}
+                          className="px-6 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 shadow-lg shadow-red-500/10"
+                        >
+                          {disconnectMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : 'KICK'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SECTION 2: DISCOVERY */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-1 rounded-full bg-cyan-500" />
+                  <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Nearby Hardware</h4>
+                </div>
+
+                {deviceManager.isScanning ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-6">
+                    <div className="relative">
+                      <div className="w-20 h-20 rounded-full border-[4px] border-cyan-500/20 border-t-cyan-500 animate-spin" />
+                    </div>
+                    <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest animate-pulse">Scanning Network...</p>
+                  </div>
+                ) : deviceManager.discoveredHosts.length === 0 ? (
+                  <div className="py-10 text-center border-2 border-dashed border-slate-100 dark:border-white/5 rounded-[2rem]">
+                    <p className="text-xs text-slate-400 dark:text-muted font-bold uppercase tracking-widest opacity-60">No new devices detected</p>
+                    <button 
+                      onClick={() => openDeviceManager({ id: deviceManager.subId, package: { maxDevices: deviceManager.maxDevices } })}
+                      className="mt-4 text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] hover:underline"
+                    >
+                      RE-SCAN
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {deviceManager.discoveredHosts.map((host) => (
                       <button
                         key={host.mac}
                         onClick={() => linkDevice(host.mac)}
                         className="w-full relative group transition-all duration-500 active:scale-95 text-left"
                       >
-                        <div className="p-8 rounded-[2rem] bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-white/5 group-hover:border-cyan-500/40 group-hover:bg-white dark:group-hover:bg-slate-800 transition-all shadow-xl group-hover:shadow-[0_20px_50px_rgba(6,182,212,0.15)] flex items-center justify-between">
-                          <div className="flex items-center gap-8">
-                            <div className="w-20 h-20 rounded-3xl bg-white dark:bg-slate-950 flex items-center justify-center text-cyan-500 shadow-xl group-hover:scale-110 transition-transform border border-slate-100 dark:border-white/5">
-                              {host.deviceName === 'Apple' ? <Smartphone size={36} /> : <Laptop size={36} />}
+                        <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-white/5 group-hover:border-cyan-500/40 flex items-center justify-between">
+                          <div className="flex items-center gap-5">
+                            <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-950 flex items-center justify-center text-cyan-500 border border-slate-100 dark:border-white/5 shadow-sm">
+                              {host.deviceName?.toLowerCase().includes('laptop') ? <Laptop size={28} /> : <Smartphone size={28} />}
                             </div>
                             <div>
-                               <h5 className="font-black text-slate-900 dark:text-white text-lg tracking-tighter uppercase mb-2">{host.deviceName || 'Neighbor Device'}</h5>
-                               <div className="flex items-center gap-4">
-                                 <span className="text-[11px] font-black text-slate-400 dark:text-muted font-mono tracking-widest">{host.mac}</span>
-                                 {host.ip && (
-                                   <>
-                                     <div className="w-1.5 h-1.5 rounded-full bg-cyan-500/30" />
-                                     <span className="text-[11px] font-black text-cyan-500/60 font-mono italic">{host.ip}</span>
-                                   </>
-                                 )}
-                               </div>
+                               <h5 className="font-black text-slate-900 dark:text-white text-base tracking-tighter uppercase mb-1">{host.deviceName || 'Neighbor Device'}</h5>
+                               <span className="text-[10px] font-black text-slate-400 dark:text-muted font-mono tracking-widest">{host.mac}</span>
                             </div>
                           </div>
-                          <div className="w-12 h-12 rounded-full bg-cyan-500 flex items-center justify-center text-white scale-0 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-                            <ArrowRight size={20} />
-                          </div>
+                          <ArrowRight className="text-cyan-500 opacity-0 group-hover:opacity-100 transition-all" size={20} />
                         </div>
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-            {/* Footer / Info Rail */}
-            <div className="p-8 bg-slate-50 dark:bg-slate-950/20 border-t border-main/5 flex items-center justify-between px-12">
-               <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-[9px] font-black text-slate-400 dark:text-muted uppercase tracking-widest">Router Protected</span>
-               </div>
-               <span className="text-[9px] font-black text-slate-400 dark:text-muted uppercase tracking-tighter opacity-50 font-mono">ID: {discoverySubId?.slice(-8).toUpperCase()}</span>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {deviceLimitModal.open && (
-        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 backdrop-blur-2xl bg-slate-950/60 animate-fade-in">
-          <div className="glass-panel w-full max-w-lg p-8 sm:p-12 border-red-500/30 bg-opacity-95 shadow-[0_0_80px_rgba(239,68,68,0.15)] rounded-[2.5rem]" style={{ backgroundColor: 'var(--bg-panel)' }}>
-            <div className="flex items-center gap-6 mb-8 pb-8 border-b border-main/10">
-              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500 shrink-0">
-                <AlertTriangle size={32} />
-              </div>
-              <div>
-                <h3 className="text-2xl font-black text-main uppercase tracking-tight">Limit Reached</h3>
-                <p className="text-[10px] text-muted font-bold uppercase tracking-widest opacity-60">
-                  Max {deviceLimitModal.maxDevices} device{deviceLimitModal.maxDevices > 1 ? 's' : ''} allowed
-                </p>
-              </div>
+            {/* Footer */}
+            <div className="p-8 bg-slate-50 dark:bg-slate-950/20 border-t border-slate-100 dark:border-white/5 flex items-center justify-center">
+               <div className="flex items-center gap-3">
+                  <ShieldCheck className="text-emerald-500" size={16} />
+                  <span className="text-[9px] font-black text-slate-400 dark:text-muted uppercase tracking-[0.2em]">Secure Hardware Isolation</span>
+               </div>
             </div>
-            <p className="text-sm text-muted mb-8 leading-relaxed font-bold uppercase tracking-wide opacity-80">
-              Your plan is currently active on other devices. Please disconnect a device below to start surfing here.
-            </p>
-            <div className="space-y-4 mb-10">
-              {deviceLimitModal.connectedDevices.map((device: any) => (
-                <div key={device.id} className="flex items-center justify-between p-5 bg-main/5 border border-main/5 rounded-2xl group hover:border-red-500/20 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
-                      <Smartphone size={24} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-main uppercase tracking-wide">{device.model || 'Unknown Device'}</p>
-                      <p className="text-[10px] text-muted font-mono tracking-widest">{device.mac}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => disconnectMutation.mutate(device.id)}
-                    disabled={disconnectMutation.isPending}
-                    className="px-6 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 shadow-lg shadow-red-500/10"
-                  >
-                    {disconnectMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : 'KICK'}
-                  </button>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setDeviceLimitModal(prev => ({ ...prev, open: false }))}
-              className="w-full py-5 bg-main/5 border border-main/10 text-muted text-xs font-black uppercase tracking-[0.3em] rounded-2xl hover:bg-main/10 hover:text-main transition-all"
-            >
-              Cancel
-            </button>
           </div>
         </div>
       )}

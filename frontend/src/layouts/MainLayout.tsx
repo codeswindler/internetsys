@@ -193,19 +193,26 @@ export default function MainLayout({ role }: LayoutProps) {
     
     // Trigger the hidden MikroTik login form
     if (formRef.current) {
-      console.log('FIRING INTERNET FORM...');
-      
-      // If custom credentials provided, we'd need a way to set them. 
-      // For now we assume activeSub is correct or form is already populated.
+      console.log('FIRING MIKROTIK LOGIN FORM...');
       formRef.current.submit();
     }
 
-    // Satisfy the phone's OS that we are now UNBLOCKED and redirect to trigger portal dismissal
-    // We use a longer delay (2.5s) to ensure the router processes the login before the device checks
-    // We use HTTP connectivity check because it's more resilient than HTTPS during the switchover
+    // Capture current context
+    const routerIp = activeSub.router?.localGateway || '10.5.50.1';
+
+    // Satisfy the phone's OS that we are now UNBLOCKED
+    // We use multiple triggers to ensure the OS dismisses the "Sign In" prompt
     setTimeout(() => {
+      // 1. Connectivity Check (Standard Android/iPhone trigger)
       window.location.href = 'http://connectivitycheck.gstatic.com/generate_204';
-    }, 2500);
+      
+      // 2. Backup: Redirect to router's own success page
+      setTimeout(() => {
+        if (window.location.hostname !== routerIp) {
+            window.location.href = `http://${routerIp}/status`;
+        }
+      }, 1000);
+    }, 2000);
   };
 
   // ── SESSION EXPIRY MONITOR ──

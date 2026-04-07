@@ -425,7 +425,7 @@ export class SubscriptionsService {
       }
     }
 
-    // Force hardware logout for all associated devices to trigger captive portal popup in other apps
+    // Forced hardware logout for all associated devices to trigger captive portal popup
     if (sub.deviceSessions && sub.deviceSessions.length > 0) {
       for (const session of sub.deviceSessions) {
         try {
@@ -433,6 +433,7 @@ export class SubscriptionsService {
             sub.router,
             session.ipAddress,
             session.macAddress,
+            sub.mikrotikUsername,
           );
         } catch (e) {
           this.logger.warn(`Secondary hardware logout failed for ${session.macAddress}: ${e.message}`);
@@ -552,26 +553,16 @@ export class SubscriptionsService {
     if (session.subscription.router && session.macAddress) {
       try {
         const router = session.subscription.router;
-        const api = await (this.mikrotikService as any).connect(router);
-        try {
-          // Remove from hotspot active sessions by MAC
-          const active = await api.write('/ip/hotspot/active/print', [
-            `?mac-address=${session.macAddress}`,
-          ]);
-          for (const a of active) {
-            await api.write('/ip/hotspot/active/remove', [`=.id=${a['.id']}`]);
-          }
-          // Remove from host table
-          const hosts = await api.write('/ip/hotspot/host/print', [
-            `?mac-address=${session.macAddress}`,
-          ]);
-          for (const h of hosts) {
-            await api.write('/ip/hotspot/host/remove', [`=.id=${h['.id']}`]);
-          }
-          this.logger.log(`[DISCONNECT] Removed device ${session.macAddress} from router ${router.name}`);
-        } finally {
-          api.close();
-        }
+        
+        // FORCE LOGOUT: This is the critical step to trigger the captive portal on the device
+        await this.mikrotikService.forceLogoutHotspot(
+          router,
+          session.ipAddress,
+          session.macAddress,
+          session.subscription.mikrotikUsername,
+        );
+        
+        this.logger.log(`[DISCONNECT] Forcefully removed device ${session.macAddress} from router ${router.name}`);
       } catch (e) {
         this.logger.warn(`[DISCONNECT] Router cleanup failed for ${session.macAddress}: ${e.message}`);
       }
