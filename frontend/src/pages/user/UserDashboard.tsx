@@ -73,7 +73,16 @@ export default function UserDashboard() {
   }, [window.location.search, currentUser?.id]);
   
   const startDiscovery = async (subId: string) => {
-    setDeviceManager(prev => ({ ...prev, open: true, subId, isScanning: true, discoveredHosts: [] }));
+    const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
+    setDeviceManager({
+      open: true,
+      subId,
+      isScanning: true,
+      connectedDevices: targetSub?.deviceSessions?.filter((s: any) => s.isActive) || [],
+      discoveredHosts: [],
+      maxDevices: targetSub?.package?.maxDevices || 1,
+      pendingSubId: subId
+    });
     try {
       const res = await api.get(`/subscriptions/${subId}/discover-hosts`);
       setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false }));
@@ -113,10 +122,20 @@ export default function UserDashboard() {
 
   const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
 
-  const linkDevice = (mac: string) => {
-    localStorage.setItem('hotspot_mac', mac);
+  const linkDevice = (host: { mac: string; ip?: string }) => {
+    localStorage.setItem('hotspot_mac', host.mac);
+    if (host.ip) localStorage.setItem('hotspot_ip', host.ip);
+    else localStorage.removeItem('hotspot_ip');
     setIsSynced(true);
+    const pendingSubId = deviceManager.pendingSubId;
     setDeviceManager(prev => ({ ...prev, open: false }));
+
+    if (pendingSubId) {
+      toast.success('Device linked. Completing connection...', { icon: '🔗' });
+      startMutation.mutate(pendingSubId);
+      return;
+    }
+
     toast.success('Device linked successfully! Ready to start.', { icon: '🔗' });
   };
 
@@ -129,7 +148,7 @@ export default function UserDashboard() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
       toast.success('Internet Connection Established!', { icon: '🚀' });
-      setDeviceManager(prev => ({ ...prev, open: false })); // Close manager if open
+      setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null })); // Close manager if open
       
       const sub = res.data;
       setTimeout(() => {
@@ -161,7 +180,7 @@ export default function UserDashboard() {
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: (sessionId: string) => api.post(`/subscriptions/session/${sessionId}/disconnect`),
+    mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
     onSuccess: (data, sessionId) => {
       toast.success('Device disconnected! Slot cleared.', { icon: '🔓' });
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
@@ -627,12 +646,18 @@ export default function UserDashboard() {
                     <div className="w-10 h-1 rounded-full bg-cyan-500" />
                     <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Nearby Hardware</h4>
                   </div>
-                  <button 
-                    onClick={() => {
-                      const routerGateway = activeSub?.router?.localGateway || '10.5.50.1';
-                      const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/dashboard?success=true')}`;
-                      window.location.href = redirectUrl;
-                    }}
+                     <button
+                        onClick={() => {
+                          const managerSub = allActiveSubs.find((sub: any) => sub.id === deviceManager.subId);
+                          const routerGateway = managerSub?.router?.localGateway || activeSub?.router?.localGateway || '10.5.50.1';
+                          const returnUrl = new URL(`${window.location.origin}/user/dashboard`);
+                          returnUrl.searchParams.set('success', 'true');
+                          if (deviceManager.pendingSubId) {
+                            returnUrl.searchParams.set('auto_start', deviceManager.pendingSubId);
+                          }
+                          const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(returnUrl.toString())}`;
+                          window.location.href = redirectUrl;
+                        }}
                     className="text-[10px] font-black text-cyan-500 uppercase tracking-widest hover:underline flex items-center gap-2"
                   >
                     <RefreshCw size={12} />
@@ -662,7 +687,7 @@ export default function UserDashboard() {
                     {deviceManager.discoveredHosts.map((host) => (
                       <button
                         key={host.mac}
-                        onClick={() => linkDevice(host.mac)}
+                        onClick={() => linkDevice(host)}
                         className="w-full relative group transition-all duration-500 active:scale-95 text-left"
                       >
                         <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-white/5 group-hover:border-cyan-500/40 flex items-center justify-between">

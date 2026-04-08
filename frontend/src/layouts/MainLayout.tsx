@@ -46,6 +46,7 @@ export default function MainLayout({ role }: LayoutProps) {
   const [authData, setAuthData] = useState<{ user: string; pass: string; gateway: string } | null>(null);
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
+  const autoHandshakeAttemptedRef = useRef(false);
 
   const redeemMutation = useMutation({
     mutationFn: async (data: { code: string; routerId: string }) => {
@@ -209,6 +210,30 @@ export default function MainLayout({ role }: LayoutProps) {
     setPendingRedirectUrl(loginUrl);
     setShowSuccessOverlay(true);
   };
+
+  const submitPendingHandshake = () => {
+    const form = document.getElementById('ironclad-handshake') as HTMLFormElement | null;
+    if (form) {
+      form.submit();
+    } else if (pendingRedirectUrl) {
+      window.location.href = pendingRedirectUrl;
+    }
+  };
+
+  useEffect(() => {
+    if (!showSuccessOverlay) {
+      autoHandshakeAttemptedRef.current = false;
+      return;
+    }
+    if (autoHandshakeAttemptedRef.current) return;
+
+    autoHandshakeAttemptedRef.current = true;
+    const timer = window.setTimeout(() => {
+      submitPendingHandshake();
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [showSuccessOverlay, pendingRedirectUrl, authData]);
 
   // ── SESSION EXPIRY MONITOR ──
   useEffect(() => {
@@ -833,16 +858,7 @@ export default function MainLayout({ role }: LayoutProps) {
 
             <div className="space-y-4">
               <button
-                onClick={() => {
-                  // IRONCLAD HANDSHAKE: Submit the hidden POST form
-                  const form = document.getElementById('ironclad-handshake') as HTMLFormElement;
-                  if (form) {
-                    form.submit();
-                  } else {
-                    // Fallback to URL method if form missing
-                    window.location.href = pendingRedirectUrl;
-                  }
-                }}
+                onClick={() => submitPendingHandshake()}
                 className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
               >
                 COMPLETE SETUP
@@ -851,10 +867,10 @@ export default function MainLayout({ role }: LayoutProps) {
 
               {/* HIDDEN IRONCLAD HANDSHAKE FORM - DIRECT POST TO ROUTER */}
               {authData && (
-                <form 
-                  id="ironclad-handshake" 
-                  action={`http://${authData.gateway}/login`} 
-                  method="POST" 
+                <form
+                  id="ironclad-handshake"
+                  action={localStorage.getItem('hotspot_link_login') || `http://${authData.gateway}/login`}
+                  method="POST"
                   target="_self"
                   style={{ display: 'none' }}
                 >

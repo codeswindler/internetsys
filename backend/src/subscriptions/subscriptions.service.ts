@@ -592,8 +592,9 @@ export class SubscriptionsService {
     });
     const linkedMacs = new Set(activeSessions.map((s) => s.macAddress?.toLowerCase()));
 
-    // 3. Return all hosts for selection
+    // 3. Return only hosts that are not already linked to an active session
     return allHosts
+      .filter((h) => h.mac && !linkedMacs.has(h.mac.toLowerCase()))
       .map((h) => ({
         mac: h.mac,
         ip: h.ip,

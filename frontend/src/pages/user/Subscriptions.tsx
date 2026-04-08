@@ -17,6 +17,7 @@ export default function Subscriptions() {
   const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
+  const [pendingStartSubId, setPendingStartSubId] = useState<string | null>(null);
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -58,8 +59,13 @@ export default function Subscriptions() {
   );
 
   const startDiscovery = (subId: string) => {
-    // Redundant fallback if they bypass the router
-    toast.error("Unidentified App Session. Please ensure you logged in via the captive portal network redirect to securely sync your physical hardware identity.", { icon: '🛡️' });
+    const targetSub = subHistory.find((sub: any) => sub.id === subId);
+    const routerGateway = targetSub?.router?.localGateway || '10.5.50.1';
+    const returnUrl = new URL(`${window.location.origin}/user/subscriptions`);
+    returnUrl.searchParams.set('success', 'true');
+    returnUrl.searchParams.set('auto_start', subId);
+    const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(returnUrl.toString())}`;
+    window.location.href = redirectUrl;
   };
 
   const fireInternet = () => {
@@ -77,6 +83,7 @@ export default function Subscriptions() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+      setPendingStartSubId(null);
       toast.success('Internet Connection Established!', { icon: '🚀' });
       setTimeout(() => {
         fireInternet();
@@ -84,23 +91,52 @@ export default function Subscriptions() {
     },
     onError: (err: any) => {
       if (err.response?.status === 409 && err.response?.data?.subId) {
+        setPendingStartSubId(err.response.data.subId);
         setDiscoverySubId(err.response.data.subId);
         setShowDiscovery(true);
       } else {
+        setPendingStartSubId(null);
         toast.error(err.response?.data?.message || 'Failed to start session');
       }
     }
   });
 
   const disconnectMutation = useMutation({
-    mutationFn: (sessionId: string) => api.post(`/subscriptions/session/${sessionId}/disconnect`),
+    mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
     onSuccess: () => {
       toast.success('Device disconnected! You have a free slot.');
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+      if (pendingStartSubId) {
+        const nextSubId = pendingStartSubId;
+        setPendingStartSubId(null);
+        startMutation.mutate(nextSubId);
+      }
       // We keep the modal open so they can visibly see the slot freed up, 
       // they can click 'X' manually when satisfied.
     }
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mac = params.get('mac');
+    const ip = params.get('ip');
+    const autoStartId = params.get('auto_start');
+
+    if (!mac && !ip && !autoStartId) return;
+
+    if (mac) localStorage.setItem('hotspot_mac', mac);
+    if (ip) localStorage.setItem('hotspot_ip', ip);
+    if (mac || ip || localStorage.getItem('hotspot_mac')) {
+      setIsSynced(true);
+    }
+
+    if (autoStartId && (mac || ip || localStorage.getItem('hotspot_mac'))) {
+      setPendingStartSubId(autoStartId);
+      startMutation.mutate(autoStartId);
+    }
+
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []);
 
   // Traffic Polling
   useEffect(() => {
