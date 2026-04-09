@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { Wifi, Clock, CreditCard, Smartphone, ShieldCheck, Download, Upload, Zap, RefreshCw, ChevronRight, Laptop, Monitor, ArrowRight, X, Search, AlertTriangle, Monitor as MonitorIcon, Laptop as LaptopIcon, Play, Router } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
-import { buildHotspotIdentifyUrl, getStoredHotspotIdentity } from '../../services/hotspot';
+import { buildHotspotIdentifyUrl, getStoredHotspotIdentity, shouldTriggerHotspotIdentify } from '../../services/hotspot';
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
@@ -16,13 +16,17 @@ export default function Subscriptions() {
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   
-  const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
+  const [isSynced, setIsSynced] = useState(() => {
+    const storedIdentity = getStoredHotspotIdentity();
+    return !!(storedIdentity.mac || storedIdentity.ip);
+  });
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [discoverySubId, setDiscoverySubId] = useState<string | null>(null);
   const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   const [pendingStartSubId, setPendingStartSubId] = useState<string | null>(null);
+  const currentDeviceStartRef = useRef<string | null>(null);
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -73,6 +77,11 @@ export default function Subscriptions() {
     window.location.href = redirectUrl;
   };
 
+  const startCurrentDevice = (subId: string) => {
+    currentDeviceStartRef.current = subId;
+    startMutation.mutate(subId);
+  };
+
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
       const mac = localStorage.getItem('hotspot_mac');
@@ -80,6 +89,10 @@ export default function Subscriptions() {
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
     onSuccess: (res) => {
+      if (currentDeviceStartRef.current) {
+        setIsSynced(true);
+      }
+      currentDeviceStartRef.current = null;
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
       setPendingStartSubId(null);
       toast.success('Completing secure connection...', { icon: '📶' });
@@ -93,6 +106,14 @@ export default function Subscriptions() {
       }, 350);
     },
     onError: (err: any) => {
+      const currentDeviceSubId = currentDeviceStartRef.current;
+      currentDeviceStartRef.current = null;
+
+      if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
+        startDiscovery(currentDeviceSubId);
+        return;
+      }
+
       if (err.response?.status === 409 && err.response?.data?.subId) {
         setPendingStartSubId(err.response.data.subId);
         setDiscoverySubId(err.response.data.subId);
@@ -303,10 +324,10 @@ export default function Subscriptions() {
                               </div>
                                <button 
                                  onClick={async (e) => {
-                                   e.stopPropagation();
-                                   if (isThisDeviceLive) return;
-                                   if (!isSynced) {
-                                      startDiscovery(sub.id);
+                                  e.stopPropagation();
+                                  if (isThisDeviceLive) return;
+                                  if (!isSynced) {
+                                      startCurrentDevice(sub.id);
                                       return;
                                    }
                                    startMutation.mutate(sub.id);
@@ -378,7 +399,7 @@ export default function Subscriptions() {
                                  onClick={async () => {
                                    if (isThisDeviceLive) return;
                                    if (!isSynced) {
-                                      startDiscovery(sub.id);
+                                      startCurrentDevice(sub.id);
                                       return;
                                    }
                                    startMutation.mutate(sub.id);
@@ -398,7 +419,7 @@ export default function Subscriptions() {
                                  !isSynced ? <Wifi size={24} className="text-white animate-pulse" /> :
                                  <Zap size={24} className="text-white" />}
                                 
-                                {startMutation.isPending ? 'SCANNING...' : 
+                                {startMutation.isPending ? 'CONNECTING...' : 
                                  !isSynced ? 'LINK DEVICE' : 
                                  'JOIN NETWORK'}
                                </button>

@@ -26,3 +26,15 @@ export const getStoredHotspotIdentity = () => ({
   mac: localStorage.getItem('hotspot_mac') || undefined,
   ip: localStorage.getItem('hotspot_ip') || undefined,
 });
+
+export const shouldTriggerHotspotIdentify = (error: any) => {
+  const status = error?.response?.status;
+  const message = `${error?.response?.data?.message || ''}`.toLowerCase();
+
+  if (status !== 400) return false;
+
+  return (
+    message.includes('missing mac and ip address bindings') ||
+    message.includes('not physically connected to the hotspot wi-fi network')
+  );
+};

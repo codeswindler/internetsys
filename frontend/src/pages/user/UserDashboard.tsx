@@ -6,14 +6,18 @@ import toast from 'react-hot-toast';
 import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, Search, Laptop, AlertTriangle, Monitor, Play, Router, Settings, Activity as ActivityIcon } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
-import { buildHotspotIdentifyUrl, getStoredHotspotIdentity } from '../../services/hotspot';
+import { buildHotspotIdentifyUrl, getStoredHotspotIdentity, shouldTriggerHotspotIdentify } from '../../services/hotspot';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
-  const [isSynced, setIsSynced] = useState(!!localStorage.getItem('hotspot_mac'));
+  const [isSynced, setIsSynced] = useState(() => {
+    const storedIdentity = getStoredHotspotIdentity();
+    return !!(storedIdentity.mac || storedIdentity.ip);
+  });
+  const currentDeviceStartRef = useRef<string | null>(null);
   const [deviceManager, setDeviceManager] = useState<{ 
     open: boolean; 
     subId: string | null;
@@ -98,6 +102,11 @@ export default function UserDashboard() {
     window.location.href = redirectUrl;
   };
 
+  const startCurrentDevice = (subId: string) => {
+    currentDeviceStartRef.current = subId;
+    startMutation.mutate(subId);
+  };
+
   const startDiscovery = async (subId: string) => {
     const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
     setDeviceManager({
@@ -172,6 +181,10 @@ export default function UserDashboard() {
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
     onSuccess: (res) => {
+      if (currentDeviceStartRef.current) {
+        setIsSynced(true);
+      }
+      currentDeviceStartRef.current = null;
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
       setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null })); // Close manager if open
       
@@ -186,6 +199,14 @@ export default function UserDashboard() {
       }, 350);
     },
     onError: (err: any) => {
+      const currentDeviceSubId = currentDeviceStartRef.current;
+      currentDeviceStartRef.current = null;
+
+      if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
+        identifyCurrentDevice(currentDeviceSubId);
+        return;
+      }
+
       if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
         // Open the device manager in 'Limit Reached' mode
         setDeviceManager({
@@ -432,7 +453,7 @@ export default function UserDashboard() {
                                      e.stopPropagation();
                                      if (isDeviceLive) return;
                                      if (!isSynced) {
-                                         identifyCurrentDevice(sub.id);
+                                         startCurrentDevice(sub.id);
                                          return;
                                       }
                                       startMutation.mutate(sub.id);
@@ -516,7 +537,7 @@ export default function UserDashboard() {
                                <button 
                                  onClick={async () => {
                                    if (!isSynced) {
-                                      identifyCurrentDevice(sub.id);
+                                      startCurrentDevice(sub.id);
                                       return;
                                    }
                                    startMutation.mutate(sub.id);
@@ -536,7 +557,7 @@ export default function UserDashboard() {
                                  !isSynced ? <Wifi size={24} className="text-white animate-pulse" /> :
                                  <Zap size={24} className="text-white" />}
                                 
-                                {startMutation.isPending ? 'SCANNING...' : 
+                                {startMutation.isPending ? 'CONNECTING...' : 
                                  !isSynced ? 'LINK DEVICE' : 
                                  'JOIN NETWORK'}
                                </button>
