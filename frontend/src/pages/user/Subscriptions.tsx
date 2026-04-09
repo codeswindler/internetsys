@@ -302,17 +302,15 @@ export default function Subscriptions() {
                                  onClick={async (e) => {
                                    e.stopPropagation();
                                    if (isThisDeviceLive) return;
-                                   if (isOtherDeviceLive) {
-                                      setDiscoverySubId(sub.id);
-                                      setShowDiscovery(true);
+                                   if (!isSynced) {
+                                      startDiscovery(sub.id);
                                       return;
                                    }
-                                   if (!isSynced) return toast.error("Unidentified App Session. Please ensure you logged in via the captive portal network redirect to securely sync your physical hardware identity.", { icon: '🛡️' });
                                    startMutation.mutate(sub.id);
                                  }}
                                  className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isThisDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : isOtherDeviceLive ? 'text-cyan-500 hover:text-main' : 'text-cyan-500 hover:text-main'}`}
                                >
-                                 {isThisDeviceLive ? 'THIS DEVICE CONNECTED' : isOtherDeviceLive ? 'MANAGE DEVICES' : 'CONNECT THIS DEVICE'}
+                                 {isThisDeviceLive ? 'THIS DEVICE CONNECTED' : 'CONNECT THIS DEVICE'}
                                </button>
                             </div>
 
@@ -376,12 +374,10 @@ export default function Subscriptions() {
                                <button 
                                  onClick={async () => {
                                    if (isThisDeviceLive) return;
-                                   if (isOtherDeviceLive) {
-                                      setDiscoverySubId(sub.id);
-                                      setShowDiscovery(true);
+                                   if (!isSynced) {
+                                      startDiscovery(sub.id);
                                       return;
                                    }
-                                   if (!isSynced) return toast.error("Unidentified App Session. Please ensure you logged in via the captive portal network redirect to securely sync your physical hardware identity.", { icon: '🛡️' });
                                    startMutation.mutate(sub.id);
                                  }}
                                  disabled={startMutation.isPending || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
@@ -445,9 +441,10 @@ export default function Subscriptions() {
                </div>
                <button 
                  onClick={() => setShowDiscovery(false)}
-                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-500 hover:scale-110 transition-all active:scale-95 group relative z-10"
+                 aria-label="Close linked devices"
+                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-slate-950/70 dark:bg-slate-800/90 border border-white/20 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 hover:text-white hover:bg-red-500 hover:border-red-400/60 hover:scale-110 transition-all active:scale-95 group relative z-10"
                >
-                 <X size={26} strokeWidth={2.5} />
+                 <X size={24} strokeWidth={3} />
                </button>
             </div>
 

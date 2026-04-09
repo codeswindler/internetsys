@@ -72,6 +72,16 @@ export default function UserDashboard() {
     }
   }, [window.location.search, currentUser?.id]);
   
+  const identifyCurrentDevice = (subId: string) => {
+    const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
+    const routerGateway = targetSub?.router?.localGateway || activeSub?.router?.localGateway || '10.5.50.1';
+    const returnUrl = new URL(`${window.location.origin}/user/dashboard`);
+    returnUrl.searchParams.set('success', 'true');
+    returnUrl.searchParams.set('auto_start', subId);
+    const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(returnUrl.toString())}`;
+    window.location.href = redirectUrl;
+  };
+
   const startDiscovery = async (subId: string) => {
     const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
     setDeviceManager({
@@ -403,10 +413,10 @@ export default function UserDashboard() {
                                   <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">SURFING LIVE</span>
                                   <button 
                                     onClick={async (e) => {
-                                      e.stopPropagation();
-                                      if (isDeviceLive) return;
-                                      if (!isSynced) {
-                                         startDiscovery(sub.id);
+                                     e.stopPropagation();
+                                     if (isDeviceLive) return;
+                                     if (!isSynced) {
+                                         identifyCurrentDevice(sub.id);
                                          return;
                                       }
                                       startMutation.mutate(sub.id);
@@ -490,7 +500,7 @@ export default function UserDashboard() {
                                <button 
                                  onClick={async () => {
                                    if (!isSynced) {
-                                      startDiscovery(sub.id);
+                                      identifyCurrentDevice(sub.id);
                                       return;
                                    }
                                    startMutation.mutate(sub.id);
@@ -607,9 +617,10 @@ export default function UserDashboard() {
                </div>
                <button 
                  onClick={() => setDeviceManager(prev => ({ ...prev, open: false }))}
-                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-500 hover:scale-110 transition-all active:scale-95 group relative z-10"
+                 aria-label="Close device manager"
+                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-slate-950/70 dark:bg-slate-800/90 border border-white/20 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 hover:text-white hover:bg-red-500 hover:border-red-400/60 hover:scale-110 transition-all active:scale-95 group relative z-10"
                >
-                 <X size={26} strokeWidth={2.5} />
+                 <X size={24} strokeWidth={3} />
                </button>
             </div>
 
@@ -656,15 +667,9 @@ export default function UserDashboard() {
                   </div>
                      <button
                         onClick={() => {
-                          const managerSub = allActiveSubs.find((sub: any) => sub.id === deviceManager.subId);
-                          const routerGateway = managerSub?.router?.localGateway || activeSub?.router?.localGateway || '10.5.50.1';
-                          const returnUrl = new URL(`${window.location.origin}/user/dashboard`);
-                          returnUrl.searchParams.set('success', 'true');
-                          if (deviceManager.pendingSubId) {
-                            returnUrl.searchParams.set('auto_start', deviceManager.pendingSubId);
-                          }
-                          const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(returnUrl.toString())}`;
-                          window.location.href = redirectUrl;
+                          const targetSubId = deviceManager.pendingSubId || deviceManager.subId;
+                          if (!targetSubId) return;
+                          identifyCurrentDevice(targetSubId);
                         }}
                     className="text-[10px] font-black text-cyan-500 uppercase tracking-widest hover:underline flex items-center gap-2"
                   >
