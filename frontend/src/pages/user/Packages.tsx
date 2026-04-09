@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
+import { buildHotspotIdentifyUrl } from '../../services/hotspot';
 import { format } from 'date-fns';
 
 export default function Packages() {
@@ -111,7 +112,10 @@ export default function Packages() {
       } catch (err: any) {
         // If we can't find them, offer a manual refresh to the router
         const routerGateway = routers?.[0]?.localGateway || '10.5.50.1';
-        const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/packages')}`;
+        const redirectUrl = buildHotspotIdentifyUrl(
+          routerGateway,
+          `${window.location.origin}/user/packages`,
+        );
 
         setDetectionError(
           <div className="flex flex-col gap-3 py-2">
@@ -481,7 +485,10 @@ export default function Packages() {
               <button 
                 onClick={() => {
                   const routerGateway = routers?.[0]?.localGateway || '10.5.50.1';
-                  const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(window.location.origin + '/user/packages')}`;
+                  const redirectUrl = buildHotspotIdentifyUrl(
+                    routerGateway,
+                    `${window.location.origin}/user/packages`,
+                  );
                   window.location.href = redirectUrl;
                 }}
                 className="flex-1 py-4 bg-orange-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 hover:bg-orange-400 transition-all active:scale-95"

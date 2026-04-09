@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, X, Search, Laptop, AlertTriangle, Monitor, Play, Router, Settings, Activity as ActivityIcon } from 'lucide-react';
+import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, Search, Laptop, AlertTriangle, Monitor, Play, Router, Settings, Activity as ActivityIcon } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
+import { buildHotspotIdentifyUrl, getStoredHotspotIdentity } from '../../services/hotspot';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
@@ -43,12 +44,14 @@ export default function UserDashboard() {
     const ip = params.get('ip');
     const autoStartId = params.get('auto_start');
     const isReturningSuccess = params.get('success');
+    const storedIdentity = getStoredHotspotIdentity();
+    const finalMac = mac || storedIdentity.mac;
+    const finalIp = ip || storedIdentity.ip;
+    const hasIdentity = !!(finalMac || finalIp);
 
     if (isReturningSuccess && currentUser?.id) {
        console.log('Returning from Router Success. Invalidating Cache...');
        queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser.id] });
-       // Clean URL
-       window.history.replaceState({}, '', window.location.pathname);
     }
 
     if (mac || ip) {
@@ -61,14 +64,27 @@ export default function UserDashboard() {
         queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser.id] });
       }
       
-      // Auto-start if requested
-      if (autoStartId) {
-        startMutation.mutate(autoStartId);
-         // Clean URL
-         window.history.replaceState({}, '', window.location.pathname);
-      } else if (!isReturningSuccess) {
+      if (!isReturningSuccess) {
         toast.success("Device Identified Successfully!", { id: 'url-sync' });
       }
+    }
+
+    if (!mac && !ip && hasIdentity) {
+      setIsSynced(true);
+    }
+
+    if (autoStartId && hasIdentity) {
+      startMutation.mutate(autoStartId);
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    if (isReturningSuccess && !hasIdentity) {
+      toast.error('We could not identify this device yet. Tap Manual Identify and keep Wi-Fi connected.');
+    }
+
+    if (isReturningSuccess || autoStartId) {
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, [window.location.search, currentUser?.id]);
   
@@ -78,7 +94,7 @@ export default function UserDashboard() {
     const returnUrl = new URL(`${window.location.origin}/user/dashboard`);
     returnUrl.searchParams.set('success', 'true');
     returnUrl.searchParams.set('auto_start', subId);
-    const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(returnUrl.toString())}`;
+    const redirectUrl = buildHotspotIdentifyUrl(routerGateway, returnUrl.toString());
     window.location.href = redirectUrl;
   };
 
@@ -615,13 +631,13 @@ export default function UserDashboard() {
                    {deviceManager.connectedDevices.length} / {deviceManager.maxDevices} Devices Active
                  </p>
                </div>
-               <button 
-                 onClick={() => setDeviceManager(prev => ({ ...prev, open: false }))}
-                 aria-label="Close device manager"
-                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-slate-950/70 dark:bg-slate-800/90 border border-white/20 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 hover:text-white hover:bg-red-500 hover:border-red-400/60 hover:scale-110 transition-all active:scale-95 group relative z-10"
-               >
-                 <X size={24} strokeWidth={3} />
-               </button>
+              <button 
+                onClick={() => setDeviceManager(prev => ({ ...prev, open: false }))}
+                aria-label="Close device manager"
+                className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/10 dark:bg-slate-800/95 border border-white/30 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 backdrop-blur-md hover:text-white hover:bg-red-500 hover:border-red-300/70 hover:scale-110 transition-all active:scale-95 group relative z-10"
+              >
+                <span aria-hidden className="text-[30px] font-black leading-none text-white translate-y-[-1px]">×</span>
+              </button>
             </div>
 
             <div className="p-6 pt-0 md:p-10 md:pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar space-y-10">

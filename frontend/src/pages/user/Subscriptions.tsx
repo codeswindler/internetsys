@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Wifi, Clock, CreditCard, Smartphone, ShieldCheck, Download, Upload, Zap, RefreshCw, ChevronRight, Laptop, Monitor, ArrowRight, X, Search, AlertTriangle, Monitor as MonitorIcon, Laptop as LaptopIcon, Play, Router } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
+import { buildHotspotIdentifyUrl, getStoredHotspotIdentity } from '../../services/hotspot';
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
@@ -68,7 +69,7 @@ export default function Subscriptions() {
     const returnUrl = new URL(`${window.location.origin}/user/subscriptions`);
     returnUrl.searchParams.set('success', 'true');
     returnUrl.searchParams.set('auto_start', subId);
-    const redirectUrl = `http://${routerGateway}/login?dst=${encodeURIComponent(returnUrl.toString())}`;
+    const redirectUrl = buildHotspotIdentifyUrl(routerGateway, returnUrl.toString());
     window.location.href = redirectUrl;
   };
 
@@ -123,16 +124,18 @@ export default function Subscriptions() {
     const mac = params.get('mac');
     const ip = params.get('ip');
     const autoStartId = params.get('auto_start');
+    const storedIdentity = getStoredHotspotIdentity();
+    const hasIdentity = !!(mac || ip || storedIdentity.mac || storedIdentity.ip);
 
     if (!mac && !ip && !autoStartId) return;
 
     if (mac) localStorage.setItem('hotspot_mac', mac);
     if (ip) localStorage.setItem('hotspot_ip', ip);
-    if (mac || ip || localStorage.getItem('hotspot_mac')) {
+    if (hasIdentity) {
       setIsSynced(true);
     }
 
-    if (autoStartId && (mac || ip || localStorage.getItem('hotspot_mac'))) {
+    if (autoStartId && hasIdentity) {
       setPendingStartSubId(autoStartId);
       startMutation.mutate(autoStartId);
     }
@@ -440,12 +443,12 @@ export default function Subscriptions() {
                  <p className="text-[11px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.3em] opacity-80">Manage Active Sessions</p>
                </div>
                <button 
-                 onClick={() => setShowDiscovery(false)}
-                 aria-label="Close linked devices"
-                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-slate-950/70 dark:bg-slate-800/90 border border-white/20 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 hover:text-white hover:bg-red-500 hover:border-red-400/60 hover:scale-110 transition-all active:scale-95 group relative z-10"
-               >
-                 <X size={24} strokeWidth={3} />
-               </button>
+                  onClick={() => setShowDiscovery(false)}
+                  aria-label="Close linked devices"
+                  className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/10 dark:bg-slate-800/95 border border-white/30 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 backdrop-blur-md hover:text-white hover:bg-red-500 hover:border-red-300/70 hover:scale-110 transition-all active:scale-95 group relative z-10"
+                >
+                  <span aria-hidden className="text-[30px] font-black leading-none text-white translate-y-[-1px]">×</span>
+                </button>
             </div>
 
             <div className="p-6 pt-0 md:p-10 md:pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar">

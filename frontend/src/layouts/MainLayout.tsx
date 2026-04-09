@@ -10,6 +10,7 @@ import { BackToTop } from '../components/BackToTop';
 import SupportChat from '../components/SupportChat';
 import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import { resolveHotspotLoginUrl } from '../services/hotspot';
 
 interface LayoutProps {
   role: 'admin' | 'user';
@@ -213,24 +214,6 @@ export default function MainLayout({ role }: LayoutProps) {
     queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
     queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
     queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
-  };
-
-  const resolveHotspotLoginUrl = (routerIp: string) => {
-    const storedLoginUrl = localStorage.getItem('hotspot_link_login');
-    const routerIdentity = localStorage.getItem('hotspot_router_id');
-
-    if (storedLoginUrl) {
-      try {
-        const parsed = new URL(storedLoginUrl);
-        if (parsed.hostname === routerIp || (routerIdentity && parsed.hostname === routerIdentity)) {
-          return storedLoginUrl;
-        }
-      } catch {
-        // Ignore stale URL parsing issues and fall back to the router gateway.
-      }
-    }
-
-    return `http://${routerIp}/login`;
   };
 
   const buildHandshakeReturnUrl = (subId?: string, redirectPath?: string) => {
