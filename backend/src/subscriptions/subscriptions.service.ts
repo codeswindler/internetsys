@@ -634,17 +634,21 @@ export class SubscriptionsService {
   }
 
   async startSession(
+    userId: string,
     id: string,
     mac?: string,
     ip?: string,
     userAgent?: string,
-  ): Promise<Subscription> {
+  ): Promise<any> {
     const sub = await this.subRepo.findOne({
       where: { id },
       relations: ['user', 'package', 'router', 'deviceSessions'],
     });
 
     if (!sub) throw new NotFoundException('Subscription not found');
+    if (sub.user?.id !== userId) {
+      throw new BadRequestException('You can only start your own subscription');
+    }
 
     // Capture and Save Device Model if missing
     const model = userAgent ? this.parseUserAgent(userAgent) : 'Unknown Device';
@@ -699,6 +703,8 @@ export class SubscriptionsService {
         'Missing MAC and IP address bindings to assign this package to.',
       );
     }
+
+    await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
 
     // SEQUENTIAL CHECK: Check if any OTHER subscription is already live
     const allSubs = await this.findAllActive(sub.user.id);
@@ -819,24 +825,112 @@ export class SubscriptionsService {
       }
     }
 
-    if (!sub.startedAt) {
-      sub.startedAt = new Date();
-      sub.status = SubscriptionStatus.ACTIVE;
-
-      // Calculate expiry
-      const duration = sub.package.durationValue;
-      const type = sub.package.durationType;
-      const expiresAt = new Date(sub.startedAt);
-      if (type === 'minutes')
-        expiresAt.setMinutes(expiresAt.getMinutes() + duration);
-      else if (type === 'hours')
-        expiresAt.setHours(expiresAt.getHours() + duration);
-      else if (type === 'days')
-        expiresAt.setDate(expiresAt.getDate() + duration);
-      sub.expiresAt = expiresAt;
+    if (sub.startedAt) {
+      return {
+        ...sub,
+        handshakeRequired: true,
+        activationPending: false,
+      };
     }
 
-    return this.subRepo.save(sub);
+    this.logger.log(
+      `[CONNECT-PENDING] Router authorized for sub ${sub.id}. Waiting for handshake confirmation before starting timer.`,
+    );
+
+    return {
+      ...sub,
+      handshakeRequired: true,
+      activationPending: true,
+    };
+  }
+
+  async confirmConnection(
+    userId: string,
+    id: string,
+    mac?: string,
+    ip?: string,
+  ): Promise<any> {
+    const sub = await this.subRepo.findOne({
+      where: { id },
+      relations: ['user', 'package', 'router', 'deviceSessions'],
+    });
+
+    if (!sub) throw new NotFoundException('Subscription not found');
+    if (sub.user?.id !== userId) {
+      throw new BadRequestException('You can only confirm your own subscription');
+    }
+
+    if (sub.status !== SubscriptionStatus.PAID && sub.status !== SubscriptionStatus.ACTIVE) {
+      throw new BadRequestException(`Subscription is ${sub.status}.`);
+    }
+
+    const finalMac = mac || sub.user.lastMac;
+    const finalIp = ip || sub.user.lastIp;
+
+    if (!finalMac && !finalIp) {
+      throw new BadRequestException('Missing MAC and IP address bindings to confirm connection.');
+    }
+
+    await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
+
+    const isConfirmed = await this.mikrotikService.verifyHotspotConnection(
+      sub.router,
+      finalMac,
+      finalIp,
+      sub.mikrotikUsername,
+    );
+
+    if (!isConfirmed) {
+      throw new ConflictException({
+        message: 'Connection handshake is still pending. Time has not started. Please retry Join Network.',
+        error: 'CONNECTION_NOT_CONFIRMED',
+        subId: sub.id,
+      });
+    }
+
+    if (!sub.startedAt) {
+      this.activateSubscriptionClock(sub);
+    }
+
+    const savedSub = await this.subRepo.save(sub);
+    return {
+      ...savedSub,
+      handshakeRequired: false,
+      activationPending: false,
+      connectionConfirmed: true,
+    };
+  }
+
+  private activateSubscriptionClock(sub: Subscription) {
+    sub.startedAt = new Date();
+    sub.status = SubscriptionStatus.ACTIVE;
+
+    const duration = sub.package.durationValue;
+    const type = sub.package.durationType;
+    const expiresAt = new Date(sub.startedAt);
+    if (type === 'minutes')
+      expiresAt.setMinutes(expiresAt.getMinutes() + duration);
+    else if (type === 'hours')
+      expiresAt.setHours(expiresAt.getHours() + duration);
+    else if (type === 'days')
+      expiresAt.setDate(expiresAt.getDate() + duration);
+    sub.expiresAt = expiresAt;
+  }
+
+  private async persistLatestDeviceIdentity(user: User, mac?: string, ip?: string) {
+    let changed = false;
+    if (mac && user.lastMac !== mac) {
+      user.lastMac = mac;
+      changed = true;
+    }
+    if (ip && user.lastIp !== ip) {
+      user.lastIp = ip;
+      changed = true;
+    }
+
+    if (changed) {
+      await this.userRepo.save(user);
+    }
   }
 
   async getTrafficStats(userId: string): Promise<any> {

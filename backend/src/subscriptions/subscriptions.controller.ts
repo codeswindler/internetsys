@@ -100,10 +100,27 @@ export class SubscriptionsController {
     const finalIp = body.ip || clientIp;
     const userAgent = req.headers['user-agent'];
     return this.subscriptionsService.startSession(
+      req.user.id,
       id,
       body.mac,
       finalIp,
       userAgent,
+    );
+  }
+
+  @Post(':id/confirm-connection')
+  confirmConnection(
+    @Param('id') id: string,
+    @Body() body: { mac?: string; ip?: string },
+    @Ip() clientIp: string,
+    @Request() req: any,
+  ) {
+    const finalIp = body.ip || clientIp;
+    return this.subscriptionsService.confirmConnection(
+      req.user.id,
+      id,
+      body.mac,
+      finalIp,
     );
   }
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Wifi, Clock, CreditCard, Smartphone, ShieldCheck, Download, Upload, Zap, RefreshCw, ChevronRight, Laptop, Monitor, ArrowRight, X, Search, AlertTriangle, Monitor as MonitorIcon, Laptop as LaptopIcon, Play, Router } from 'lucide-react';
@@ -8,6 +9,9 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
+  const { fireInternet } = useOutletContext<{
+    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string }) => void;
+  }>();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   
@@ -68,26 +72,24 @@ export default function Subscriptions() {
     window.location.href = redirectUrl;
   };
 
-  const fireInternet = () => {
-    window.location.href = "intent://google.com/#Intent;scheme=https;package=com.android.chrome;end";
-    setTimeout(() => {
-        window.location.href = "https://google.com/generate_204";
-    }, 500);
-  };
-
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
       const mac = localStorage.getItem('hotspot_mac');
       const ip = localStorage.getItem('hotspot_ip');
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
       setPendingStartSubId(null);
-      toast.success('Internet Connection Established!', { icon: '🚀' });
+      toast.success('Completing secure connection...', { icon: '📶' });
+      const sub = res.data;
       setTimeout(() => {
-        fireInternet();
-      }, 1000);
+        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
+          subId: sub?.id,
+          routerIp: sub?.router?.localGateway,
+          redirectPath: window.location.pathname,
+        });
+      }, 350);
     },
     onError: (err: any) => {
       if (err.response?.status === 409 && err.response?.data?.subId) {

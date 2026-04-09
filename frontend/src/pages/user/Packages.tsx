@@ -34,7 +34,7 @@ export default function Packages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
-  const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string) => void }>();
+  const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string }) => void }>();
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [routerId, setRouterId] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);

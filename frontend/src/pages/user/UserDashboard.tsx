@@ -32,7 +32,7 @@ export default function UserDashboard() {
   });
 
   const { fireInternet, currentUser } = useOutletContext<{ 
-    fireInternet: (u?: string, p?: string) => void,
+    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string }) => void,
     currentUser: any 
   }>();
 
@@ -147,13 +147,17 @@ export default function UserDashboard() {
     },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
-      toast.success('Internet Connection Established!', { icon: '🚀' });
       setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null })); // Close manager if open
       
       const sub = res.data;
+      toast.success('Completing secure connection...', { icon: '📶' });
       setTimeout(() => {
-        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword);
-      }, 500);
+        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
+          subId: sub?.id,
+          routerIp: sub?.router?.localGateway,
+          redirectPath: window.location.pathname,
+        });
+      }, 350);
     },
     onError: (err: any) => {
       if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
@@ -457,7 +461,11 @@ export default function UserDashboard() {
                                  <button
                                    onClick={(e) => {
                                      e.stopPropagation();
-                                     fireInternet(sub.mikrotikUsername, sub.mikrotikPassword);
+                                     fireInternet(sub.mikrotikUsername, sub.mikrotikPassword, {
+                                       subId: sub.id,
+                                       routerIp: sub.router?.localGateway,
+                                       redirectPath: window.location.pathname,
+                                     });
                                      toast.success('Refreshing Handshake...');
                                    }}
                                    title="Refresh Connection Handshake"

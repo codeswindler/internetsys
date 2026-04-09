@@ -88,7 +88,7 @@ export class MikrotikService {
       try {
         // 1. Get all active hotspot hosts
         const hosts = await api.write('/ip/hotspot/host/print');
-        
+
         // 2. Get all DHCP leases to find hostnames
         const leases = await api.write('/ip/dhcp-server/lease/print');
         const leaseMap = new Map();
@@ -103,7 +103,7 @@ export class MikrotikService {
         }
 
         this.logger.log(`[SYNC] Found ${hosts?.length || 0} total hosts on ${router.name}`);
-        
+
         if (!hosts || hosts.length === 0) return [];
 
         return hosts
@@ -556,58 +556,104 @@ export class MikrotikService {
           `[PROVISIONING SUCCESS] User ${username} created with profile ${profile || 'default'}`,
         );
       }
-      try {
-        // Stage 1 Deep-Clean: Forcefully remove existing active sessions & bindings
-        const cleanupQuery = finalMac ? `?mac-address=${finalMac}` : (ip ? `?address=${ip}` : null);
+      // Stage 1 Deep-Clean: Forcefully remove existing active sessions & bindings
+      const cleanupQuery = finalMac ? `?mac-address=${finalMac}` : (ip ? `?address=${ip}` : null);
 
-        if (cleanupQuery) {
-          // 1. Cleave Active Hotspot Sessions
-          const actives = await api.write('/ip/hotspot/active/print', [cleanupQuery]);
-          for (const a of actives) {
-            if (a['.id']) await api.write('/ip/hotspot/active/remove', [`=.id=${a['.id']}`]);
-          }
-          
-          // 2. Cleave Hardware Hosts table
-          const hosts = await api.write('/ip/hotspot/host/print', [cleanupQuery]);
-          for (const h of hosts) {
-            if (h['.id']) await api.write('/ip/hotspot/host/remove', [`=.id=${h['.id']}`]);
-          }
-
-          // 3. Cleave IP-Bindings
-          const existing = await api.write('/ip/hotspot/ip-binding/print', [cleanupQuery]);
-          for (const b of existing) {
-            if (b['.id']) await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
-          }
+      if (cleanupQuery) {
+        // 1. Cleave Active Hotspot Sessions
+        const actives = await api.write('/ip/hotspot/active/print', [cleanupQuery]);
+        for (const a of actives) {
+          if (a['.id']) await api.write('/ip/hotspot/active/remove', [`=.id=${a['.id']}`]);
         }
 
-        // Stage 2: The Proofed-Bypass (100% Reliable)
-        const bindingArgs = [
-          '=type=bypassed',
-          `=comment=Pulselynk: ${username}`,
-        ];
-        if (finalMac) bindingArgs.push(`=mac-address=${finalMac}`);
-        if (ip) bindingArgs.push(`=address=${ip}`);
+        // 2. Cleave Hardware Hosts table
+        const hosts = await api.write('/ip/hotspot/host/print', [cleanupQuery]);
+        for (const h of hosts) {
+          if (h['.id']) await api.write('/ip/hotspot/host/remove', [`=.id=${h['.id']}`]);
+        }
 
-        await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
-        this.logger.log(
-          `[STAGE 2 SUCCESS] IP-Binding BYPASS created for ${finalMac || ip}.`,
-        );
+        // 3. Cleave IP-Bindings
+        const existing = await api.write('/ip/hotspot/ip-binding/print', [cleanupQuery]);
+        for (const b of existing) {
+          if (b['.id']) await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
+        }
+      }
 
-        // Stage 3: Instant-Flow Nudge (Force Hardware Unblocking)
+      // Stage 2: The Proofed-Bypass (must succeed or the session is not ready)
+      const bindingArgs = [
+        '=type=bypassed',
+        `=comment=Pulselynk: ${username}`,
+      ];
+      if (finalMac) bindingArgs.push(`=mac-address=${finalMac}`);
+      if (ip) bindingArgs.push(`=address=${ip}`);
+
+      await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
+      this.logger.log(
+        `[STAGE 2 SUCCESS] IP-Binding BYPASS created for ${finalMac || ip}.`,
+      );
+
+      // Stage 3: Instant-Flow Nudge (best effort only)
+      try {
         if (ip) await api.write('/ip/arp/remove', [`?address=${ip}`]);
         if (finalMac)
           await api.write('/ip/arp/remove', [`?mac-address=${finalMac}`]);
         this.logger.log(
           `[INSTANT-FLOW] ARP Nudge sent for ${ip || finalMac}. Fluid connectivity engaged.`,
         );
-      } catch (e) {
-        this.logger.warn(`[STAGE 2] Bypass creation failed: ${e.message}`);
+      } catch (e: any) {
+        this.logger.warn(`[INSTANT-FLOW] ARP nudge failed: ${e.message}`);
       }
 
       return { success: true };
     } catch (e: any) {
       this.logger.error(`Hotspot Login ERROR on ${router.name}: ${e.message}`);
       throw e;
+    } finally {
+      api.close();
+    }
+  }
+
+  async verifyHotspotConnection(
+    router: Router,
+    mac?: string,
+    ip?: string,
+    username?: string,
+  ): Promise<boolean> {
+    const api = await this.connect(router);
+    const finalMac = this.normalizeMac(mac);
+    try {
+      const activeQuery = finalMac
+        ? `?mac-address=${finalMac}`
+        : ip
+          ? `?address=${ip}`
+          : username
+            ? `?user=${username}`
+            : null;
+
+      if (activeQuery) {
+        const active = await api.write('/ip/hotspot/active/print', [activeQuery]);
+        if (active && active.length > 0) return true;
+      }
+
+      const bindingQuery = finalMac
+        ? `?mac-address=${finalMac}`
+        : ip
+          ? `?address=${ip}`
+          : null;
+
+      if (!bindingQuery) return false;
+
+      const bindings = await api.write('/ip/hotspot/ip-binding/print', [bindingQuery]);
+      return bindings.some((binding: any) => {
+        const type = `${binding['type'] || ''}`.toLowerCase();
+        const comment = `${binding['comment'] || ''}`;
+        return type === 'bypassed' && (!username || comment === `Pulselynk: ${username}`);
+      });
+    } catch (e: any) {
+      this.logger.warn(
+        `Failed to verify hotspot connection for ${router.name}: ${e.message}`,
+      );
+      return false;
     } finally {
       api.close();
     }

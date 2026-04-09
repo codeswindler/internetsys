@@ -15,6 +15,12 @@ interface LayoutProps {
   role: 'admin' | 'user';
 }
 
+interface FireInternetOptions {
+  subId?: string;
+  routerIp?: string;
+  redirectPath?: string;
+}
+
 export default function MainLayout({ role }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,10 +49,18 @@ export default function MainLayout({ role }: LayoutProps) {
   const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [pendingRedirectUrl, setPendingRedirectUrl] = useState('');
-  const [authData, setAuthData] = useState<{ user: string; pass: string; gateway: string } | null>(null);
+  const [authData, setAuthData] = useState<{
+    user: string;
+    pass: string;
+    gateway: string;
+    loginAction: string;
+    returnUrl: string;
+    subId?: string;
+  } | null>(null);
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
   const autoHandshakeAttemptedRef = useRef(false);
+  const connectConfirmationRef = useRef<string | null>(null);
 
   const redeemMutation = useMutation({
     mutationFn: async (data: { code: string; routerId: string }) => {
@@ -67,7 +81,12 @@ export default function MainLayout({ role }: LayoutProps) {
       setIsRedeemModalOpen(false);
       setVoucherCode('');
       // Auto-Fire Internet after redemption success
-      setTimeout(() => fireInternet(data?.mikrotikUsername, data?.mikrotikPassword), 1000);
+      setTimeout(() => {
+        fireInternet(data?.mikrotikUsername, data?.mikrotikPassword, {
+          subId: data?.id,
+          routerIp: data?.router?.localGateway,
+        });
+      }, 1000);
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Voucher redemption failed');
@@ -189,24 +208,61 @@ export default function MainLayout({ role }: LayoutProps) {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   })[0]) || null;
 
+  const invalidateSubscriptionQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+    queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+    queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
+    queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+  };
 
-  const fireInternet = (customUser?: string, customPass?: string) => {
+  const resolveHotspotLoginUrl = (routerIp: string) => {
+    const storedLoginUrl = localStorage.getItem('hotspot_link_login');
+    const routerIdentity = localStorage.getItem('hotspot_router_id');
+
+    if (storedLoginUrl) {
+      try {
+        const parsed = new URL(storedLoginUrl);
+        if (parsed.hostname === routerIp || (routerIdentity && parsed.hostname === routerIdentity)) {
+          return storedLoginUrl;
+        }
+      } catch {
+        // Ignore stale URL parsing issues and fall back to the router gateway.
+      }
+    }
+
+    return `http://${routerIp}/login`;
+  };
+
+  const buildHandshakeReturnUrl = (subId?: string, redirectPath?: string) => {
+    const callbackUrl = new URL(`${window.location.origin}${redirectPath || location.pathname}`);
+    callbackUrl.searchParams.set('connect_result', '1');
+    if (subId) callbackUrl.searchParams.set('connect_sub', subId);
+    return callbackUrl.toString();
+  };
+
+  const fireInternet = (customUser?: string, customPass?: string, options: FireInternetOptions = {}) => {
     const user = customUser || activeSub?.mikrotikUsername;
     const pass = customPass || activeSub?.mikrotikPassword;
-    const routerIp = activeSub?.router?.localGateway || '10.5.50.1';
+    const routerIp = options.routerIp || activeSub?.router?.localGateway || '10.5.50.1';
+    const loginAction = resolveHotspotLoginUrl(routerIp);
+    const returnUrl = buildHandshakeReturnUrl(options.subId || activeSub?.id, options.redirectPath);
 
     if (!user || !pass) {
        console.log('Direct-Thrust aborted: Missing credentials');
        return;
     }
 
-    // DIRECT-THRUST: Force the browser to hit the router directly (HTTP)
-    // This dismisses the "Sign In" bar on iPhones/Androids 100% of the time.
-    const googleEscapeUrl = 'http://connectivitycheck.gstatic.com/generate_204';
-    const loginUrl = `http://${routerIp}/login?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(googleEscapeUrl)}`;
+    const loginUrl = `${loginAction}?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(returnUrl)}`;
 
     console.log('🚀 PREPARING IRONCLAD POST-LOGIN...', loginUrl);
-    setAuthData({ user, pass, gateway: routerIp });
+    setAuthData({
+      user,
+      pass,
+      gateway: routerIp,
+      loginAction,
+      returnUrl,
+      subId: options.subId || activeSub?.id,
+    });
     setPendingRedirectUrl(loginUrl);
     setShowSuccessOverlay(true);
   };
@@ -292,6 +348,45 @@ export default function MainLayout({ role }: LayoutProps) {
       }
     }
   }, [location.search, token, API_URL]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const subId = params.get('connect_sub');
+
+    if (params.get('connect_result') !== '1' || !subId || !token) return;
+
+    const mac = params.get('mac') || localStorage.getItem('hotspot_mac') || undefined;
+    const ip = params.get('ip') || localStorage.getItem('hotspot_ip') || undefined;
+    const confirmationKey = `${subId}:${mac || ''}:${ip || ''}`;
+
+    if (connectConfirmationRef.current === confirmationKey) return;
+    connectConfirmationRef.current = confirmationKey;
+
+    const confirmConnection = async () => {
+      try {
+        await axios.post(
+          `${API_URL}/subscriptions/${subId}/confirm-connection`,
+          { mac, ip },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        invalidateSubscriptionQueries();
+        toast.success('Internet Connection Established!', { icon: '🚀' });
+      } catch (err: any) {
+        toast.error(
+          err.response?.data?.message ||
+            'Connection handshake did not finish. Time has not started.',
+        );
+      } finally {
+        setShowSuccessOverlay(false);
+        setPendingRedirectUrl('');
+        setAuthData(null);
+        connectConfirmationRef.current = null;
+        window.history.replaceState({}, '', location.pathname);
+      }
+    };
+
+    confirmConnection();
+  }, [location.pathname, location.search, token, API_URL, currentUser?.id]);
 
   // User must explicitly choose which plan to start, so automatic firing is disabled.
 
@@ -715,7 +810,7 @@ export default function MainLayout({ role }: LayoutProps) {
           <form 
             ref={formRef}
             method="post" 
-            action={localStorage.getItem('hotspot_link_login') || `http://${activeSub.router?.localGateway || '10.5.50.1'}/login`}
+            action={resolveHotspotLoginUrl(activeSub.router?.localGateway || '10.5.50.1')}
             className="hidden"
             target="ghost-frame"
           >
@@ -869,14 +964,14 @@ export default function MainLayout({ role }: LayoutProps) {
               {authData && (
                 <form
                   id="ironclad-handshake"
-                  action={localStorage.getItem('hotspot_link_login') || `http://${authData.gateway}/login`}
+                  action={authData.loginAction}
                   method="POST"
                   target="_self"
                   style={{ display: 'none' }}
                 >
                   <input type="hidden" name="username" value={authData.user} />
                   <input type="hidden" name="password" value={authData.pass} />
-                  <input type="hidden" name="dst" value="http://connectivitycheck.gstatic.com/generate_204" />
+                  <input type="hidden" name="dst" value={authData.returnUrl} />
                 </form>
               )}
 
