@@ -687,20 +687,31 @@ export class SubscriptionsService {
       }
     }
 
-    // VERIFY PHYSICAL CONNECTION TO AP
-    const finalMac = mac || sub.user.lastMac;
+    // Resolve the current device from the router itself so device-limit state
+    // and "this device" UI stay aligned with the actual connected hardware.
     const finalIp = ip || sub.user.lastIp;
+    let finalMac = mac;
 
-    if (finalMac || finalIp) {
-      const isPresent = await this.mikrotikService.verifyHostPresence(sub.router, finalMac, finalIp);
-      if (!isPresent) {
-        throw new BadRequestException(
-          'CONNECTION REJECTED: You are not physically connected to the hotspot Wi-Fi network. Please connect to the Wi-Fi first to activate this package.',
-        );
-      }
-    } else {
+    if (!finalMac && finalIp) {
+      finalMac = (await this.mikrotikService.findMacByIp(sub.router, finalIp)) || undefined;
+    }
+
+    if (!finalMac && !finalIp) {
       throw new BadRequestException(
         'Missing MAC and IP address bindings to assign this package to.',
+      );
+    }
+
+    if (!finalMac) {
+      throw new BadRequestException(
+        'Unable to identify your device on the hotspot. Please retry Link Device.',
+      );
+    }
+
+    const isPresent = await this.mikrotikService.verifyHostPresence(sub.router, finalMac, finalIp);
+    if (!isPresent) {
+      throw new BadRequestException(
+        'CONNECTION REJECTED: You are not physically connected to the hotspot Wi-Fi network. Please connect to the Wi-Fi first to activate this package.',
       );
     }
 
@@ -723,12 +734,12 @@ export class SubscriptionsService {
     }
 
     // MULTI-DEVICE LOGIC: GHOST-BUSTER - Purge any existing active sessions globally for this MAC
-    if (mac) {
-      this.logger.log(`[GHOST-BUSTER] Investigating MAC ${mac} for ghost sessions...`);
+    if (finalMac) {
+      this.logger.log(`[GHOST-BUSTER] Investigating MAC ${finalMac} for ghost sessions...`);
       
       const existingGlobalSessions = await this.sessionRepo.find({
         where: { 
-          macAddress: mac,
+          macAddress: finalMac,
           isActive: true,
           subscription: { user: { id: sub.user.id } }
         },
@@ -736,7 +747,7 @@ export class SubscriptionsService {
       });
 
       if (existingGlobalSessions.length > 0) {
-        this.logger.log(`[GHOST-BUSTER] Purging ${existingGlobalSessions.length} stale sessions for MAC ${mac}`);
+        this.logger.log(`[GHOST-BUSTER] Purging ${existingGlobalSessions.length} stale sessions for MAC ${finalMac}`);
         for (const s of existingGlobalSessions) {
           s.isActive = false;
           await this.sessionRepo.save(s);
@@ -751,7 +762,7 @@ export class SubscriptionsService {
         }
       });
 
-      const existingSessionInSub = currentSubActiveSessions.find((s) => s.macAddress === mac);
+      const existingSessionInSub = currentSubActiveSessions.find((s) => s.macAddress === finalMac);
 
       if (!existingSessionInSub) {
         // Check Limit
@@ -789,15 +800,15 @@ export class SubscriptionsService {
         // Create new session
         const newSession = this.sessionRepo.create({
           subscription: sub,
-          macAddress: mac,
-          ipAddress: ip,
+          macAddress: finalMac,
+          ipAddress: finalIp,
           deviceModel: model,
           isActive: true,
         });
         await this.sessionRepo.save(newSession);
       } else {
         // Update existing session
-        existingSessionInSub.ipAddress = ip || existingSessionInSub.ipAddress;
+        existingSessionInSub.ipAddress = finalIp || existingSessionInSub.ipAddress;
         existingSessionInSub.deviceModel = model;
         existingSessionInSub.isActive = true;
         await this.sessionRepo.save(existingSessionInSub);
@@ -852,6 +863,8 @@ export class SubscriptionsService {
       handshakeRequired: false,
       activationPending: false,
       connectionConfirmed: true,
+      resolvedMac: finalMac,
+      resolvedIp: finalIp,
     };
   }
 
@@ -875,8 +888,12 @@ export class SubscriptionsService {
       throw new BadRequestException(`Subscription is ${sub.status}.`);
     }
 
-    const finalMac = mac || sub.user.lastMac;
     const finalIp = ip || sub.user.lastIp;
+    let finalMac: string | undefined = mac || sub.user.lastMac || undefined;
+
+    if (!finalMac && finalIp) {
+      finalMac = (await this.mikrotikService.findMacByIp(sub.router, finalIp)) || undefined;
+    }
 
     if (!finalMac && !finalIp) {
       throw new BadRequestException('Missing MAC and IP address bindings to confirm connection.');
@@ -909,6 +926,8 @@ export class SubscriptionsService {
       handshakeRequired: false,
       activationPending: false,
       connectionConfirmed: true,
+      resolvedMac: finalMac,
+      resolvedIp: finalIp,
     };
   }
 

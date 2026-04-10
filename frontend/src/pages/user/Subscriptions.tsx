@@ -6,7 +6,14 @@ import toast from 'react-hot-toast';
 import { Wifi, Clock, CreditCard, Smartphone, ShieldCheck, Download, Upload, Zap, RefreshCw, ChevronRight, Laptop, Monitor, ArrowRight, X, Search, AlertTriangle, Monitor as MonitorIcon, Laptop as LaptopIcon, Play, Router } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
-import { buildHotspotIdentifyUrl, getStoredHotspotIdentity, shouldTriggerHotspotIdentify } from '../../services/hotspot';
+import {
+  buildHotspotIdentifyUrl,
+  getStoredHotspotIdentity,
+  hasStoredHotspotIdentity,
+  matchesStoredHotspotIdentity,
+  shouldTriggerHotspotIdentify,
+  syncStoredHotspotIdentity,
+} from '../../services/hotspot';
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
@@ -16,10 +23,7 @@ export default function Subscriptions() {
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   
-  const [isSynced, setIsSynced] = useState(() => {
-    const storedIdentity = getStoredHotspotIdentity();
-    return !!(storedIdentity.mac || storedIdentity.ip);
-  });
+  const [isSynced, setIsSynced] = useState(() => hasStoredHotspotIdentity());
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [discoverySubId, setDiscoverySubId] = useState<string | null>(null);
   const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
@@ -27,6 +31,7 @@ export default function Subscriptions() {
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   const [pendingStartSubId, setPendingStartSubId] = useState<string | null>(null);
   const currentDeviceStartRef = useRef<string | null>(null);
+  const currentDeviceIpOnlyRef = useRef(false);
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -79,20 +84,25 @@ export default function Subscriptions() {
 
   const startCurrentDevice = (subId: string) => {
     currentDeviceStartRef.current = subId;
+    currentDeviceIpOnlyRef.current = true;
     startMutation.mutate(subId);
   };
 
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
-      const mac = localStorage.getItem('hotspot_mac');
-      const ip = localStorage.getItem('hotspot_ip');
+      const identity = getStoredHotspotIdentity();
+      const mac = currentDeviceIpOnlyRef.current ? undefined : identity.mac;
+      const ip = identity.ip;
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
     onSuccess: (res) => {
-      if (currentDeviceStartRef.current) {
-        setIsSynced(true);
-      }
+      syncStoredHotspotIdentity({
+        mac: res.data?.resolvedMac,
+        ip: res.data?.resolvedIp,
+      });
+      setIsSynced(hasStoredHotspotIdentity());
       currentDeviceStartRef.current = null;
+      currentDeviceIpOnlyRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
       setPendingStartSubId(null);
       toast.success('Completing secure connection...', { icon: '📶' });
@@ -110,6 +120,7 @@ export default function Subscriptions() {
     onError: (err: any) => {
       const currentDeviceSubId = currentDeviceStartRef.current;
       currentDeviceStartRef.current = null;
+      currentDeviceIpOnlyRef.current = false;
 
       if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
         startDiscovery(currentDeviceSubId);
@@ -155,7 +166,7 @@ export default function Subscriptions() {
     if (mac) localStorage.setItem('hotspot_mac', mac);
     if (ip) localStorage.setItem('hotspot_ip', ip);
     if (hasIdentity) {
-      setIsSynced(true);
+      setIsSynced(hasStoredHotspotIdentity());
     }
 
     if (autoStartId && hasIdentity) {
@@ -255,8 +266,9 @@ export default function Subscriptions() {
           <div className="grid gap-10">
             {activeSubs.map((sub: any) => {
               const isSubLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > new Date();
-              const storedMac = localStorage.getItem('hotspot_mac');
-              const isThisDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === storedMac && ds.isActive);
+              const storedIdentity = getStoredHotspotIdentity();
+              const activeCurrentSession = sub.deviceSessions?.find((ds: any) => matchesStoredHotspotIdentity(ds, storedIdentity));
+              const isThisDeviceLive = !!activeCurrentSession;
               const hasActiveSession = sub.deviceSessions?.some((ds: any) => ds.isActive);
               const isOtherDeviceLive = hasActiveSession && !isThisDeviceLive;
               const isLive = isSubLive;
@@ -304,7 +316,7 @@ export default function Subscriptions() {
                             <div className="flex-1 min-w-0">
                               <p className="text-[9px] font-black text-muted uppercase tracking-[0.25em] mb-1 truncate">DEVICE MODEL</p>
                               <h4 className="text-xs font-bold text-main tracking-wide leading-relaxed truncate">
-                                {isThisDeviceLive ? (sub.deviceSessions?.find((ds: any) => ds.macAddress === storedMac && ds.isActive)?.deviceModel || localDeviceName) : (sub.deviceSessions?.find((ds: any) => ds.isActive)?.deviceModel || localDeviceName)}
+                                {isThisDeviceLive ? (activeCurrentSession?.deviceModel || localDeviceName) : (sub.deviceSessions?.find((ds: any) => ds.isActive)?.deviceModel || localDeviceName)}
                               </h4>
                               <div className="flex items-center gap-2 mt-2">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
@@ -328,11 +340,7 @@ export default function Subscriptions() {
                                  onClick={async (e) => {
                                   e.stopPropagation();
                                   if (isThisDeviceLive) return;
-                                  if (!isSynced) {
-                                      startCurrentDevice(sub.id);
-                                      return;
-                                   }
-                                   startMutation.mutate(sub.id);
+                                  startCurrentDevice(sub.id);
                                  }}
                                  className={`text-[10px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isThisDeviceLive ? 'text-emerald-400 opacity-50 cursor-default no-underline' : isOtherDeviceLive ? 'text-cyan-500 hover:text-main' : 'text-cyan-500 hover:text-main'}`}
                                >

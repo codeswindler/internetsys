@@ -30,6 +30,40 @@ export const getStoredHotspotIdentity = () => ({
   ip: localStorage.getItem('hotspot_ip') || undefined,
 });
 
+const normalizeMac = (mac?: string | null) =>
+  mac ? mac.replace(/[^a-fA-F0-9]/g, '').toUpperCase() : '';
+
+export const syncStoredHotspotIdentity = (identity?: { mac?: string; ip?: string }) => {
+  if (!identity) return;
+
+  if (identity.mac) {
+    localStorage.setItem('hotspot_mac', identity.mac);
+  }
+
+  if (identity.ip) {
+    localStorage.setItem('hotspot_ip', identity.ip);
+  }
+};
+
+export const hasStoredHotspotIdentity = () => {
+  const identity = getStoredHotspotIdentity();
+  return !!(identity.mac || identity.ip);
+};
+
+export const matchesStoredHotspotIdentity = (
+  session?: { macAddress?: string; ipAddress?: string; isActive?: boolean },
+  identity = getStoredHotspotIdentity(),
+) => {
+  if (!session?.isActive) return false;
+
+  const storedMac = normalizeMac(identity.mac);
+  const sessionMac = normalizeMac(session.macAddress);
+  const macMatches = !!storedMac && !!sessionMac && storedMac === sessionMac;
+  const ipMatches = !!identity.ip && !!session.ipAddress && identity.ip === session.ipAddress;
+
+  return macMatches || ipMatches;
+};
+
 const parseHotspotUrl = (value?: string | null, currentOrigin?: string) => {
   if (!value) return null;
 
@@ -118,6 +152,7 @@ export const shouldTriggerHotspotIdentify = (error: any) => {
 
   return (
     message.includes('missing mac and ip address bindings') ||
-    message.includes('not physically connected to the hotspot wi-fi network')
+    message.includes('not physically connected to the hotspot wi-fi network') ||
+    message.includes('unable to identify your device on the hotspot')
   );
 };

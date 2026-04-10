@@ -6,18 +6,23 @@ import toast from 'react-hot-toast';
 import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, ArrowRight, ShieldCheck, CreditCard, Smartphone, Link, Trash2, Search, Laptop, AlertTriangle, Monitor, Play, Router, Settings, Activity as ActivityIcon } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
-import { buildHotspotIdentifyUrl, getStoredHotspotIdentity, shouldTriggerHotspotIdentify } from '../../services/hotspot';
+import {
+  buildHotspotIdentifyUrl,
+  getStoredHotspotIdentity,
+  hasStoredHotspotIdentity,
+  matchesStoredHotspotIdentity,
+  shouldTriggerHotspotIdentify,
+  syncStoredHotspotIdentity,
+} from '../../services/hotspot';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
-  const [isSynced, setIsSynced] = useState(() => {
-    const storedIdentity = getStoredHotspotIdentity();
-    return !!(storedIdentity.mac || storedIdentity.ip);
-  });
+  const [isSynced, setIsSynced] = useState(() => hasStoredHotspotIdentity());
   const currentDeviceStartRef = useRef<string | null>(null);
+  const currentDeviceIpOnlyRef = useRef(false);
   const [deviceManager, setDeviceManager] = useState<{ 
     open: boolean; 
     subId: string | null;
@@ -59,9 +64,8 @@ export default function UserDashboard() {
     }
 
     if (mac || ip) {
-      if (mac) localStorage.setItem('hotspot_mac', mac);
-      if (ip) localStorage.setItem('hotspot_ip', ip);
-      setIsSynced(true);
+      syncStoredHotspotIdentity({ mac: mac || undefined, ip: ip || undefined });
+      setIsSynced(hasStoredHotspotIdentity());
       
       // CRITICAL: Force a full dashboard refresh because we just mapped a new hardware ID!
       if (currentUser?.id) {
@@ -74,7 +78,7 @@ export default function UserDashboard() {
     }
 
     if (!mac && !ip && hasIdentity) {
-      setIsSynced(true);
+      setIsSynced(hasStoredHotspotIdentity());
     }
 
     if (autoStartId && hasIdentity) {
@@ -104,6 +108,7 @@ export default function UserDashboard() {
 
   const startCurrentDevice = (subId: string) => {
     currentDeviceStartRef.current = subId;
+    currentDeviceIpOnlyRef.current = true;
     startMutation.mutate(subId);
   };
 
@@ -176,15 +181,19 @@ export default function UserDashboard() {
 
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
-      const mac = localStorage.getItem('hotspot_mac');
-      const ip = localStorage.getItem('hotspot_ip');
+      const identity = getStoredHotspotIdentity();
+      const mac = currentDeviceIpOnlyRef.current ? undefined : identity.mac;
+      const ip = identity.ip;
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
     onSuccess: (res) => {
-      if (currentDeviceStartRef.current) {
-        setIsSynced(true);
-      }
+      syncStoredHotspotIdentity({
+        mac: res.data?.resolvedMac,
+        ip: res.data?.resolvedIp,
+      });
+      setIsSynced(hasStoredHotspotIdentity());
       currentDeviceStartRef.current = null;
+      currentDeviceIpOnlyRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
       setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null })); // Close manager if open
       
@@ -203,6 +212,7 @@ export default function UserDashboard() {
     onError: (err: any) => {
       const currentDeviceSubId = currentDeviceStartRef.current;
       currentDeviceStartRef.current = null;
+      currentDeviceIpOnlyRef.current = false;
 
       if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
         identifyCurrentDevice(currentDeviceSubId);
@@ -385,7 +395,9 @@ export default function UserDashboard() {
           <div className="grid gap-10">
             {allActiveSubs.map((sub: any) => {
                const isSubLive = sub.status === 'ACTIVE' && sub.expiresAt && new Date(sub.expiresAt) > new Date();
-               const isDeviceLive = sub.deviceSessions?.some((ds: any) => ds.macAddress === localStorage.getItem('hotspot_mac') && ds.isActive);
+               const storedIdentity = getStoredHotspotIdentity();
+               const activeCurrentSession = sub.deviceSessions?.find((ds: any) => matchesStoredHotspotIdentity(ds, storedIdentity));
+               const isDeviceLive = !!activeCurrentSession;
                
                return (
                 <div key={sub.id} className="relative group animate-fade-in">
@@ -430,7 +442,7 @@ export default function UserDashboard() {
                             <div className="flex-1 min-w-0">
                               <p className="text-[9px] font-black text-muted uppercase tracking-[0.25em] mb-1 truncate">THIS DEVICE</p>
                               <h4 className="text-xs font-bold text-main tracking-wide leading-relaxed truncate">
-                                {localDeviceName}
+                                {activeCurrentSession?.deviceModel || localDeviceName}
                               </h4>
                               <div className="flex items-center gap-2 mt-2">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
@@ -454,11 +466,7 @@ export default function UserDashboard() {
                                     onClick={async (e) => {
                                      e.stopPropagation();
                                      if (isDeviceLive) return;
-                                     if (!isSynced) {
-                                         startCurrentDevice(sub.id);
-                                         return;
-                                      }
-                                      startMutation.mutate(sub.id);
+                                     startCurrentDevice(sub.id);
                                     }}
                                     className={`text-left text-[9px] font-black uppercase tracking-widest transition-all underline underline-offset-4 relative z-10 ${isDeviceLive ? 'text-emerald-400/50 opacity-50 cursor-default no-underline' : 'text-cyan-500 hover:text-main'}`}
                                   >
