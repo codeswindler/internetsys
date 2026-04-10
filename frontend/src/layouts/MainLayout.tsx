@@ -10,7 +10,11 @@ import { BackToTop } from '../components/BackToTop';
 import SupportChat from '../components/SupportChat';
 import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
-import { resolveHotspotLoginUrl } from '../services/hotspot';
+import {
+  resolveHotspotLoginUrl,
+  resolveHotspotReleaseUrl,
+  storeHotspotContext,
+} from '../services/hotspot';
 
 interface LayoutProps {
   role: 'admin' | 'user';
@@ -20,6 +24,7 @@ interface FireInternetOptions {
   subId?: string;
   routerIp?: string;
   redirectPath?: string;
+  releaseOnly?: boolean;
 }
 
 export default function MainLayout({ role }: LayoutProps) {
@@ -254,6 +259,15 @@ export default function MainLayout({ role }: LayoutProps) {
   };
 
   const fireInternet = (customUser?: string, customPass?: string, options: FireInternetOptions = {}) => {
+    if (options.releaseOnly) {
+      clearHandshakeFallbackTimer();
+      setShowSuccessOverlay(false);
+      setPendingRedirectUrl('');
+      setAuthData(null);
+      window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
+      return;
+    }
+
     const user = customUser || activeSub?.mikrotikUsername;
     const pass = customPass || activeSub?.mikrotikPassword;
     const routerIp = options.routerIp || activeSub?.router?.localGateway || '10.5.50.1';
@@ -338,15 +352,9 @@ export default function MainLayout({ role }: LayoutProps) {
     const params = new URLSearchParams(window.location.search);
     const mac = params.get('mac');
     const ip = params.get('ip');
-    const routerIdentity = params.get('router'); // MikroTik router's ID or hostname
-    const linkLogin = params.get('link-login') || params.get('link-login-only') || params.get('link-login-esc');
+    storeHotspotContext(params, window.location.origin);
     
-    if (mac || ip || routerIdentity) {
-      if (mac) localStorage.setItem('hotspot_mac', mac);
-      if (ip) localStorage.setItem('hotspot_ip', ip);
-      if (routerIdentity) localStorage.setItem('hotspot_router_id', routerIdentity);
-      if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
-
+    if (mac || ip) {
       // Save to server if logged in
       if (token) {
         axios.post(`${API_URL}/auth/heartbeat`, { mac, ip }, {

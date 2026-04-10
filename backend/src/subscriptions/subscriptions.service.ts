@@ -825,22 +825,33 @@ export class SubscriptionsService {
       }
     }
 
-    if (sub.startedAt) {
-      return {
-        ...sub,
-        handshakeRequired: true,
-        activationPending: false,
-      };
-    }
-
-    this.logger.log(
-      `[CONNECT-PENDING] Router authorized for sub ${sub.id}. Waiting for handshake confirmation before starting timer.`,
+    const isConfirmed = await this.verifyHotspotConnectionWithRetry(
+      sub.router,
+      finalMac,
+      finalIp,
+      sub.mikrotikUsername,
     );
 
+    if (!isConfirmed) {
+      this.logger.warn(
+        `[CONNECT-PENDING] Router authorization for sub ${sub.id} could not be verified after retry window.`,
+      );
+      throw new BadRequestException(
+        'Connection is still initializing. Please retry Link Device in a few seconds.',
+      );
+    }
+
+    if (!sub.startedAt) {
+      this.activateSubscriptionClock(sub);
+    }
+
+    const savedSub = await this.subRepo.save(sub);
+
     return {
-      ...sub,
-      handshakeRequired: true,
-      activationPending: true,
+      ...savedSub,
+      handshakeRequired: false,
+      activationPending: false,
+      connectionConfirmed: true,
     };
   }
 
@@ -873,7 +884,7 @@ export class SubscriptionsService {
 
     await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
 
-    const isConfirmed = await this.mikrotikService.verifyHotspotConnection(
+    const isConfirmed = await this.verifyHotspotConnectionWithRetry(
       sub.router,
       finalMac,
       finalIp,
@@ -899,6 +910,36 @@ export class SubscriptionsService {
       activationPending: false,
       connectionConfirmed: true,
     };
+  }
+
+  private async verifyHotspotConnectionWithRetry(
+    router: Router,
+    mac?: string,
+    ip?: string,
+    username?: string,
+  ) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const isConfirmed = await this.mikrotikService.verifyHotspotConnection(
+        router,
+        mac,
+        ip,
+        username,
+      );
+
+      if (isConfirmed) {
+        return true;
+      }
+
+      if (attempt < 3) {
+        await this.wait(400);
+      }
+    }
+
+    return false;
+  }
+
+  private wait(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private activateSubscriptionClock(sub: Subscription) {

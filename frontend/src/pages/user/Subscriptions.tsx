@@ -11,7 +11,7 @@ import { buildHotspotIdentifyUrl, getStoredHotspotIdentity, shouldTriggerHotspot
 export default function Subscriptions() {
   const queryClient = useQueryClient();
   const { fireInternet } = useOutletContext<{
-    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string }) => void;
+    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean }) => void;
   }>();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
@@ -97,11 +97,13 @@ export default function Subscriptions() {
       setPendingStartSubId(null);
       toast.success('Completing secure connection...', { icon: '📶' });
       const sub = res.data;
+      const releaseOnly = sub?.connectionConfirmed || sub?.activationPending === false || !!sub?.startedAt;
       setTimeout(() => {
         fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
           subId: sub?.id,
           routerIp: sub?.router?.localGateway,
           redirectPath: window.location.pathname,
+          releaseOnly,
         });
       }, 350);
     },

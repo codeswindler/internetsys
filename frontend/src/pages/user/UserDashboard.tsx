@@ -37,7 +37,7 @@ export default function UserDashboard() {
   });
 
   const { fireInternet, currentUser } = useOutletContext<{ 
-    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string }) => void,
+    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean }) => void,
     currentUser: any 
   }>();
 
@@ -189,12 +189,14 @@ export default function UserDashboard() {
       setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null })); // Close manager if open
       
       const sub = res.data;
+      const releaseOnly = sub?.connectionConfirmed || sub?.activationPending === false || !!sub?.startedAt;
       toast.success('Completing secure connection...', { icon: '📶' });
       setTimeout(() => {
         fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
           subId: sub?.id,
           routerIp: sub?.router?.localGateway,
           redirectPath: window.location.pathname,
+          releaseOnly,
         });
       }, 350);
     },
@@ -508,11 +510,12 @@ export default function UserDashboard() {
                                  <button
                                    onClick={(e) => {
                                      e.stopPropagation();
-                                     fireInternet(sub.mikrotikUsername, sub.mikrotikPassword, {
-                                       subId: sub.id,
-                                       routerIp: sub.router?.localGateway,
-                                       redirectPath: window.location.pathname,
-                                     });
+                                    fireInternet(sub.mikrotikUsername, sub.mikrotikPassword, {
+                                      subId: sub.id,
+                                      routerIp: sub.router?.localGateway,
+                                      redirectPath: window.location.pathname,
+                                      releaseOnly: true,
+                                    });
                                      toast.success('Refreshing Handshake...');
                                    }}
                                    title="Refresh Connection Handshake"

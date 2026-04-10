@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { User as UserIcon, Phone, Lock, ArrowRight } from 'lucide-react';
 import { useEffect } from 'react';
 import api from '../../services/api';
+import { storeHotspotContext } from '../../services/hotspot';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -15,13 +16,7 @@ export default function Register() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const mac = params.get('mac');
-    const ip = params.get('ip');
-    const linkLogin = params.get('link-login') || params.get('link-login-only');
-    
-    if (mac) localStorage.setItem('hotspot_mac', mac);
-    if (ip) localStorage.setItem('hotspot_ip', ip);
-    if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
+    storeHotspotContext(params, window.location.origin);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
