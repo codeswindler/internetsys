@@ -40,8 +40,6 @@ export default function MainLayout({ role }: LayoutProps) {
   const [isPulling, setIsPulling] = useState(false);
   const startY = useRef(0);
   const mainRef = useRef<HTMLElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
-
   // Voucher Redemption State
   const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
   const [voucherCode, setVoucherCode] = useState('');
@@ -60,8 +58,8 @@ export default function MainLayout({ role }: LayoutProps) {
   } | null>(null);
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
-  const autoHandshakeAttemptedRef = useRef(false);
   const connectConfirmationRef = useRef<string | null>(null);
+  const handshakeFallbackTimerRef = useRef<number | null>(null);
 
   const redeemMutation = useMutation({
     mutationFn: async (data: { code: string; routerId: string }) => {
@@ -223,6 +221,38 @@ export default function MainLayout({ role }: LayoutProps) {
     return callbackUrl.toString();
   };
 
+  const clearHandshakeFallbackTimer = () => {
+    if (handshakeFallbackTimerRef.current !== null) {
+      window.clearTimeout(handshakeFallbackTimerRef.current);
+      handshakeFallbackTimerRef.current = null;
+    }
+  };
+
+  const submitHotspotHandshake = (loginAction: string, user: string, pass: string, returnUrl: string) => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = loginAction;
+    form.target = '_self';
+    form.style.display = 'none';
+
+    const fields = [
+      ['username', user],
+      ['password', pass],
+      ['dst', returnUrl],
+    ];
+
+    for (const [name, value] of fields) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
+  };
+
   const fireInternet = (customUser?: string, customPass?: string, options: FireInternetOptions = {}) => {
     const user = customUser || activeSub?.mikrotikUsername;
     const pass = customPass || activeSub?.mikrotikPassword;
@@ -247,32 +277,26 @@ export default function MainLayout({ role }: LayoutProps) {
       subId: options.subId || activeSub?.id,
     });
     setPendingRedirectUrl(loginUrl);
-    setShowSuccessOverlay(true);
+    setShowSuccessOverlay(false);
+    clearHandshakeFallbackTimer();
+    handshakeFallbackTimerRef.current = window.setTimeout(() => {
+      setShowSuccessOverlay(true);
+    }, 1500);
+    submitHotspotHandshake(loginAction, user, pass, returnUrl);
   };
 
   const submitPendingHandshake = () => {
-    const form = document.getElementById('ironclad-handshake') as HTMLFormElement | null;
-    if (form) {
-      form.submit();
+    if (authData) {
+      clearHandshakeFallbackTimer();
+      setShowSuccessOverlay(false);
+      handshakeFallbackTimerRef.current = window.setTimeout(() => {
+        setShowSuccessOverlay(true);
+      }, 1500);
+      submitHotspotHandshake(authData.loginAction, authData.user, authData.pass, authData.returnUrl);
     } else if (pendingRedirectUrl) {
       window.location.href = pendingRedirectUrl;
     }
   };
-
-  useEffect(() => {
-    if (!showSuccessOverlay) {
-      autoHandshakeAttemptedRef.current = false;
-      return;
-    }
-    if (autoHandshakeAttemptedRef.current) return;
-
-    autoHandshakeAttemptedRef.current = true;
-    const timer = window.setTimeout(() => {
-      submitPendingHandshake();
-    }, 350);
-
-    return () => window.clearTimeout(timer);
-  }, [showSuccessOverlay, pendingRedirectUrl, authData]);
 
   // ── SESSION EXPIRY MONITOR ──
   useEffect(() => {
@@ -360,6 +384,7 @@ export default function MainLayout({ role }: LayoutProps) {
             'Connection handshake did not finish. Time has not started.',
         );
       } finally {
+        clearHandshakeFallbackTimer();
         setShowSuccessOverlay(false);
         setPendingRedirectUrl('');
         setAuthData(null);
@@ -370,6 +395,10 @@ export default function MainLayout({ role }: LayoutProps) {
 
     confirmConnection();
   }, [location.pathname, location.search, token, API_URL, currentUser?.id]);
+
+  useEffect(() => {
+    return () => clearHandshakeFallbackTimer();
+  }, []);
 
   // User must explicitly choose which plan to start, so automatic firing is disabled.
 
@@ -791,7 +820,6 @@ export default function MainLayout({ role }: LayoutProps) {
         {/* Global Hidden MikroTik Login Form */}
         {activeSub && role === 'user' && (
           <form 
-            ref={formRef}
             method="post" 
             action={resolveHotspotLoginUrl(activeSub.router?.localGateway || '10.5.50.1')}
             className="hidden"
@@ -921,7 +949,7 @@ export default function MainLayout({ role }: LayoutProps) {
         />
       </main>
 
-      {/* High-Fidelity Success Overlay with Portal-Burst for Android/iOS Satisfaction */}
+      {/* Handshake Fallback Overlay */}
       {showSuccessOverlay && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300">
           <div className="max-w-sm w-full bg-slate-900 border border-white/10 rounded-3xl p-8 text-center shadow-2xl shadow-blue-500/10">
@@ -929,9 +957,9 @@ export default function MainLayout({ role }: LayoutProps) {
               <ShieldCheck className="w-8 h-8 text-blue-400 animate-pulse" />
             </div>
             
-            <h2 className="text-2xl font-bold text-white mb-2">Network Ready!</h2>
+            <h2 className="text-2xl font-bold text-white mb-2">Still Connecting?</h2>
             <p className="text-slate-400 mb-8 text-xs leading-relaxed">
-              Your device is now authorized on the hardware level. Click below to complete the connection handshake.
+              Link Device already attempted the internet handshake automatically. If your phone is still on this page, retry once below.
             </p>
 
             <div className="space-y-4">
@@ -939,24 +967,9 @@ export default function MainLayout({ role }: LayoutProps) {
                 onClick={() => submitPendingHandshake()}
                 className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
               >
-                COMPLETE SETUP
+                RETRY CONNECTION
                 <ArrowRight className="w-5 h-5" />
               </button>
-
-              {/* HIDDEN IRONCLAD HANDSHAKE FORM - DIRECT POST TO ROUTER */}
-              {authData && (
-                <form
-                  id="ironclad-handshake"
-                  action={authData.loginAction}
-                  method="POST"
-                  target="_self"
-                  style={{ display: 'none' }}
-                >
-                  <input type="hidden" name="username" value={authData.user} />
-                  <input type="hidden" name="password" value={authData.pass} />
-                  <input type="hidden" name="dst" value={authData.returnUrl} />
-                </form>
-              )}
 
               <button
                 onClick={() => {
