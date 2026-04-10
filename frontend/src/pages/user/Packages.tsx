@@ -28,7 +28,12 @@ import {
 } from 'lucide-react';
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
-import { buildHotspotIdentifyUrl } from '../../services/hotspot';
+import {
+  buildHotspotIdentifyUrl,
+  hasStoredHotspotIdentity,
+  storeHotspotContext,
+  syncStoredHotspotIdentity,
+} from '../../services/hotspot';
 import { format } from 'date-fns';
 
 export default function Packages() {
@@ -49,6 +54,7 @@ export default function Packages() {
   const [verifyingSubId, setVerifyingSubId] = useState<string | null>(null);
   const [pollCount, setPollCount] = useState(0);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const initialDetectionRef = useRef(false);
 
   useEffect(() => {
     const handleScroll = () => setShowScroll(window.scrollY > 300);
@@ -78,62 +84,83 @@ export default function Packages() {
   const [isDetecting, setIsDetecting] = useState(true);
   const [detectionError, setDetectionError] = useState<string | null>(null);
 
+  const getIdentifyRedirectUrl = () => {
+    const savedRouterId = localStorage.getItem('hotspot_router_id');
+    const matchedRouter = savedRouterId
+      ? routers?.find((router: any) => router.id === savedRouterId || router.name === savedRouterId)
+      : null;
+    const routerGateway = matchedRouter?.localGateway || routers?.[0]?.localGateway || '10.5.50.1';
+
+    return buildHotspotIdentifyUrl(
+      routerGateway,
+      `${window.location.origin}/user/packages`,
+    );
+  };
+
   useEffect(() => {
+    if (initialDetectionRef.current || routersLoading || subsLoading) {
+      return;
+    }
+
+    initialDetectionRef.current = true;
+
     const detectRouter = async () => {
-      // 1. Check URL Params (from Round-Trip)
       const params = new URLSearchParams(window.location.search);
-      const urlMac = params.get('mac');
-      const urlIp = params.get('ip');
-      if (urlMac) {
-        localStorage.setItem('hotspot_mac', urlMac);
-        if (urlIp) localStorage.setItem('hotspot_ip', urlIp);
+      const hasHotspotCallbackParams = [
+        'mac',
+        'ip',
+        'router',
+        'link-login',
+        'link-login-only',
+        'link-login-esc',
+        'link-orig',
+        'link-orig-esc',
+        'link-orig-only',
+        'dst',
+        'orig',
+        'orig-url',
+      ].some((key) => params.has(key));
+      storeHotspotContext(params, window.location.origin);
+
+      if (hasHotspotCallbackParams) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+
+      if (hasStoredHotspotIdentity()) {
         setIsDetecting(false);
         setDetectionError(null);
         return;
       }
 
-      // 2. Check Static Storage
-      if (localStorage.getItem('hotspot_mac')) {
+      const existingIp = localStorage.getItem('hotspot_ip');
+      const hasExistingSubscription = Array.isArray(subs) && subs.length > 0;
+
+      if (!hasExistingSubscription || !existingIp) {
         setIsDetecting(false);
-        setDetectionError(null);
+        setDetectionError('We need one quick hotspot identification before we can attach this purchase to your current device.');
         return;
       }
 
       try {
         setIsDetecting(true);
         setDetectionError(null);
-        const existingIp = localStorage.getItem('hotspot_ip');
-        const res = await api.post('/subscriptions/detect-router', { ip: existingIp || undefined });
-        const { mac } = res.data;
-        if (mac) {
-          localStorage.setItem('hotspot_mac', mac);
+        const res = await api.post('/subscriptions/detect-router', { ip: existingIp });
+        syncStoredHotspotIdentity({
+          mac: res.data?.mac,
+          ip: res.data?.ip || existingIp,
+        });
+        if (hasStoredHotspotIdentity()) {
           toast.success("Router Detected! You're on the right network.", { id: 'detect-toast' });
+          return;
         }
       } catch (err: any) {
-        // If we can't find them, offer a manual refresh to the router
-        const routerGateway = routers?.[0]?.localGateway || '10.5.50.1';
-        const redirectUrl = buildHotspotIdentifyUrl(
-          routerGateway,
-          `${window.location.origin}/user/packages`,
-        );
-
-        setDetectionError(
-          <div className="flex flex-col gap-3 py-2">
-            <p>We can't find your device on the Wi-Fi. Browser privacy may be hiding your ID.</p>
-            <button 
-               onClick={() => window.location.href = redirectUrl}
-               className="bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] uppercase tracking-widest py-2 px-4 rounded-xl transition-all self-start flex items-center gap-2"
-            >
-               <RefreshCw size={12} /> Identify My Device
-            </button>
-          </div> as any
-        );
+        setDetectionError("We couldn't verify this browser automatically. Browser privacy or a stale hotspot login can hide your device until you identify it once.");
       } finally {
         setIsDetecting(false);
       }
     };
     detectRouter();
-  }, []);
+  }, [routers, routersLoading, subs, subsLoading]);
 
   // Auto-select router silently
   useEffect(() => {
@@ -317,9 +344,8 @@ export default function Packages() {
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Proactive Validation: Check if device is synced
-    const mac = localStorage.getItem('hotspot_mac');
-    if (!mac) {
+    // Proactive Validation: Only block when we have no hotspot identity at all.
+    if (!hasStoredHotspotIdentity()) {
       setShowConnectionModal(true);
       return;
     }
@@ -464,16 +490,19 @@ export default function Packages() {
             </div>
             <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-4">Connection Required</h3>
             <div className="text-slate-400 text-sm mb-8 space-y-4 leading-relaxed">
-              <p>To purchase a package, you must be connected to the <span className="text-white font-bold tracking-widest">HOTSPOT WI-FI</span>.</p>
+              <p>To purchase a package, we need to identify this device on the <span className="text-white font-bold tracking-widest">HOTSPOT WI-FI</span>.</p>
               <div className="p-4 bg-slate-950/50 rounded-xl border border-white/5 text-xs text-left">
                 <p className="text-cyan-400 font-bold mb-1 uppercase tracking-widest text-[10px]">How to fix:</p>
                 <ol className="list-decimal list-inside space-y-1 text-slate-500">
                   <li>Connect to the Wi-Fi network.</li>
-                  <li>Ensure you see the <span className="text-slate-300 font-bold">Login Page</span> (Captive Portal).</li>
-                  <li>Hit "Login" or "Sync" to register your device.</li>
+                  <li>Open the hotspot login page if your browser has not shown it yet.</li>
+                  <li>Tap <span className="text-slate-300 font-bold">Identify Device</span> once so we can capture your hotspot identity.</li>
                 </ol>
               </div>
-              <p className="text-[10px] text-slate-500 italic">Privacy settings on some mobile browsers may hide your identity until you hit the Sync button on your dashboard.</p>
+              {detectionError && (
+                <p className="text-[11px] text-orange-200/80">{detectionError}</p>
+              )}
+              <p className="text-[10px] text-slate-500 italic">Some mobile browsers hide hotspot identity until the captive portal redirects once. After that, package purchase should work normally.</p>
             </div>
             <div className="flex gap-4">
               <button 
@@ -484,16 +513,11 @@ export default function Packages() {
               </button>
               <button 
                 onClick={() => {
-                  const routerGateway = routers?.[0]?.localGateway || '10.5.50.1';
-                  const redirectUrl = buildHotspotIdentifyUrl(
-                    routerGateway,
-                    `${window.location.origin}/user/packages`,
-                  );
-                  window.location.href = redirectUrl;
+                  window.location.href = getIdentifyRedirectUrl();
                 }}
                 className="flex-1 py-4 bg-orange-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 hover:bg-orange-400 transition-all active:scale-95"
               >
-                Go to Sync
+                Identify Device
               </button>
             </div>
           </div>
