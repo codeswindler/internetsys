@@ -343,13 +343,7 @@ export default function Packages() {
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Proactive Validation: Only block when we have no hotspot identity at all.
-    if (!hasStoredHotspotIdentity()) {
-      setShowConnectionModal(true);
-      return;
-    }
-    
+
     if (paymentType === 'mpesa') {
       try {
         if (!stkPhone) return toast.error('Please enter M-Pesa phone number');
