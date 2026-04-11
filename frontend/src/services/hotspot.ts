@@ -1,5 +1,6 @@
 const HOTSPOT_RELEASE_URL_KEY = 'hotspot_release_url';
 const HOTSPOT_RELEASE_FALLBACK_URL = 'http://connectivitycheck.gstatic.com/generate_204';
+const HOTSPOT_IDENTITY_UPDATED_AT_KEY = 'hotspot_identity_updated_at';
 
 export const resolveHotspotLoginUrl = (routerIp: string) => {
   const storedLoginUrl = localStorage.getItem('hotspot_link_login');
@@ -33,21 +34,46 @@ export const getStoredHotspotIdentity = () => ({
 const normalizeMac = (mac?: string | null) =>
   mac ? mac.replace(/[^a-fA-F0-9]/g, '').toUpperCase() : '';
 
+const touchHotspotIdentity = () => {
+  localStorage.setItem(HOTSPOT_IDENTITY_UPDATED_AT_KEY, `${Date.now()}`);
+};
+
 export const syncStoredHotspotIdentity = (identity?: { mac?: string; ip?: string }) => {
   if (!identity) return;
 
+  let changed = false;
+
   if (identity.mac) {
     localStorage.setItem('hotspot_mac', identity.mac);
+    changed = true;
   }
 
   if (identity.ip) {
     localStorage.setItem('hotspot_ip', identity.ip);
+    changed = true;
+  }
+
+  if (changed) {
+    touchHotspotIdentity();
   }
 };
 
 export const hasStoredHotspotIdentity = () => {
   const identity = getStoredHotspotIdentity();
   return !!(identity.mac || identity.ip);
+};
+
+export const hasFreshHotspotIdentity = (maxAgeMs = 5 * 60 * 1000) => {
+  if (!hasStoredHotspotIdentity()) {
+    return false;
+  }
+
+  const updatedAt = Number(localStorage.getItem(HOTSPOT_IDENTITY_UPDATED_AT_KEY) || 0);
+  if (!updatedAt) {
+    return false;
+  }
+
+  return Date.now() - updatedAt <= maxAgeMs;
 };
 
 export const matchesStoredHotspotIdentity = (
@@ -126,6 +152,7 @@ export const storeHotspotContext = (params: URLSearchParams, currentOrigin?: str
 
   if (mac) localStorage.setItem('hotspot_mac', mac);
   if (ip) localStorage.setItem('hotspot_ip', ip);
+  if (mac || ip) touchHotspotIdentity();
   if (routerIdentity) localStorage.setItem('hotspot_router_id', routerIdentity);
   if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
 

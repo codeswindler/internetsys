@@ -8,6 +8,7 @@ import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
   buildHotspotIdentifyUrl,
+  hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
   matchesStoredHotspotIdentity,
@@ -22,7 +23,6 @@ export default function UserDashboard() {
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [isSynced, setIsSynced] = useState(() => hasStoredHotspotIdentity());
   const currentDeviceStartRef = useRef<string | null>(null);
-  const currentDeviceIpOnlyRef = useRef(false);
   const [deviceManager, setDeviceManager] = useState<{ 
     open: boolean; 
     subId: string | null;
@@ -57,6 +57,7 @@ export default function UserDashboard() {
     const finalMac = mac || storedIdentity.mac;
     const finalIp = ip || storedIdentity.ip;
     const hasIdentity = !!(finalMac || finalIp);
+    const hasFreshIdentity = !!(mac || ip) || hasFreshHotspotIdentity();
 
     if (isReturningSuccess && currentUser?.id) {
        console.log('Returning from Router Success. Invalidating Cache...');
@@ -81,13 +82,13 @@ export default function UserDashboard() {
       setIsSynced(hasStoredHotspotIdentity());
     }
 
-    if (autoStartId && hasIdentity) {
+    if (autoStartId && hasFreshIdentity) {
       startMutation.mutate(autoStartId);
       window.history.replaceState({}, '', window.location.pathname);
       return;
     }
 
-    if (isReturningSuccess && !hasIdentity) {
+    if (isReturningSuccess && !hasFreshIdentity) {
       toast.error('We could not identify this device yet. Tap Manual Identify and keep Wi-Fi connected.');
     }
 
@@ -108,7 +109,10 @@ export default function UserDashboard() {
 
   const startCurrentDevice = (subId: string) => {
     currentDeviceStartRef.current = subId;
-    currentDeviceIpOnlyRef.current = true;
+    if (!hasFreshHotspotIdentity()) {
+      identifyCurrentDevice(subId);
+      return;
+    }
     startMutation.mutate(subId);
   };
 
@@ -163,9 +167,11 @@ export default function UserDashboard() {
   const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
 
   const linkDevice = (host: { mac: string; ip?: string }) => {
-    localStorage.setItem('hotspot_mac', host.mac);
-    if (host.ip) localStorage.setItem('hotspot_ip', host.ip);
-    else localStorage.removeItem('hotspot_ip');
+    syncStoredHotspotIdentity({
+      mac: host.mac,
+      ip: host.ip,
+    });
+    if (!host.ip) localStorage.removeItem('hotspot_ip');
     setIsSynced(true);
     const pendingSubId = deviceManager.pendingSubId;
     setDeviceManager(prev => ({ ...prev, open: false }));
@@ -182,9 +188,10 @@ export default function UserDashboard() {
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
       const identity = getStoredHotspotIdentity();
-      const mac = currentDeviceIpOnlyRef.current ? undefined : identity.mac;
-      const ip = identity.ip;
-      return api.post(`/subscriptions/${subId}/start`, { mac, ip });
+      return api.post(`/subscriptions/${subId}/start`, {
+        mac: identity.mac,
+        ip: identity.ip,
+      });
     },
     onSuccess: (res) => {
       syncStoredHotspotIdentity({
@@ -193,7 +200,6 @@ export default function UserDashboard() {
       });
       setIsSynced(hasStoredHotspotIdentity());
       currentDeviceStartRef.current = null;
-      currentDeviceIpOnlyRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
       setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null })); // Close manager if open
       
@@ -212,7 +218,6 @@ export default function UserDashboard() {
     onError: (err: any) => {
       const currentDeviceSubId = currentDeviceStartRef.current;
       currentDeviceStartRef.current = null;
-      currentDeviceIpOnlyRef.current = false;
 
       if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
         identifyCurrentDevice(currentDeviceSubId);
@@ -546,12 +551,8 @@ export default function UserDashboard() {
 
                              <div className="flex flex-col lg:flex-row items-center gap-6 w-full">
                                <button 
-                                 onClick={async () => {
-                                   if (!isSynced) {
-                                      startCurrentDevice(sub.id);
-                                      return;
-                                   }
-                                   startMutation.mutate(sub.id);
+                                 onClick={() => {
+                                   startCurrentDevice(sub.id);
                                  }}
                                  disabled={startMutation.isPending || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
                                  className={`w-full lg:flex-1 py-6 text-sm font-black tracking-[0.4em] uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-3xl ${

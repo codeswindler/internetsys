@@ -8,6 +8,7 @@ import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
   buildHotspotIdentifyUrl,
+  hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
   matchesStoredHotspotIdentity,
@@ -31,7 +32,6 @@ export default function Subscriptions() {
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   const [pendingStartSubId, setPendingStartSubId] = useState<string | null>(null);
   const currentDeviceStartRef = useRef<string | null>(null);
-  const currentDeviceIpOnlyRef = useRef(false);
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -84,16 +84,20 @@ export default function Subscriptions() {
 
   const startCurrentDevice = (subId: string) => {
     currentDeviceStartRef.current = subId;
-    currentDeviceIpOnlyRef.current = true;
+    if (!hasFreshHotspotIdentity()) {
+      startDiscovery(subId);
+      return;
+    }
     startMutation.mutate(subId);
   };
 
   const startMutation = useMutation({
     mutationFn: (subId: string) => {
       const identity = getStoredHotspotIdentity();
-      const mac = currentDeviceIpOnlyRef.current ? undefined : identity.mac;
-      const ip = identity.ip;
-      return api.post(`/subscriptions/${subId}/start`, { mac, ip });
+      return api.post(`/subscriptions/${subId}/start`, {
+        mac: identity.mac,
+        ip: identity.ip,
+      });
     },
     onSuccess: (res) => {
       syncStoredHotspotIdentity({
@@ -102,7 +106,6 @@ export default function Subscriptions() {
       });
       setIsSynced(hasStoredHotspotIdentity());
       currentDeviceStartRef.current = null;
-      currentDeviceIpOnlyRef.current = false;
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
       setPendingStartSubId(null);
       toast.success('Completing secure connection...', { icon: '📶' });
@@ -120,7 +123,6 @@ export default function Subscriptions() {
     onError: (err: any) => {
       const currentDeviceSubId = currentDeviceStartRef.current;
       currentDeviceStartRef.current = null;
-      currentDeviceIpOnlyRef.current = false;
 
       if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
         startDiscovery(currentDeviceSubId);
@@ -160,16 +162,19 @@ export default function Subscriptions() {
     const autoStartId = params.get('auto_start');
     const storedIdentity = getStoredHotspotIdentity();
     const hasIdentity = !!(mac || ip || storedIdentity.mac || storedIdentity.ip);
+    const hasFreshIdentity = !!(mac || ip) || hasFreshHotspotIdentity();
 
     if (!mac && !ip && !autoStartId) return;
 
-    if (mac) localStorage.setItem('hotspot_mac', mac);
-    if (ip) localStorage.setItem('hotspot_ip', ip);
+    syncStoredHotspotIdentity({
+      mac: mac || undefined,
+      ip: ip || undefined,
+    });
     if (hasIdentity) {
       setIsSynced(hasStoredHotspotIdentity());
     }
 
-    if (autoStartId && hasIdentity) {
+    if (autoStartId && hasFreshIdentity) {
       setPendingStartSubId(autoStartId);
       startMutation.mutate(autoStartId);
     }
@@ -406,13 +411,9 @@ export default function Subscriptions() {
 
                              <div className="flex flex-col lg:flex-row items-center gap-6 w-full">
                                <button 
-                                 onClick={async () => {
+                                 onClick={() => {
                                    if (isThisDeviceLive) return;
-                                   if (!isSynced) {
-                                      startCurrentDevice(sub.id);
-                                      return;
-                                   }
-                                   startMutation.mutate(sub.id);
+                                   startCurrentDevice(sub.id);
                                  }}
                                  disabled={startMutation.isPending || sub.status === 'AWAITING_APPROVAL' || sub.status === 'VERIFYING'}
                                  className={`w-full lg:flex-1 py-6 text-sm font-black tracking-[0.4em] uppercase shadow-2xl transition-all duration-500 transform hover:scale-105 active:scale-95 flex items-center justify-center gap-4 rounded-3xl ${

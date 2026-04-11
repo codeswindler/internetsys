@@ -716,8 +716,8 @@ export class SubscriptionsService {
 
     // Resolve the current device from the router itself so device-limit state
     // and "this device" UI stay aligned with the actual connected hardware.
-    const finalIp = ip || sub.user.lastIp;
-    let finalMac = mac;
+    const finalIp = ip || undefined;
+    let finalMac = mac || undefined;
 
     if (!finalMac && finalIp) {
       finalMac = (await this.mikrotikService.findMacByIp(sub.router, finalIp)) || undefined;
