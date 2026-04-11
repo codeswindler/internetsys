@@ -19,6 +19,7 @@ import AdminAdmins from './pages/admin/AdminAdmins';
 import UserPackages from './pages/user/Packages';
 import UserSubscriptions from './pages/user/Subscriptions';
 import UserDashboard from './pages/user/UserDashboard';
+import HotspotConnect from './pages/user/HotspotConnect';
 
 function RootRedirect() {
   const location = useLocation();
@@ -55,6 +56,7 @@ function App() {
         <Route path="dashboard" element={<UserDashboard />} />
         <Route path="packages" element={<UserPackages />} />
         <Route path="subscriptions" element={<UserSubscriptions />} />
+        <Route path="connect" element={<HotspotConnect />} />
         <Route index element={<Navigate to="/user/dashboard" replace />} />
       </Route>
     </Routes>

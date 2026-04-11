@@ -7,7 +7,8 @@ import { Wifi, Clock, CreditCard, Smartphone, ShieldCheck, Download, Upload, Zap
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
-  buildHotspotIdentifyUrl,
+  buildHotspotConnectUrl,
+  consumeHotspotDeviceLimitContext,
   hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
@@ -31,6 +32,8 @@ export default function Subscriptions() {
   const [isScanning, setIsScanning] = useState(false);
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   const [pendingStartSubId, setPendingStartSubId] = useState<string | null>(null);
+  const [deviceLimitSessions, setDeviceLimitSessions] = useState<any[]>([]);
+  const [deviceLimitMaxDevices, setDeviceLimitMaxDevices] = useState<number | null>(null);
   const currentDeviceStartRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -75,20 +78,16 @@ export default function Subscriptions() {
   const startDiscovery = (subId: string) => {
     const targetSub = subHistory.find((sub: any) => sub.id === subId);
     const routerGateway = targetSub?.router?.localGateway || '10.5.50.1';
-    const returnUrl = new URL(`${window.location.origin}/user/subscriptions`);
-    returnUrl.searchParams.set('success', 'true');
-    returnUrl.searchParams.set('auto_start', subId);
-    const redirectUrl = buildHotspotIdentifyUrl(routerGateway, returnUrl.toString());
-    window.location.href = redirectUrl;
+    window.location.href = buildHotspotConnectUrl(
+      subId,
+      window.location.pathname,
+      routerGateway,
+      window.location.origin,
+    );
   };
 
   const startCurrentDevice = (subId: string) => {
-    currentDeviceStartRef.current = subId;
-    if (!hasFreshHotspotIdentity()) {
-      startDiscovery(subId);
-      return;
-    }
-    startMutation.mutate(subId);
+    startDiscovery(subId);
   };
 
   const startMutation = useMutation({
@@ -142,9 +141,10 @@ export default function Subscriptions() {
 
   const disconnectMutation = useMutation({
     mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
-    onSuccess: () => {
+    onSuccess: (_data, sessionId) => {
       toast.success('Device disconnected! You have a free slot.');
       queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+      setDeviceLimitSessions((prev) => prev.filter((session) => session.id !== sessionId));
       if (pendingStartSubId) {
         const nextSubId = pendingStartSubId;
         setPendingStartSubId(null);
@@ -160,9 +160,32 @@ export default function Subscriptions() {
     const mac = params.get('mac');
     const ip = params.get('ip');
     const autoStartId = params.get('auto_start');
+    const deviceLimitRequested = params.get('device_limit') === '1';
+    const deviceLimitSubId = params.get('subId');
     const storedIdentity = getStoredHotspotIdentity();
     const hasIdentity = !!(mac || ip || storedIdentity.mac || storedIdentity.ip);
     const hasFreshIdentity = !!(mac || ip) || hasFreshHotspotIdentity();
+
+    if (deviceLimitRequested && deviceLimitSubId) {
+      const context = consumeHotspotDeviceLimitContext();
+      if (context && context.subId === deviceLimitSubId) {
+        setPendingStartSubId(context.subId);
+        setDiscoverySubId(context.subId);
+        setDeviceLimitMaxDevices(context.maxDevices || 1);
+        setDeviceLimitSessions(
+          (context.connectedDevices || []).map((device: any) => ({
+            id: device.id,
+            macAddress: device.mac,
+            ipAddress: device.ip,
+            deviceModel: device.model,
+            isActive: true,
+          })),
+        );
+        setShowDiscovery(true);
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
 
     if (!mac && !ip && !autoStartId) return;
 
@@ -222,6 +245,10 @@ export default function Subscriptions() {
   }, [activeSubs.find((s: any) => s.status === 'ACTIVE')?.id]);
 
   const activeManageSub = activeSubs.find((s: any) => s.id === discoverySubId) || pastSubs.find((s: any) => s.id === discoverySubId);
+  const activeManageSessions =
+    deviceLimitSessions.length > 0 && discoverySubId
+      ? deviceLimitSessions
+      : activeManageSub?.deviceSessions?.filter((ds: any) => ds.isActive) || [];
 
   if (isLoading) return (
     <div className="flex items-center justify-center p-20">
@@ -489,11 +516,11 @@ export default function Subscriptions() {
                    <ShieldCheck className="text-cyan-500 shrink-0" size={24} />
                    <div className="flex flex-col">
                      <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest leading-none mb-1">Select an active device to disconnect</p>
-                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Max Allowed: {activeManageSub?.package?.maxDevices || 1}</p>
+                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Max Allowed: {deviceLimitMaxDevices || activeManageSub?.package?.maxDevices || 1}</p>
                    </div>
                 </div>
                 <div className="grid gap-6">
-                  {activeManageSub?.deviceSessions?.filter((ds: any) => ds.isActive)?.map((session: any) => (
+                  {activeManageSessions.map((session: any) => (
                     <div
                       key={session.id}
                       className="w-full relative group transition-all duration-500"
@@ -537,7 +564,7 @@ export default function Subscriptions() {
                     </div>
                   ))}
                   
-                  {(!activeManageSub?.deviceSessions || activeManageSub.deviceSessions.filter((ds: any) => ds.isActive).length === 0) && (
+                  {activeManageSessions.length === 0 && (
                     <div className="py-12 text-center border border-dashed border-white/10 rounded-3xl bg-white/5">
                        <Smartphone className="mx-auto text-slate-500 mb-4 opacity-30" size={40} />
                        <h4 className="text-sm font-black text-white uppercase tracking-widest opacity-50">No Devices Linked</h4>

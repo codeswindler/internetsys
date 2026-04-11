@@ -7,7 +7,8 @@ import { Wifi, Clock, Activity, Download, Upload, Zap, RefreshCw, ChevronRight, 
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
-  buildHotspotIdentifyUrl,
+  buildHotspotConnectUrl,
+  consumeHotspotDeviceLimitContext,
   hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
@@ -53,11 +54,34 @@ export default function UserDashboard() {
     const ip = params.get('ip');
     const autoStartId = params.get('auto_start');
     const isReturningSuccess = params.get('success');
+    const deviceLimitRequested = params.get('device_limit') === '1';
+    const deviceLimitSubId = params.get('subId');
     const storedIdentity = getStoredHotspotIdentity();
     const finalMac = mac || storedIdentity.mac;
     const finalIp = ip || storedIdentity.ip;
     const hasIdentity = !!(finalMac || finalIp);
     const hasFreshIdentity = !!(mac || ip) || hasFreshHotspotIdentity();
+
+    if (deviceLimitRequested && deviceLimitSubId) {
+      const context = consumeHotspotDeviceLimitContext();
+      if (context && context.subId === deviceLimitSubId) {
+        setDeviceManager({
+          open: true,
+          subId: context.subId,
+          isScanning: true,
+          connectedDevices: context.connectedDevices || [],
+          discoveredHosts: [],
+          maxDevices: context.maxDevices || 1,
+          pendingSubId: context.subId,
+        });
+
+        api.get(`/subscriptions/${deviceLimitSubId}/discover-hosts`)
+          .then((res) => setDeviceManager((prev) => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
+          .catch(() => setDeviceManager((prev) => ({ ...prev, isScanning: false })));
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
 
     if (isReturningSuccess && currentUser?.id) {
        console.log('Returning from Router Success. Invalidating Cache...');
@@ -100,20 +124,16 @@ export default function UserDashboard() {
   const identifyCurrentDevice = (subId: string) => {
     const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
     const routerGateway = targetSub?.router?.localGateway || activeSub?.router?.localGateway || '10.5.50.1';
-    const returnUrl = new URL(`${window.location.origin}/user/dashboard`);
-    returnUrl.searchParams.set('success', 'true');
-    returnUrl.searchParams.set('auto_start', subId);
-    const redirectUrl = buildHotspotIdentifyUrl(routerGateway, returnUrl.toString());
-    window.location.href = redirectUrl;
+    window.location.href = buildHotspotConnectUrl(
+      subId,
+      window.location.pathname,
+      routerGateway,
+      window.location.origin,
+    );
   };
 
   const startCurrentDevice = (subId: string) => {
-    currentDeviceStartRef.current = subId;
-    if (!hasFreshHotspotIdentity()) {
-      identifyCurrentDevice(subId);
-      return;
-    }
-    startMutation.mutate(subId);
+    identifyCurrentDevice(subId);
   };
 
   const startDiscovery = async (subId: string) => {

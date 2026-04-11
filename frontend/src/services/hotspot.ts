@@ -1,6 +1,7 @@
 const HOTSPOT_RELEASE_URL_KEY = 'hotspot_release_url';
 const HOTSPOT_RELEASE_FALLBACK_URL = 'http://connectivitycheck.gstatic.com/generate_204';
 const HOTSPOT_IDENTITY_UPDATED_AT_KEY = 'hotspot_identity_updated_at';
+const HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY = 'hotspot_device_limit_context';
 
 export const resolveHotspotLoginUrl = (routerIp: string) => {
   const storedLoginUrl = localStorage.getItem('hotspot_link_login');
@@ -24,6 +25,21 @@ export const buildHotspotIdentifyUrl = (routerIp: string, returnUrl: string) => 
   const loginUrl = new URL(resolveHotspotLoginUrl(routerIp));
   loginUrl.searchParams.set('dst', returnUrl);
   return loginUrl.toString();
+};
+
+export const buildHotspotConnectUrl = (
+  subId: string,
+  fromPath: string,
+  routerIp?: string,
+  currentOrigin?: string,
+) => {
+  const connectUrl = new URL('/user/connect', currentOrigin || window.location.origin);
+  connectUrl.searchParams.set('sub', subId);
+  connectUrl.searchParams.set('from', fromPath);
+  if (routerIp) {
+    connectUrl.searchParams.set('routerIp', routerIp);
+  }
+  return connectUrl.toString();
 };
 
 export const getStoredHotspotIdentity = () => ({
@@ -182,4 +198,21 @@ export const shouldTriggerHotspotIdentify = (error: any) => {
     message.includes('not physically connected to the hotspot wi-fi network') ||
     message.includes('unable to identify your device on the hotspot')
   );
+};
+
+export const storeHotspotDeviceLimitContext = (context: any) => {
+  sessionStorage.setItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY, JSON.stringify(context));
+};
+
+export const consumeHotspotDeviceLimitContext = () => {
+  const raw = sessionStorage.getItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY);
+  if (!raw) return null;
+
+  sessionStorage.removeItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY);
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 };
