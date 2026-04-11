@@ -84,13 +84,34 @@ export default function MainLayout({ role }: LayoutProps) {
       });
       setIsRedeemModalOpen(false);
       setVoucherCode('');
-      // Auto-Fire Internet after redemption success
       setTimeout(() => {
-        fireInternet(data?.mikrotikUsername, data?.mikrotikPassword, {
-          subId: data?.id,
-          routerIp: data?.router?.localGateway,
+        const mac = localStorage.getItem('hotspot_mac') || undefined;
+        const ip = localStorage.getItem('hotspot_ip') || undefined;
+
+        if (!token || !data?.id || (!mac && !ip)) {
+          navigate('/user/dashboard');
+          return;
+        }
+
+        axios.post(
+          `${API_URL}/subscriptions/${data.id}/start`,
+          { mac, ip },
+          { headers: { Authorization: `Bearer ${token}` } },
+        ).then(() => {
+          invalidateSubscriptionQueries();
+          fireInternet(undefined, undefined, {
+            subId: data.id,
+            routerIp: data?.router?.localGateway,
+            releaseOnly: true,
+          });
+        }).catch((err: any) => {
+          toast.error(
+            err.response?.data?.message ||
+              'Voucher activated, but this device still needs hotspot identification.',
+          );
+          navigate('/user/dashboard');
         });
-      }, 1000);
+      }, 600);
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Voucher redemption failed');
@@ -219,11 +240,12 @@ export default function MainLayout({ role }: LayoutProps) {
     queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
   };
 
-  const buildHandshakeReturnUrl = (subId?: string, redirectPath?: string) => {
-    const callbackUrl = new URL(`${window.location.origin}${redirectPath || location.pathname}`);
-    callbackUrl.searchParams.set('connect_result', '1');
-    if (subId) callbackUrl.searchParams.set('connect_sub', subId);
-    return callbackUrl.toString();
+  const fireInternet = (_customUser?: string, _customPass?: string, options: FireInternetOptions = {}) => {
+    if (!options.releaseOnly && !activeSub?.id) {
+      return;
+    }
+
+    window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
   };
 
   const clearHandshakeFallbackTimer = () => {
@@ -233,40 +255,19 @@ export default function MainLayout({ role }: LayoutProps) {
     }
   };
 
-  const submitHotspotHandshake = (loginAction: string, user: string, pass: string, returnUrl: string) => {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = loginAction;
-    form.target = '_self';
-    form.style.display = 'none';
-
-    const fields = [
-      ['username', user],
-      ['password', pass],
-      ['dst', returnUrl],
-    ];
-
-    for (const [name, value] of fields) {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = name;
-      input.value = value;
-      form.appendChild(input);
-    }
-
-    document.body.appendChild(form);
-    form.submit();
-  };
-
-  const fireInternet = (customUser?: string, customPass?: string, options: FireInternetOptions = {}) => {
-    if (options.releaseOnly) {
-      clearHandshakeFallbackTimer();
-      setShowSuccessOverlay(false);
-      setPendingRedirectUrl('');
-      setAuthData(null);
-      window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
+  const submitPendingHandshake = () => {
+    clearHandshakeFallbackTimer();
+    setShowSuccessOverlay(false);
+    if (pendingRedirectUrl) {
+      window.location.href = pendingRedirectUrl;
       return;
     }
+    window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
+  };
+
+
+  const unusedLegacyHandshake = null;
+  /*
 
     const user = customUser || activeSub?.mikrotikUsername;
     const pass = customPass || activeSub?.mikrotikPassword;
@@ -348,6 +349,46 @@ export default function MainLayout({ role }: LayoutProps) {
   }, [activeSub?.id, activeSub?.expiresAt, activeSub?.startedAt]);
 
   // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
+  */
+
+  useEffect(() => {
+    if (!activeSub || !activeSub.expiresAt || !activeSub.startedAt || !token) return;
+
+    const checkExpiry = () => {
+      const expiresAt = new Date(activeSub.expiresAt).getTime();
+      const remaining = expiresAt - Date.now();
+
+      if (remaining <= 0 && expiredRef.current !== activeSub.id) {
+        expiredRef.current = activeSub.id;
+        setIsExpiredModalOpen(true);
+        toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+
+        axios.post(
+          `${API_URL}/subscriptions/${activeSub.id}/expire-now`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } },
+        ).catch(() => {
+          // The cron/self-healing backend path will still clean up if this immediate nudge fails.
+        }).finally(() => {
+          invalidateSubscriptionQueries();
+        });
+      }
+
+      if (remaining > 0 && remaining < 300000 && warnedRef.current !== activeSub.id) {
+        toast('Your session expires in less than 5 minutes!', {
+          icon: 'â³',
+          duration: 6000,
+          id: 'warning-toast'
+        });
+        warnedRef.current = activeSub.id;
+      }
+    };
+
+    const interval = setInterval(checkExpiry, 2000);
+    checkExpiry();
+    return () => clearInterval(interval);
+  }, [activeSub?.id, activeSub?.expiresAt, activeSub?.startedAt, token, API_URL]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mac = params.get('mac');

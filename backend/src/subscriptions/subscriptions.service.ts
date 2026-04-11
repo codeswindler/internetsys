@@ -247,6 +247,7 @@ export class SubscriptionsService {
   }
 
   async findMy(userId: string): Promise<Subscription[]> {
+    await this.expireOverdueSubscriptionsForUser(userId);
     return this.subRepo.find({
       where: { user: { id: userId } },
       relations: ['package', 'router', 'user', 'deviceSessions'],
@@ -255,6 +256,7 @@ export class SubscriptionsService {
   }
 
   async findActive(userId: string): Promise<Subscription | null> {
+    await this.expireOverdueSubscriptionsForUser(userId);
     const all = await this.subRepo.find({
       where: { user: { id: userId } },
       relations: ['package', 'router', 'user', 'deviceSessions'],
@@ -264,6 +266,7 @@ export class SubscriptionsService {
   }
 
   async findRecent(userId: string): Promise<any | null> {
+    await this.expireOverdueSubscriptionsForUser(userId);
     // Priority 1: Specifically Active and not expired
     const all = await this.subRepo.find({
       where: { user: { id: userId } },
@@ -291,6 +294,7 @@ export class SubscriptionsService {
   }
 
   async findAllActive(userId: string): Promise<Subscription[]> {
+    await this.expireOverdueSubscriptionsForUser(userId);
     this.logger.log(`[DIAGNOSTIC] findAllActive for ${userId} - Starting RELIABLE Query...`);
     
     const all = await this.subRepo.find({
@@ -436,11 +440,32 @@ export class SubscriptionsService {
         } catch (e) {
           this.logger.warn(`Secondary hardware logout failed for ${session.macAddress}: ${e.message}`);
         }
+        session.isActive = false;
       }
+      await this.sessionRepo.save(sub.deviceSessions);
     }
 
     sub.status = SubscriptionStatus.EXPIRED;
     await this.subRepo.save(sub);
+  }
+
+  async expireIfDue(userId: string, subId: string): Promise<{ expired: boolean; status: SubscriptionStatus | string }> {
+    const sub = await this.subRepo.findOne({
+      where: { id: subId },
+      relations: ['user'],
+    });
+
+    if (!sub) throw new NotFoundException('Subscription not found');
+    if (sub.user?.id !== userId) {
+      throw new BadRequestException('You can only expire your own subscription');
+    }
+
+    if (sub.status === SubscriptionStatus.ACTIVE && sub.expiresAt && sub.expiresAt <= new Date()) {
+      await this.expireSubscription(sub.id);
+      return { expired: true, status: SubscriptionStatus.EXPIRED };
+    }
+
+    return { expired: false, status: sub.status };
   }
 
   async cancelSubscription(subId: string): Promise<Subscription> {
@@ -488,7 +513,9 @@ export class SubscriptionsService {
         } catch (e) {
           this.logger.warn(`Hardware logout failed for session ${session.id}: ${e.message}`);
         }
+        session.isActive = false;
       }
+      await this.sessionRepo.save(sub.deviceSessions);
     }
 
     sub.status = SubscriptionStatus.CANCELLED;
@@ -994,6 +1021,7 @@ export class SubscriptionsService {
   }
 
   async getTrafficStats(userId: string): Promise<any> {
+    await this.expireOverdueSubscriptionsForUser(userId);
     const sub = await this.subRepo.findOne({
       where: { user: { id: userId }, status: 'active' as any },
       relations: ['router', 'user'],
@@ -1032,6 +1060,22 @@ export class SubscriptionsService {
       return stats;
     } catch (e) {
       return null;
+    }
+  }
+
+  private async expireOverdueSubscriptionsForUser(userId: string): Promise<void> {
+    const overdueSubs = await this.subRepo.find({
+      where: {
+        user: { id: userId },
+        status: SubscriptionStatus.ACTIVE,
+      },
+      relations: ['router', 'deviceSessions'],
+    });
+
+    for (const sub of overdueSubs) {
+      if (sub.expiresAt && sub.expiresAt <= new Date()) {
+        await this.expireSubscription(sub.id);
+      }
     }
   }
 }

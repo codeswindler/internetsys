@@ -21,7 +21,7 @@ export class ExpiryJob {
     private readonly smsService: SmsService,
   ) {}
 
-  @Cron(CronExpression.EVERY_MINUTE)
+  @Cron(CronExpression.EVERY_10_SECONDS)
   async handleExpiry() {
     this.logger.debug('Running subscription expiry check...');
 

@@ -124,6 +124,11 @@ export class SubscriptionsController {
     );
   }
 
+  @Post(':id/expire-now')
+  expireNow(@Param('id') id: string, @Request() req: any) {
+    return this.subscriptionsService.expireIfDue(req.user.id, id);
+  }
+
   @Get(':id/discover-hosts')
   discoverHosts(@Param('id') id: string) {
     return this.subscriptionsService.discoverNearbyHosts(id);
