@@ -53,6 +53,7 @@ export default function MainLayout({ role }: LayoutProps) {
   const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
+  const trackedLiveSessionRef = useRef<string | null>(null);
 
   const redeemMutation = useMutation({
     mutationFn: async (data: { code: string; routerId: string }) => {
@@ -204,6 +205,13 @@ export default function MainLayout({ role }: LayoutProps) {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   })[0]) || null;
 
+  useEffect(() => {
+    if (role !== 'user') return;
+    if (`${activeSub?.status || ''}`.toUpperCase() === 'ACTIVE' && activeSub?.id) {
+      trackedLiveSessionRef.current = activeSub.id;
+    }
+  }, [activeSub?.id, activeSub?.status, role]);
+
   const invalidateSubscriptionQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
     queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
@@ -271,6 +279,23 @@ export default function MainLayout({ role }: LayoutProps) {
     checkExpiry();
     return () => clearInterval(interval);
   }, [activeSub?.id, activeSub?.expiresAt, activeSub?.startedAt, token, API_URL]);
+
+  useEffect(() => {
+    if (role !== 'user' || !trackedLiveSessionRef.current) return;
+
+    const endedSub = allSubsData.find((sub: any) => sub.id === trackedLiveSessionRef.current);
+    if (!endedSub) return;
+
+    const endedStatus = `${endedSub.status || ''}`.toUpperCase();
+    if (!['EXPIRED', 'CANCELLED'].includes(endedStatus)) return;
+    if (expiredRef.current === endedSub.id) return;
+
+    expiredRef.current = endedSub.id;
+    warnedRef.current = endedSub.id;
+    trackedLiveSessionRef.current = null;
+    setIsExpiredModalOpen(true);
+    toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+  }, [allSubsData, role]);
 
   // User must explicitly choose which plan to start, so automatic firing is disabled.
 
@@ -746,7 +771,7 @@ export default function MainLayout({ role }: LayoutProps) {
               </div>
               
               <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Session Expired</h3>
-              <p className="text-slate-400 font-medium mb-8">Your internet access has been paused. Please renew your plan to stay connected.</p>
+              <p className="text-slate-400 font-medium mb-8">Your subscription has ended. Please buy a new plan to continue browsing.</p>
               
               <div className="space-y-3">
                 <button 

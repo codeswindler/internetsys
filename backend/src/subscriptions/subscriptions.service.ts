@@ -517,6 +517,7 @@ export class SubscriptionsService {
             sub.router,
             session.ipAddress,
             session.macAddress,
+            sub.mikrotikUsername,
           );
         } catch (e) {
           this.logger.warn(`Hardware logout failed for session ${session.id}: ${e.message}`);

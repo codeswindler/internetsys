@@ -296,6 +296,8 @@ export class MikrotikService {
         }
       }
 
+      await this.removeHotspotCookies(api, username);
+
     } catch (e) {
       this.logger.error(
         `Error removing hotspot user ${username} on ${router.host}`,
@@ -515,6 +517,7 @@ export class MikrotikService {
         for (const u of users) {
           await api.write('/ip/hotspot/user/remove', [`=.id=${u['.id']}`]);
         }
+        await this.removeHotspotCookies(api, username);
       }
       if (mac) {
         this.logger.log(
@@ -541,6 +544,7 @@ export class MikrotikService {
         for (const bind of bindings) {
           await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${bind['.id']}`]);
         }
+        await this.removeHotspotCookies(api, undefined, mac);
       }
       if (ip) {
         this.logger.log(
@@ -575,6 +579,26 @@ export class MikrotikService {
       );
     } finally {
       api.close();
+    }
+  }
+
+  private async removeHotspotCookies(
+    api: RouterOSAPI,
+    username?: string,
+    mac?: string,
+  ): Promise<void> {
+    const cookieQueries = [
+      username ? `?user=${username}` : null,
+      mac ? `?mac-address=${mac}` : null,
+    ].filter(Boolean) as string[];
+
+    for (const query of cookieQueries) {
+      const cookies = await api.write('/ip/hotspot/cookie/print', [query]);
+      for (const cookie of cookies) {
+        if (cookie['.id']) {
+          await api.write('/ip/hotspot/cookie/remove', [`=.id=${cookie['.id']}`]);
+        }
+      }
     }
   }
 
