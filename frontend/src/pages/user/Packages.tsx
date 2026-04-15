@@ -597,7 +597,7 @@ export default function Packages() {
                       <span className="text-slate-900 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">Phone Number:</span>
                       <input 
                         type="tel"
-                        className="w-full bg-white dark:bg-[rgba(15,23,42,0.8)] border border-slate-300 dark:border-[rgba(255,255,255,0.1)] focus:border-emerald-500 dark:focus:border-green-400 rounded-xl p-3 text-slate-900 dark:text-white font-mono text-lg tracking-widest shadow-inner outline-none transition-all"
+                        className="w-full bg-slate-50 dark:bg-[rgba(15,23,42,0.8)] border border-slate-400 dark:border-[rgba(255,255,255,0.1)] focus:border-emerald-500 dark:focus:border-green-400 rounded-xl p-3 text-slate-950 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-500 font-mono text-lg tracking-widest shadow-inner outline-none transition-all caret-emerald-600"
                         placeholder="254712345678"
                         value={stkPhone}
                         onChange={(e) => setStkPhone(e.target.value)}

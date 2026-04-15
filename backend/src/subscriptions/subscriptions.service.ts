@@ -20,6 +20,7 @@ import { MikrotikService } from '../routers/mikrotik.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { TransactionMethod } from '../entities/transaction.entity';
 import { MpesaService } from './mpesa.service';
+import { SmsService } from '../sms/sms.service';
 
 @Injectable()
 export class SubscriptionsService {
@@ -35,6 +36,7 @@ export class SubscriptionsService {
     private mikrotikService: MikrotikService,
     private mpesaService: MpesaService,
     private transactionsService: TransactionsService,
+    private smsService: SmsService,
   ) {}
 
   /**
@@ -409,7 +411,7 @@ export class SubscriptionsService {
   async expireSubscription(subId: string): Promise<void> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
-      relations: ['router', 'deviceSessions'],
+      relations: ['router', 'deviceSessions', 'user', 'package'],
     });
     if (!sub) return;
 
@@ -435,23 +437,7 @@ export class SubscriptionsService {
       }
     }
 
-    // Forced hardware logout for all associated devices to trigger captive portal popup
-    if (sub.deviceSessions && sub.deviceSessions.length > 0) {
-      for (const session of sub.deviceSessions) {
-        try {
-          await this.mikrotikService.forceLogoutHotspot(
-            sub.router,
-            session.ipAddress,
-            session.macAddress,
-            sub.mikrotikUsername,
-          );
-        } catch (e) {
-          this.logger.warn(`Secondary hardware logout failed for ${session.macAddress}: ${e.message}`);
-        }
-        session.isActive = false;
-      }
-      await this.sessionRepo.save(sub.deviceSessions);
-    }
+    await this.forceDisconnectSubscriptionDevices(sub, 'expiry');
 
     sub.status = SubscriptionStatus.EXPIRED;
     await this.subRepo.save(sub);
@@ -509,26 +495,14 @@ export class SubscriptionsService {
       }
     }
 
-    // Force hardware logout for all associated devices
-    if (sub.deviceSessions && sub.deviceSessions.length > 0) {
-      for (const session of sub.deviceSessions) {
-        try {
-          await this.mikrotikService.forceLogoutHotspot(
-            sub.router,
-            session.ipAddress,
-            session.macAddress,
-            sub.mikrotikUsername,
-          );
-        } catch (e) {
-          this.logger.warn(`Hardware logout failed for session ${session.id}: ${e.message}`);
-        }
-        session.isActive = false;
-      }
-      await this.sessionRepo.save(sub.deviceSessions);
-    }
+    await this.forceDisconnectSubscriptionDevices(sub, 'cancel');
 
     sub.status = SubscriptionStatus.CANCELLED;
-    return this.subRepo.save(sub);
+    const saved = await this.subRepo.save(sub);
+
+    await this.sendCancellationNotice(saved);
+
+    return saved;
   }
 
   async reactivateSubscription(subId: string): Promise<Subscription> {
@@ -667,6 +641,82 @@ export class SubscriptionsService {
     if (m.startsWith('DC:A6:32') || m.startsWith('B8:27:EB')) return 'Smart Device';
     
     return 'Hotspot Device';
+  }
+
+  private async forceDisconnectSubscriptionDevices(
+    sub: Subscription,
+    reason: 'cancel' | 'expiry',
+  ): Promise<void> {
+    const seenIdentities = new Set<string>();
+    const scopeLabel = reason.toUpperCase();
+
+    if (sub.deviceSessions && sub.deviceSessions.length > 0) {
+      for (const session of sub.deviceSessions) {
+        const sessionIp = session.ipAddress || undefined;
+        const sessionMac = session.macAddress || undefined;
+        const identityKey = `${sessionMac || ''}|${sessionIp || ''}`;
+
+        if ((sessionIp || sessionMac) && !seenIdentities.has(identityKey)) {
+          try {
+            await this.mikrotikService.forceLogoutHotspot(
+              sub.router,
+              sessionIp,
+              sessionMac,
+              sub.mikrotikUsername,
+            );
+            seenIdentities.add(identityKey);
+          } catch (e) {
+            this.logger.warn(
+              `[${scopeLabel}] Hardware logout failed for session ${session.id}: ${e.message}`,
+            );
+          }
+        }
+
+        session.isActive = false;
+      }
+
+      await this.sessionRepo.save(sub.deviceSessions);
+    }
+
+    const fallbackIp = sub.user?.lastIp || undefined;
+    const fallbackMac = sub.user?.lastMac || undefined;
+    const fallbackKey = `${fallbackMac || ''}|${fallbackIp || ''}`;
+
+    if ((fallbackIp || fallbackMac) && !seenIdentities.has(fallbackKey)) {
+      try {
+        await this.mikrotikService.forceLogoutHotspot(
+          sub.router,
+          fallbackIp,
+          fallbackMac,
+          sub.mikrotikUsername,
+        );
+        this.logger.log(
+          `[${scopeLabel}] Applied last-known device logout fallback for sub ${sub.id}.`,
+        );
+      } catch (e) {
+        this.logger.warn(
+          `[${scopeLabel}] Last-known device logout fallback failed for sub ${sub.id}: ${e.message}`,
+        );
+      }
+    }
+  }
+
+  private async sendCancellationNotice(sub: Subscription): Promise<void> {
+    if (!sub.user?.phone || sub.user.phone.length < 9) {
+      return;
+    }
+
+    const packageName = sub.package?.name || 'internet';
+    const message = `PulseLynk: Your ${packageName} plan has been cancelled and access disconnected. Buy a new package to continue browsing.`;
+
+    try {
+      const sent = await this.smsService.sendSms(sub.user.phone, message);
+      if (sent) {
+        this.logger.log(`[SMS] Sent cancellation notice to ${sub.user.phone}`);
+      }
+    } catch (e) {
+      this.logger.warn(`[SMS] Failed to send cancellation notice for sub ${sub.id}: ${e.message}`);
+    }
   }
 
   async startSession(

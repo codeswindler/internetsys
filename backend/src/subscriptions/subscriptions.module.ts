@@ -12,6 +12,7 @@ import { RoutersModule } from '../routers/routers.module';
 import { DeviceSession } from '../entities/device-session.entity';
 
 import { TransactionsModule } from '../transactions/transactions.module';
+import { SmsModule } from '../sms/sms.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
 
     RoutersModule, // To use MikrotikService
     TransactionsModule,
+    SmsModule,
   ],
   controllers: [SubscriptionsController, MpesaWebhookController],
   providers: [SubscriptionsService, MpesaService],

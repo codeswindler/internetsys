@@ -578,6 +578,9 @@ export class MikrotikService {
         `Failed to force logout ${mac || ip} on ${router.name}: ${e.message}`,
       );
     } finally {
+      if (ip || mac) {
+        await this.nudgeHotspotClient(api, ip, mac);
+      }
       api.close();
     }
   }
@@ -781,15 +784,35 @@ export class MikrotikService {
     mac?: string,
   ): Promise<void> {
     try {
-      if (ip) {
-        await api.write('/ip/arp/remove', [`?address=${ip}`]);
+      const arpIds = new Set<string>();
+      const normalizedMac = this.normalizeMac(mac);
+      const arpQueries = [
+        ip ? `?address=${ip}` : null,
+        normalizedMac ? `?mac-address=${normalizedMac}` : null,
+      ].filter(Boolean) as string[];
+
+      for (const query of arpQueries) {
+        const arpEntries = await api.write('/ip/arp/print', [query]);
+        for (const arpEntry of arpEntries) {
+          if (arpEntry['.id']) {
+            arpIds.add(arpEntry['.id']);
+          }
+        }
       }
-      if (mac) {
-        await api.write('/ip/arp/remove', [`?mac-address=${mac}`]);
+
+      for (const arpId of arpIds) {
+        await api.write('/ip/arp/remove', [`=.id=${arpId}`]);
       }
-      this.logger.log(
-        `[INSTANT-FLOW] ARP nudge sent for ${ip || mac}. Fluid connectivity engaged.`,
-      );
+
+      if (arpIds.size > 0) {
+        this.logger.log(
+          `[INSTANT-FLOW] ARP nudge sent for ${ip || normalizedMac}. Fluid connectivity engaged.`,
+        );
+      } else {
+        this.logger.log(
+          `[INSTANT-FLOW] No ARP entries found to nudge for ${ip || normalizedMac}.`,
+        );
+      }
     } catch (e: any) {
       this.logger.warn(`[INSTANT-FLOW] ARP nudge failed: ${e.message}`);
     }
