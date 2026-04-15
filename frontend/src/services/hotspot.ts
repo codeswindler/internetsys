@@ -250,6 +250,54 @@ export const resolveHotspotReleaseUrl = (
   return fallbackUrl;
 };
 
+export const submitHotspotLoginRelease = ({
+  routerIp,
+  username,
+  password,
+  releaseUrl,
+  currentOrigin,
+}: {
+  routerIp?: string;
+  username?: string;
+  password?: string;
+  releaseUrl?: string;
+  currentOrigin?: string;
+}) => {
+  if (
+    typeof document === 'undefined' ||
+    !routerIp ||
+    !username ||
+    !password
+  ) {
+    return false;
+  }
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = resolveHotspotLoginUrl(routerIp);
+  form.style.display = 'none';
+
+  const payload: Record<string, string> = {
+    username,
+    password,
+    dst: resolveHotspotReleaseUrl(currentOrigin, releaseUrl),
+    popup: 'true',
+  };
+
+  Object.entries(payload).forEach(([name, value]) => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+  window.setTimeout(() => form.remove(), 1000);
+  return true;
+};
+
 export const shouldTriggerHotspotIdentify = (error: any) => {
   const status = error?.response?.status;
   const message = `${error?.response?.data?.message || ''}`.toLowerCase();

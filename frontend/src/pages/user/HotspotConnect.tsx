@@ -12,6 +12,7 @@ import {
   shouldTriggerHotspotIdentify,
   storeHotspotContext,
   storeHotspotDeviceLimitContext,
+  submitHotspotLoginRelease,
   syncStoredHotspotIdentity,
 } from '../../services/hotspot';
 
@@ -101,11 +102,32 @@ export default function HotspotConnect() {
           window.location.origin,
           connectContext?.releaseUrl,
         );
+        const routerGateway =
+          requestedRouterIp ||
+          sub?.router?.localGateway ||
+          localStorage.getItem('hotspot_router_id') ||
+          '10.5.50.1';
 
-        setStage('Releasing to the internet...');
+        setStage('Completing router handoff...');
         toast.success('Device linked. Opening internet...');
         clearHotspotConnectContext(attemptId);
-        window.location.replace(releaseUrl);
+
+        const submitted = submitHotspotLoginRelease({
+          routerIp: routerGateway,
+          username: sub?.mikrotikUsername,
+          password: sub?.mikrotikPassword,
+          releaseUrl,
+          currentOrigin: window.location.origin,
+        });
+
+        if (!submitted) {
+          window.location.replace(releaseUrl);
+          return;
+        }
+
+        window.setTimeout(() => {
+          window.location.replace(releaseUrl);
+        }, 2500);
       } catch (err: any) {
         if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
           storeHotspotDeviceLimitContext(err.response.data);

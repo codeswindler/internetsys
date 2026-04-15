@@ -13,6 +13,7 @@ import ChangePasswordModal from '../components/ChangePasswordModal';
 import {
   buildHotspotConnectUrl,
   resolveHotspotReleaseUrl,
+  submitHotspotLoginRelease,
 } from '../services/hotspot';
 
 interface LayoutProps {
@@ -215,7 +216,23 @@ export default function MainLayout({ role }: LayoutProps) {
       return;
     }
 
-    window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
+    const releaseUrl = resolveHotspotReleaseUrl(window.location.origin);
+    const submitted = submitHotspotLoginRelease({
+      routerIp: options.routerIp || activeSub?.router?.localGateway || '10.5.50.1',
+      username: _customUser || activeSub?.mikrotikUsername,
+      password: _customPass || activeSub?.mikrotikPassword,
+      releaseUrl,
+      currentOrigin: window.location.origin,
+    });
+
+    if (!submitted) {
+      window.location.replace(releaseUrl);
+      return;
+    }
+
+    window.setTimeout(() => {
+      window.location.replace(releaseUrl);
+    }, 2500);
   };
 
   useEffect(() => {
