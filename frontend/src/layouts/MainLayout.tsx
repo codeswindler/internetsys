@@ -75,12 +75,12 @@ export default function MainLayout({ role }: LayoutProps) {
           navigate('/user/dashboard');
           return;
         }
-        window.location.href = buildHotspotConnectUrl(
+        window.location.replace(buildHotspotConnectUrl(
           data.id,
           '/user/dashboard',
           data?.router?.localGateway,
           window.location.origin,
-        );
+        ));
       }, 600);
     },
     onError: (err: any) => {

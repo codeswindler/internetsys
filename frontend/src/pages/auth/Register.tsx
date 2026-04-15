@@ -36,7 +36,8 @@ export default function Register() {
       localStorage.setItem('role', 'user');
       
       toast.success('Registration successful! Welcome aboard.');
-      navigate('/user/dashboard');
+      const params = new URLSearchParams(window.location.search);
+      navigate(params.get('returnTo') || '/user/dashboard', { replace: true });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Registration failed');
     } finally {

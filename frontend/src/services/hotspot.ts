@@ -2,6 +2,14 @@ const HOTSPOT_RELEASE_URL_KEY = 'hotspot_release_url';
 const HOTSPOT_RELEASE_FALLBACK_URL = 'http://connectivitycheck.gstatic.com/generate_204';
 const HOTSPOT_IDENTITY_UPDATED_AT_KEY = 'hotspot_identity_updated_at';
 const HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY = 'hotspot_device_limit_context';
+const HOTSPOT_CONNECT_CONTEXT_PREFIX = 'hotspot_connect_context:';
+
+type HotspotConnectContext = {
+  subId: string;
+  fromPath: string;
+  routerIp?: string;
+  releaseUrl?: string;
+};
 
 export const resolveHotspotLoginUrl = (routerIp: string) => {
   const storedLoginUrl = localStorage.getItem('hotspot_link_login');
@@ -33,7 +41,17 @@ export const buildHotspotConnectUrl = (
   routerIp?: string,
   currentOrigin?: string,
 ) => {
-  const connectUrl = new URL('/user/connect', currentOrigin || window.location.origin);
+  const connectUrl = new URL('/connect', currentOrigin || window.location.origin);
+  const attemptId = `hc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  persistHotspotConnectContext(attemptId, {
+    subId,
+    fromPath,
+    routerIp,
+    releaseUrl: getStoredHotspotReleaseUrl(currentOrigin),
+  });
+
+  connectUrl.searchParams.set('attempt', attemptId);
   connectUrl.searchParams.set('sub', subId);
   connectUrl.searchParams.set('from', fromPath);
   if (routerIp) {
@@ -125,6 +143,39 @@ const parseHotspotUrl = (value?: string | null, currentOrigin?: string) => {
   }
 };
 
+const getHotspotConnectContextKey = (attemptId: string) =>
+  `${HOTSPOT_CONNECT_CONTEXT_PREFIX}${attemptId}`;
+
+export const persistHotspotConnectContext = (
+  attemptId: string,
+  context: HotspotConnectContext,
+) => {
+  sessionStorage.setItem(
+    getHotspotConnectContextKey(attemptId),
+    JSON.stringify(context),
+  );
+};
+
+export const readHotspotConnectContext = (
+  attemptId?: string | null,
+): HotspotConnectContext | null => {
+  if (!attemptId) return null;
+
+  const raw = sessionStorage.getItem(getHotspotConnectContextKey(attemptId));
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as HotspotConnectContext;
+  } catch {
+    return null;
+  }
+};
+
+export const clearHotspotConnectContext = (attemptId?: string | null) => {
+  if (!attemptId) return;
+  sessionStorage.removeItem(getHotspotConnectContextKey(attemptId));
+};
+
 const isAppOrRouterDestination = (url: URL, currentOrigin?: string) => {
   const appOrigin = currentOrigin || window.location.origin;
   const routerIdentity = localStorage.getItem('hotspot_router_id');
@@ -178,13 +229,25 @@ export const storeHotspotContext = (params: URLSearchParams, currentOrigin?: str
   }
 };
 
-export const resolveHotspotReleaseUrl = (currentOrigin?: string) => {
+export const getStoredHotspotReleaseUrl = (currentOrigin?: string) => {
   const stored = parseHotspotUrl(localStorage.getItem(HOTSPOT_RELEASE_URL_KEY), currentOrigin);
   if (stored && !isAppOrRouterDestination(stored, currentOrigin)) {
     return stored.toString();
   }
 
-  return HOTSPOT_RELEASE_FALLBACK_URL;
+  return undefined;
+};
+
+export const resolveHotspotReleaseUrl = (
+  currentOrigin?: string,
+  fallbackUrl = HOTSPOT_RELEASE_FALLBACK_URL,
+) => {
+  const stored = getStoredHotspotReleaseUrl(currentOrigin);
+  if (stored) {
+    return stored;
+  }
+
+  return fallbackUrl;
 };
 
 export const shouldTriggerHotspotIdentify = (error: any) => {

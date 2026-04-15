@@ -90,12 +90,12 @@ export default function UserDashboard() {
   const identifyCurrentDevice = (subId: string) => {
     const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
     const routerGateway = targetSub?.router?.localGateway || activeSub?.router?.localGateway || '10.5.50.1';
-    window.location.href = buildHotspotConnectUrl(
+    window.location.replace(buildHotspotConnectUrl(
       subId,
       window.location.pathname,
       routerGateway,
       window.location.origin,
-    );
+    ));
   };
 
   const startCurrentDevice = (subId: string) => {

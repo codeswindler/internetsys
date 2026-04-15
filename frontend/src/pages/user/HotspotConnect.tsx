@@ -4,9 +4,10 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, RefreshCw, ShieldCheck, Wifi } from 'lucide-react';
 import api from '../../services/api';
 import {
-  buildHotspotConnectUrl,
   buildHotspotIdentifyUrl,
+  clearHotspotConnectContext,
   getStoredHotspotIdentity,
+  readHotspotConnectContext,
   resolveHotspotReleaseUrl,
   shouldTriggerHotspotIdentify,
   storeHotspotContext,
@@ -27,9 +28,13 @@ export default function HotspotConnect() {
     startedRef.current = true;
 
     const params = new URLSearchParams(location.search);
+    const attemptId = params.get('attempt');
+    const connectContext = readHotspotConnectContext(attemptId);
     const subId = params.get('sub');
-    const requestedFrom = params.get('from') || '/user/dashboard';
-    const requestedRouterIp = params.get('routerIp') || undefined;
+    const requestedFrom =
+      params.get('from') || connectContext?.fromPath || '/user/dashboard';
+    const requestedRouterIp =
+      params.get('routerIp') || connectContext?.routerIp || undefined;
     const identifyAttempted = params.get('identified') === '1';
     const token = localStorage.getItem('token');
 
@@ -42,18 +47,22 @@ export default function HotspotConnect() {
     }
 
     if (!token) {
-      navigate('/login', { replace: true });
+      const returnTo = encodeURIComponent(
+        `${window.location.pathname}${window.location.search}`,
+      );
+      navigate(`/login?returnTo=${returnTo}`, { replace: true });
       return;
     }
 
-    const continueUrl = new URL(
-      buildHotspotConnectUrl(
-        subId,
-        requestedFrom,
-        requestedRouterIp,
-        window.location.origin,
-      ),
-    );
+    const continueUrl = new URL('/connect', window.location.origin);
+    continueUrl.searchParams.set('sub', subId);
+    continueUrl.searchParams.set('from', requestedFrom);
+    if (attemptId) {
+      continueUrl.searchParams.set('attempt', attemptId);
+    }
+    if (requestedRouterIp) {
+      continueUrl.searchParams.set('routerIp', requestedRouterIp);
+    }
     continueUrl.searchParams.set('identified', '1');
 
     const startConnection = async () => {
@@ -63,9 +72,7 @@ export default function HotspotConnect() {
           localStorage.getItem('hotspot_router_id') ||
           '10.5.50.1';
         setStage('Identifying this device on the hotspot...');
-        window.location.replace(
-          buildHotspotIdentifyUrl(routerIp, continueUrl.toString()),
-        );
+        window.location.replace(buildHotspotIdentifyUrl(routerIp, continueUrl.toString()));
         return;
       }
 
@@ -90,15 +97,22 @@ export default function HotspotConnect() {
           ip: sub?.resolvedIp,
         });
 
+        const releaseUrl = resolveHotspotReleaseUrl(
+          window.location.origin,
+          connectContext?.releaseUrl,
+        );
+
         setStage('Releasing to the internet...');
         toast.success('Device linked. Opening internet...');
-        window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
+        clearHotspotConnectContext(attemptId);
+        window.location.replace(releaseUrl);
       } catch (err: any) {
         if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
           storeHotspotDeviceLimitContext(err.response.data);
           const backUrl = new URL(`${window.location.origin}${requestedFrom}`);
           backUrl.searchParams.set('device_limit', '1');
           backUrl.searchParams.set('subId', err.response.data.subId || subId);
+          clearHotspotConnectContext(attemptId);
           window.location.replace(backUrl.toString());
           return;
         }

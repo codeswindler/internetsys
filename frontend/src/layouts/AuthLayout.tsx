@@ -6,12 +6,14 @@ export default function AuthLayout() {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
   const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const returnTo = params.get('returnTo');
 
   if (token) {
     if (role === 'admin' || role === 'superadmin') {
       return <Navigate to={`/admin/dashboard${location.search}`} replace />;
     }
-    return <Navigate to={`/user/dashboard${location.search}`} replace />;
+    return <Navigate to={returnTo || `/user/dashboard${location.search}`} replace />;
   }
 
   return (

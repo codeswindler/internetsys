@@ -98,11 +98,14 @@ export default function Login() {
     localStorage.setItem('user', JSON.stringify(profileRes.data));
     
     toast.success('Authentication successful!');
+
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = params.get('returnTo');
     
     if (profileRes.data.role === 'admin' || profileRes.data.role === 'superadmin') {
       navigate('/admin/dashboard');
     } else {
-      navigate('/user/dashboard');
+      navigate(returnTo || '/user/dashboard', { replace: true });
     }
   };
 
