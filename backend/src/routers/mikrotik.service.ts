@@ -526,6 +526,67 @@ export class MikrotikService {
       .toUpperCase();
   }
 
+  private normalizeLoginBy(loginBy?: string) {
+    const desiredOrder = [
+      'http-pap',
+      'http-chap',
+      'https',
+      'cookie',
+      'mac-cookie',
+      'mac',
+      'trial',
+    ];
+
+    const modes = new Set(
+      `${loginBy || ''}`
+        .split(',')
+        .map((mode) => mode.trim())
+        .filter(Boolean),
+    );
+
+    modes.add('http-pap');
+    modes.add('mac-cookie');
+
+    const ordered = desiredOrder.filter((mode) => modes.has(mode));
+    const extras = [...modes].filter((mode) => !desiredOrder.includes(mode)).sort();
+    return [...ordered, ...extras].join(',');
+  }
+
+  private async ensureHotspotLoginModes(api: RouterOSAPI, router: Router): Promise<void> {
+    const servers = await api.write('/ip/hotspot/print');
+    if (!servers?.length) {
+      return;
+    }
+
+    for (const server of servers) {
+      const profileName = server['profile'];
+      if (!profileName) continue;
+
+      const profiles = await api.write('/ip/hotspot/profile/print', [
+        `?name=${profileName}`,
+      ]);
+
+      if (!profiles?.length) continue;
+
+      const profile = profiles[0];
+      const currentLoginBy = `${profile['login-by'] || ''}`;
+      const normalizedLoginBy = this.normalizeLoginBy(currentLoginBy);
+
+      if (normalizedLoginBy === currentLoginBy) {
+        continue;
+      }
+
+      await api.write('/ip/hotspot/profile/set', [
+        `=.id=${profile['.id']}`,
+        `=login-by=${normalizedLoginBy}`,
+      ]);
+
+      this.logger.log(
+        `[HOTSPOT PROFILE] Updated ${router.name}/${profileName} login-by=${normalizedLoginBy}`,
+      );
+    }
+  }
+
   private async upsertHotspotUser(
     api: RouterOSAPI,
     username: string,
@@ -666,6 +727,7 @@ export class MikrotikService {
         `[PROVISIONING] Creating hotspot user ${username} on ${router.name}...`,
       );
 
+      await this.ensureHotspotLoginModes(api, router);
       await this.upsertHotspotUser(api, username, pass, profile);
       await this.clearHotspotAuthorization(api, username, ip, finalMac);
 
