@@ -844,6 +844,7 @@ export class SubscriptionsService {
 
     // 2. ALWAYS attempt login on MikroTik
     if (finalMac || finalIp) {
+      let authorizationMode: 'active-login' | 'bypass' = 'bypass';
       try {
         const loginRes = await this.mikrotikService.loginUser(
           sub.router,
@@ -857,26 +858,31 @@ export class SubscriptionsService {
         if (!loginRes?.success) {
            throw new BadRequestException('Router failed to authorize your device. Please try again in 10 seconds.');
         }
+        authorizationMode =
+          loginRes?.authorizationMode === 'active-login'
+            ? 'active-login'
+            : 'bypass';
+
+        const isConfirmed = await this.verifyHotspotConnectionWithRetry(
+          sub.router,
+          finalMac,
+          finalIp,
+          sub.mikrotikUsername,
+          { allowBypassBinding: authorizationMode === 'bypass' },
+        );
+
+        if (!isConfirmed) {
+          this.logger.warn(
+            `[CONNECT-PENDING] Router authorization for sub ${sub.id} could not be verified after retry window.`,
+          );
+          throw new BadRequestException(
+            'Connection is still initializing. Please retry Link Device in a few seconds.',
+          );
+        }
       } catch (e) {
         this.logger.error(`Router Login Failed: ${e.message}`);
         throw new BadRequestException(`Connection Error: ${e.message}`);
       }
-    }
-
-    const isConfirmed = await this.verifyHotspotConnectionWithRetry(
-      sub.router,
-      finalMac,
-      finalIp,
-      sub.mikrotikUsername,
-    );
-
-    if (!isConfirmed) {
-      this.logger.warn(
-        `[CONNECT-PENDING] Router authorization for sub ${sub.id} could not be verified after retry window.`,
-      );
-      throw new BadRequestException(
-        'Connection is still initializing. Please retry Link Device in a few seconds.',
-      );
     }
 
     if (!sub.startedAt) {
@@ -933,6 +939,7 @@ export class SubscriptionsService {
       finalMac,
       finalIp,
       sub.mikrotikUsername,
+      { allowBypassBinding: true },
     );
 
     if (!isConfirmed) {
@@ -963,21 +970,26 @@ export class SubscriptionsService {
     mac?: string,
     ip?: string,
     username?: string,
+    options: { allowBypassBinding?: boolean } = {},
   ) {
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    const maxAttempts = options.allowBypassBinding ? 5 : 6;
+    const waitMs = options.allowBypassBinding ? 400 : 500;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const isConfirmed = await this.mikrotikService.verifyHotspotConnection(
         router,
         mac,
         ip,
         username,
+        options,
       );
 
       if (isConfirmed) {
         return true;
       }
 
-      if (attempt < 3) {
-        await this.wait(400);
+      if (attempt < maxAttempts - 1) {
+        await this.wait(waitMs);
       }
     }
 

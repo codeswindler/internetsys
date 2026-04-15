@@ -11,9 +11,8 @@ import SupportChat from '../components/SupportChat';
 import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import {
-  resolveHotspotLoginUrl,
+  buildHotspotConnectUrl,
   resolveHotspotReleaseUrl,
-  storeHotspotContext,
 } from '../services/hotspot';
 
 interface LayoutProps {
@@ -51,20 +50,8 @@ export default function MainLayout({ role }: LayoutProps) {
 
   // Expiry Monitor State
   const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
-  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
-  const [pendingRedirectUrl, setPendingRedirectUrl] = useState('');
-  const [authData, setAuthData] = useState<{
-    user: string;
-    pass: string;
-    gateway: string;
-    loginAction: string;
-    returnUrl: string;
-    subId?: string;
-  } | null>(null);
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
-  const connectConfirmationRef = useRef<string | null>(null);
-  const handshakeFallbackTimerRef = useRef<number | null>(null);
 
   const redeemMutation = useMutation({
     mutationFn: async (data: { code: string; routerId: string }) => {
@@ -79,38 +66,21 @@ export default function MainLayout({ role }: LayoutProps) {
       queryClient.invalidateQueries({ queryKey: ['active-subscription'] });
       const pkgName = data?.package?.name || 'Package';
       toast.success(`Voucher Redeemed! Activated: ${pkgName}`, {
-        icon: '🎉',
         duration: 5000
       });
       setIsRedeemModalOpen(false);
       setVoucherCode('');
       setTimeout(() => {
-        const mac = localStorage.getItem('hotspot_mac') || undefined;
-        const ip = localStorage.getItem('hotspot_ip') || undefined;
-
-        if (!token || !data?.id || (!mac && !ip)) {
+        if (!token || !data?.id) {
           navigate('/user/dashboard');
           return;
         }
-
-        axios.post(
-          `${API_URL}/subscriptions/${data.id}/start`,
-          { mac, ip },
-          { headers: { Authorization: `Bearer ${token}` } },
-        ).then(() => {
-          invalidateSubscriptionQueries();
-          fireInternet(undefined, undefined, {
-            subId: data.id,
-            routerIp: data?.router?.localGateway,
-            releaseOnly: true,
-          });
-        }).catch((err: any) => {
-          toast.error(
-            err.response?.data?.message ||
-              'Voucher activated, but this device still needs hotspot identification.',
-          );
-          navigate('/user/dashboard');
-        });
+        window.location.href = buildHotspotConnectUrl(
+          data.id,
+          '/user/dashboard',
+          data?.router?.localGateway,
+          window.location.origin,
+        );
       }, 600);
     },
     onError: (err: any) => {
@@ -248,109 +218,6 @@ export default function MainLayout({ role }: LayoutProps) {
     window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
   };
 
-  const clearHandshakeFallbackTimer = () => {
-    if (handshakeFallbackTimerRef.current !== null) {
-      window.clearTimeout(handshakeFallbackTimerRef.current);
-      handshakeFallbackTimerRef.current = null;
-    }
-  };
-
-  const submitPendingHandshake = () => {
-    clearHandshakeFallbackTimer();
-    setShowSuccessOverlay(false);
-    if (pendingRedirectUrl) {
-      window.location.href = pendingRedirectUrl;
-      return;
-    }
-    window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
-  };
-
-
-  const unusedLegacyHandshake = null;
-  /*
-
-    const user = customUser || activeSub?.mikrotikUsername;
-    const pass = customPass || activeSub?.mikrotikPassword;
-    const routerIp = options.routerIp || activeSub?.router?.localGateway || '10.5.50.1';
-    const loginAction = resolveHotspotLoginUrl(routerIp);
-    const returnUrl = buildHandshakeReturnUrl(options.subId || activeSub?.id, options.redirectPath);
-
-    if (!user || !pass) {
-       console.log('Direct-Thrust aborted: Missing credentials');
-       return;
-    }
-
-    const loginUrl = `${loginAction}?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&dst=${encodeURIComponent(returnUrl)}`;
-
-    console.log('🚀 PREPARING IRONCLAD POST-LOGIN...', loginUrl);
-    setAuthData({
-      user,
-      pass,
-      gateway: routerIp,
-      loginAction,
-      returnUrl,
-      subId: options.subId || activeSub?.id,
-    });
-    setPendingRedirectUrl(loginUrl);
-    setShowSuccessOverlay(false);
-    clearHandshakeFallbackTimer();
-    handshakeFallbackTimerRef.current = window.setTimeout(() => {
-      setShowSuccessOverlay(true);
-    }, 1500);
-    submitHotspotHandshake(loginAction, user, pass, returnUrl);
-  };
-
-  const submitPendingHandshake = () => {
-    if (authData) {
-      clearHandshakeFallbackTimer();
-      setShowSuccessOverlay(false);
-      handshakeFallbackTimerRef.current = window.setTimeout(() => {
-        setShowSuccessOverlay(true);
-      }, 1500);
-      submitHotspotHandshake(authData.loginAction, authData.user, authData.pass, authData.returnUrl);
-    } else if (pendingRedirectUrl) {
-      window.location.href = pendingRedirectUrl;
-    }
-  };
-
-  // ── SESSION EXPIRY MONITOR ──
-  useEffect(() => {
-    if (!activeSub || !activeSub.expiresAt || !activeSub.startedAt) return;
-    
-    // Check if the current sub is valid and not expired
-    const checkExpiry = () => {
-      const expiresAt = new Date(activeSub.expiresAt).getTime();
-      const now = Date.now();
-      const remaining = expiresAt - now;
-
-      // 1. Final Expiry detection
-      if (remaining <= 0 && expiredRef.current !== activeSub.id) {
-        setIsExpiredModalOpen(true);
-        expiredRef.current = activeSub.id;
-        toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
-      }
-
-      // 2. Pre-expiry warning (5 minutes)
-      if (remaining > 0 && remaining < 300000 && warnedRef.current !== activeSub.id) {
-        toast('Your session expires in less than 5 minutes!', {
-          icon: '⏳',
-          duration: 6000,
-          id: 'warning-toast'
-        });
-        warnedRef.current = activeSub.id;
-      }
-    };
-
-    // Run every 2 seconds for low resource usage but decent responsiveness
-    const interval = setInterval(checkExpiry, 2000);
-    checkExpiry();
-
-    return () => clearInterval(interval);
-  }, [activeSub?.id, activeSub?.expiresAt, activeSub?.startedAt]);
-
-  // Capture Hotspot Metadata (MAC, IP, etc) from URL and save to server
-  */
-
   useEffect(() => {
     if (!activeSub || !activeSub.expiresAt || !activeSub.startedAt || !token) return;
 
@@ -376,7 +243,6 @@ export default function MainLayout({ role }: LayoutProps) {
 
       if (remaining > 0 && remaining < 300000 && warnedRef.current !== activeSub.id) {
         toast('Your session expires in less than 5 minutes!', {
-          icon: 'â³',
           duration: 6000,
           id: 'warning-toast'
         });
@@ -388,66 +254,6 @@ export default function MainLayout({ role }: LayoutProps) {
     checkExpiry();
     return () => clearInterval(interval);
   }, [activeSub?.id, activeSub?.expiresAt, activeSub?.startedAt, token, API_URL]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const mac = params.get('mac');
-    const ip = params.get('ip');
-    storeHotspotContext(params, window.location.origin);
-    
-    if (mac || ip) {
-      // Save to server if logged in
-      if (token) {
-        axios.post(`${API_URL}/auth/heartbeat`, { mac, ip }, {
-          headers: { Authorization: `Bearer ${token}` }
-        }).catch(() => {}); // Silently ignore heartbeat errors
-      }
-    }
-  }, [location.search, token, API_URL]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const subId = params.get('connect_sub');
-
-    if (params.get('connect_result') !== '1' || !subId || !token) return;
-
-    const mac = params.get('mac') || localStorage.getItem('hotspot_mac') || undefined;
-    const ip = params.get('ip') || localStorage.getItem('hotspot_ip') || undefined;
-    const confirmationKey = `${subId}:${mac || ''}:${ip || ''}`;
-
-    if (connectConfirmationRef.current === confirmationKey) return;
-    connectConfirmationRef.current = confirmationKey;
-
-    const confirmConnection = async () => {
-      try {
-        await axios.post(
-          `${API_URL}/subscriptions/${subId}/confirm-connection`,
-          { mac, ip },
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        invalidateSubscriptionQueries();
-        toast.success('Internet Connection Established!', { icon: '🚀' });
-      } catch (err: any) {
-        toast.error(
-          err.response?.data?.message ||
-            'Connection handshake did not finish. Time has not started.',
-        );
-      } finally {
-        clearHandshakeFallbackTimer();
-        setShowSuccessOverlay(false);
-        setPendingRedirectUrl('');
-        setAuthData(null);
-        connectConfirmationRef.current = null;
-        window.history.replaceState({}, '', location.pathname);
-      }
-    };
-
-    confirmConnection();
-  }, [location.pathname, location.search, token, API_URL, currentUser?.id]);
-
-  useEffect(() => {
-    return () => clearHandshakeFallbackTimer();
-  }, []);
 
   // User must explicitly choose which plan to start, so automatic firing is disabled.
 
@@ -499,7 +305,6 @@ export default function MainLayout({ role }: LayoutProps) {
     if (role === 'admin' && unreadTotal > 0) {
       if (!initialToastDone.current) {
         toast(`Welcome back! You have ${unreadTotal} unread support message${unreadTotal > 1 ? 's' : ''}.`, {
-          icon: '🔔',
           duration: 5000,
           className: 'glass-panel',
           style: {
@@ -512,7 +317,6 @@ export default function MainLayout({ role }: LayoutProps) {
         initialToastDone.current = true;
       } else if (unreadTotal > prevUnreadRef.current) {
         toast('New support message received!', {
-          icon: '💬',
           duration: 4000,
           className: 'glass-panel',
           style: {
@@ -583,7 +387,7 @@ export default function MainLayout({ role }: LayoutProps) {
   return (
     <div className="flex min-h-screen md:h-screen overflow-hidden bg-[var(--bg-main)]">
       
-      {/* ── MOBILE NAV BAR & HAMBURGER DROPDOWN (NEW) ── */}
+      {/* Mobile Nav Bar and Hamburger Dropdown */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-[9990] glass-panel rounded-none border-b border-white/5 shadow-2xl">
         <div className="flex items-center justify-between p-4 relative z-20 bg-[var(--bg-panel)]">
           <div className="flex items-center gap-4">
@@ -680,7 +484,7 @@ export default function MainLayout({ role }: LayoutProps) {
         )}
       </div>
 
-      {/* ── DESKTOP SIDEBAR (HIDDEN ON MOBILE) ── */}
+      {/* Desktop Sidebar */}
       <aside className="hidden md:flex static inset-y-0 left-0 w-64 glass-panel shrink-0 m-4 flex-col z-[9000] border-none">
         <div className="p-6 flex items-center justify-between border-b-0">
           <Link 
@@ -866,22 +670,6 @@ export default function MainLayout({ role }: LayoutProps) {
         </div>
 
 
-        {/* Global Hidden MikroTik Login Form */}
-        {activeSub && role === 'user' && (
-          <form 
-            method="post" 
-            action={resolveHotspotLoginUrl(activeSub.router?.localGateway || '10.5.50.1')}
-            className="hidden"
-            target="ghost-frame"
-          >
-            <input type="hidden" name="username" value={activeSub.mikrotikUsername} />
-            <input type="hidden" name="password" value={activeSub.mikrotikPassword} />
-            <input type="hidden" name="dst" value="http://connectivitycheck.gstatic.com/generate_204" />
-            <input type="hidden" name="popup" value="true" />
-          </form>
-        )}
-        <iframe name="ghost-frame" className="hidden" />
-
         {/* Redeem Voucher Modal */}
         {isRedeemModalOpen && createPortal(
           <div 
@@ -998,46 +786,6 @@ export default function MainLayout({ role }: LayoutProps) {
         />
       </main>
 
-      {/* Handshake Fallback Overlay */}
-      {showSuccessOverlay && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="max-w-sm w-full bg-slate-900 border border-white/10 rounded-3xl p-8 text-center shadow-2xl shadow-blue-500/10">
-            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ShieldCheck className="w-8 h-8 text-blue-400 animate-pulse" />
-            </div>
-            
-            <h2 className="text-2xl font-bold text-white mb-2">Still Connecting?</h2>
-            <p className="text-slate-400 mb-8 text-xs leading-relaxed">
-              Link Device already attempted the internet handshake automatically. If your phone is still on this page, retry once below.
-            </p>
-
-            <div className="space-y-4">
-              <button
-                onClick={() => submitPendingHandshake()}
-                className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black uppercase tracking-widest text-sm rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-95 flex items-center justify-center gap-2"
-              >
-                RETRY CONNECTION
-                <ArrowRight className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={() => {
-                   // Fallback Burst: Try hitting a high-allowed trigger URL
-                   const burstUrl = `http://1.1.1.1`;
-                   window.location.href = burstUrl;
-                }}
-                className="w-full py-3 bg-slate-800 text-slate-400 hover:text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
-              >
-                Having Trouble? Click Here
-              </button>
-            </div>
-            
-            <p className="mt-8 text-[10px] text-slate-600 uppercase tracking-widest font-black">
-              PulseLynk Elite Infrastructure
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

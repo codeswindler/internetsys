@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { RefreshCw, ShieldCheck, Wifi, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RefreshCw, ShieldCheck, Wifi } from 'lucide-react';
 import api from '../../services/api';
 import {
   buildHotspotConnectUrl,
   buildHotspotIdentifyUrl,
   getStoredHotspotIdentity,
-  resolveHotspotLoginUrl,
   resolveHotspotReleaseUrl,
   shouldTriggerHotspotIdentify,
   storeHotspotContext,
@@ -15,45 +14,13 @@ import {
   syncStoredHotspotIdentity,
 } from '../../services/hotspot';
 
-type HandshakeState = {
-  action: string;
-  username: string;
-  password: string;
-  releaseUrl: string;
-};
-
 export default function HotspotConnect() {
   const navigate = useNavigate();
   const location = useLocation();
-  const formRef = useRef<HTMLFormElement>(null);
   const startedRef = useRef(false);
-  const fallbackTimerRef = useRef<number | null>(null);
   const [stage, setStage] = useState('Preparing secure connection...');
   const [error, setError] = useState('');
   const [fromPath, setFromPath] = useState('/user/dashboard');
-  const [handshake, setHandshake] = useState<HandshakeState | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (fallbackTimerRef.current !== null) {
-        window.clearTimeout(fallbackTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!handshake || !formRef.current) return;
-
-    if (fallbackTimerRef.current !== null) {
-      window.clearTimeout(fallbackTimerRef.current);
-    }
-
-    fallbackTimerRef.current = window.setTimeout(() => {
-      window.location.replace(handshake.releaseUrl);
-    }, 1800);
-
-    formRef.current.submit();
-  }, [handshake]);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -79,12 +46,14 @@ export default function HotspotConnect() {
       return;
     }
 
-    const continueUrl = new URL(buildHotspotConnectUrl(
-      subId,
-      requestedFrom,
-      requestedRouterIp,
-      window.location.origin,
-    ));
+    const continueUrl = new URL(
+      buildHotspotConnectUrl(
+        subId,
+        requestedFrom,
+        requestedRouterIp,
+        window.location.origin,
+      ),
+    );
     continueUrl.searchParams.set('identified', '1');
 
     const startConnection = async () => {
@@ -94,13 +63,17 @@ export default function HotspotConnect() {
           localStorage.getItem('hotspot_router_id') ||
           '10.5.50.1';
         setStage('Identifying this device on the hotspot...');
-        window.location.replace(buildHotspotIdentifyUrl(routerIp, continueUrl.toString()));
+        window.location.replace(
+          buildHotspotIdentifyUrl(routerIp, continueUrl.toString()),
+        );
         return;
       }
 
       const identity = getStoredHotspotIdentity();
       if (!identity.mac && !identity.ip) {
-        setError('We could not identify this device yet. Keep Wi-Fi connected and try again from the hotspot page.');
+        setError(
+          'We could not identify this device yet. Keep Wi-Fi connected and try again from the hotspot page.',
+        );
         return;
       }
 
@@ -117,25 +90,9 @@ export default function HotspotConnect() {
           ip: sub?.resolvedIp,
         });
 
-        const routerIp = requestedRouterIp || sub?.router?.localGateway || '10.5.50.1';
-        const releaseUrl = resolveHotspotReleaseUrl(window.location.origin);
-        const username = sub?.mikrotikUsername;
-        const password = sub?.mikrotikPassword;
-
         setStage('Releasing to the internet...');
-        toast.success('Device linked. Opening internet...', { icon: '📶' });
-
-        if (!username || !password) {
-          window.location.replace(releaseUrl);
-          return;
-        }
-
-        setHandshake({
-          action: resolveHotspotLoginUrl(routerIp),
-          username,
-          password,
-          releaseUrl,
-        });
+        toast.success('Device linked. Opening internet...');
+        window.location.replace(resolveHotspotReleaseUrl(window.location.origin));
       } catch (err: any) {
         if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
           storeHotspotDeviceLimitContext(err.response.data);
@@ -147,11 +104,16 @@ export default function HotspotConnect() {
         }
 
         if (shouldTriggerHotspotIdentify(err)) {
-          setError('We could not confirm this device on the hotspot yet. Please reopen the hotspot login page and try again.');
+          setError(
+            'We could not confirm this device on the hotspot yet. Please reopen the hotspot login page and try again.',
+          );
           return;
         }
 
-        setError(err.response?.data?.message || 'We could not connect this device right now.');
+        setError(
+          err.response?.data?.message ||
+            'We could not connect this device right now.',
+        );
       }
     };
 
@@ -162,9 +124,13 @@ export default function HotspotConnect() {
     <div className="max-w-2xl mx-auto w-full py-10 md:py-16 animate-fade-in">
       <div className="glass-panel rounded-[2.5rem] p-8 md:p-12 border border-cyan-500/20 bg-panel shadow-[0_20px_60px_rgba(8,145,178,0.15)]">
         <div className="flex flex-col items-center text-center gap-6">
-          <div className={`w-20 h-20 rounded-3xl flex items-center justify-center ${
-            error ? 'bg-orange-500/10 text-orange-400' : 'bg-cyan-500/10 text-cyan-400'
-          }`}>
+          <div
+            className={`w-20 h-20 rounded-3xl flex items-center justify-center ${
+              error
+                ? 'bg-orange-500/10 text-orange-400'
+                : 'bg-cyan-500/10 text-cyan-400'
+            }`}
+          >
             {error ? <AlertTriangle size={36} /> : <ShieldCheck size={36} />}
           </div>
 
@@ -207,20 +173,6 @@ export default function HotspotConnect() {
             </div>
           )}
         </div>
-
-        {handshake && (
-          <form
-            ref={formRef}
-            method="post"
-            action={handshake.action}
-            className="hidden"
-          >
-            <input type="hidden" name="username" value={handshake.username} />
-            <input type="hidden" name="password" value={handshake.password} />
-            <input type="hidden" name="dst" value={handshake.releaseUrl} />
-            <input type="hidden" name="popup" value="true" />
-          </form>
-        )}
       </div>
     </div>
   );

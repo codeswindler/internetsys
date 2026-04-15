@@ -526,6 +526,131 @@ export class MikrotikService {
       .toUpperCase();
   }
 
+  private async upsertHotspotUser(
+    api: RouterOSAPI,
+    username: string,
+    pass: string,
+    profile?: string,
+  ): Promise<void> {
+    const users = await api.write('/ip/hotspot/user/print', [
+      `?name=${username}`,
+    ]);
+
+    if (users.length > 0) {
+      const args = [`=.id=${users[0]['.id']}`, `=password=${pass}`];
+      if (profile) args.push(`=profile=${profile}`);
+      await api.write('/ip/hotspot/user/set', args);
+      return;
+    }
+
+    const args = [`=name=${username}`, `=password=${pass}`];
+    if (profile) args.push(`=profile=${profile}`);
+    await api.write('/ip/hotspot/user/add', args);
+  }
+
+  private async clearHotspotAuthorization(
+    api: RouterOSAPI,
+    _username: string,
+    ip?: string,
+    mac?: string,
+  ): Promise<void> {
+    const activeQueries = [
+      mac ? `?mac-address=${mac}` : null,
+      ip ? `?address=${ip}` : null,
+    ].filter(Boolean) as string[];
+
+    for (const query of activeQueries) {
+      const activeSessions = await api.write('/ip/hotspot/active/print', [query]);
+      for (const session of activeSessions) {
+        if (session['.id']) {
+          await api.write('/ip/hotspot/active/remove', [`=.id=${session['.id']}`]);
+        }
+      }
+    }
+
+    const bindingQueries = [
+      mac ? `?mac-address=${mac}` : null,
+      ip ? `?address=${ip}` : null,
+    ].filter(Boolean) as string[];
+
+    for (const query of bindingQueries) {
+      const bindings = await api.write('/ip/hotspot/ip-binding/print', [query]);
+      for (const binding of bindings) {
+        if (binding['.id']) {
+          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${binding['.id']}`]);
+        }
+      }
+    }
+  }
+
+  private async removeHotspotHosts(
+    api: RouterOSAPI,
+    ip?: string,
+    mac?: string,
+  ): Promise<void> {
+    const hostQueries = [
+      mac ? `?mac-address=${mac}` : null,
+      ip ? `?address=${ip}` : null,
+    ].filter(Boolean) as string[];
+
+    for (const query of hostQueries) {
+      const hosts = await api.write('/ip/hotspot/host/print', [query]);
+      for (const host of hosts) {
+        if (host['.id']) {
+          await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+        }
+      }
+    }
+  }
+
+  private async nudgeHotspotClient(
+    api: RouterOSAPI,
+    ip?: string,
+    mac?: string,
+  ): Promise<void> {
+    try {
+      if (ip) {
+        await api.write('/ip/arp/remove', [`?address=${ip}`]);
+      }
+      if (mac) {
+        await api.write('/ip/arp/remove', [`?mac-address=${mac}`]);
+      }
+      this.logger.log(
+        `[INSTANT-FLOW] ARP nudge sent for ${ip || mac}. Fluid connectivity engaged.`,
+      );
+    } catch (e: any) {
+      this.logger.warn(`[INSTANT-FLOW] ARP nudge failed: ${e.message}`);
+    }
+  }
+
+  private async tryHotspotActiveLogin(
+    api: RouterOSAPI,
+    username: string,
+    pass: string,
+    ip?: string,
+    mac?: string,
+  ): Promise<boolean> {
+    if (!ip || !mac) return false;
+
+    const attempts = [
+      [`=user=${username}`, `=password=${pass}`, `=mac-address=${mac}`, `=ip=${ip}`],
+      [`=user=${username}`, `=password=${pass}`, `=mac-address=${mac}`, `=address=${ip}`],
+    ];
+
+    for (const args of attempts) {
+      try {
+        await api.write('/ip/hotspot/active/login', args);
+        return true;
+      } catch (e: any) {
+        this.logger.warn(
+          `[ACTIVE-LOGIN] Direct hotspot login attempt failed on ${args[3]} for ${mac}: ${e.message}`,
+        );
+      }
+    }
+
+    return false;
+  }
+
   async loginUser(
     router: Router,
     username: string,
@@ -535,51 +660,33 @@ export class MikrotikService {
     profile?: string,
   ): Promise<any> {
     const finalMac = this.normalizeMac(mac);
-    // Stage 1: Clear any "stuck" sessions and OLD users with same name
-    await this.forceLogoutHotspot(router, ip, finalMac, username);
-
     const api = await this.connect(router);
     try {
       this.logger.log(
         `[PROVISIONING] Creating hotspot user ${username} on ${router.name}...`,
       );
 
-      // Stage 1.5: Ensure user exists in /ip/hotspot/user
-      const users = await api.write('/ip/hotspot/user/print', [
-        `?name=${username}`,
-      ]);
-      if (users.length === 0) {
-        const userArgs = [`=name=${username}`, `=password=${pass}`];
-        if (profile) userArgs.push(`=profile=${profile}`);
-        await api.write('/ip/hotspot/user/add', userArgs);
+      await this.upsertHotspotUser(api, username, pass, profile);
+      await this.clearHotspotAuthorization(api, username, ip, finalMac);
+
+      const activeLoginSucceeded = await this.tryHotspotActiveLogin(
+        api,
+        username,
+        pass,
+        ip,
+        finalMac,
+      );
+
+      if (activeLoginSucceeded) {
         this.logger.log(
-          `[PROVISIONING SUCCESS] User ${username} created with profile ${profile || 'default'}`,
+          `[AUTH SUCCESS] Direct hotspot session started for ${finalMac || ip} on ${router.name}.`,
         );
-      }
-      // Stage 1 Deep-Clean: Forcefully remove existing active sessions & bindings
-      const cleanupQuery = finalMac ? `?mac-address=${finalMac}` : (ip ? `?address=${ip}` : null);
-
-      if (cleanupQuery) {
-        // 1. Cleave Active Hotspot Sessions
-        const actives = await api.write('/ip/hotspot/active/print', [cleanupQuery]);
-        for (const a of actives) {
-          if (a['.id']) await api.write('/ip/hotspot/active/remove', [`=.id=${a['.id']}`]);
-        }
-
-        // 2. Cleave Hardware Hosts table
-        const hosts = await api.write('/ip/hotspot/host/print', [cleanupQuery]);
-        for (const h of hosts) {
-          if (h['.id']) await api.write('/ip/hotspot/host/remove', [`=.id=${h['.id']}`]);
-        }
-
-        // 3. Cleave IP-Bindings
-        const existing = await api.write('/ip/hotspot/ip-binding/print', [cleanupQuery]);
-        for (const b of existing) {
-          if (b['.id']) await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${b['.id']}`]);
-        }
+        await this.nudgeHotspotClient(api, ip, finalMac);
+        return { success: true, authorizationMode: 'active-login' };
       }
 
-      // Stage 2: The Proofed-Bypass (must succeed or the session is not ready)
+      // Compatibility fallback for routers/devices that still refuse direct active login.
+      await this.removeHotspotHosts(api, ip, finalMac);
       const bindingArgs = [
         '=type=bypassed',
         `=comment=Pulselynk: ${username}`,
@@ -589,22 +696,12 @@ export class MikrotikService {
 
       await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
       this.logger.log(
-        `[STAGE 2 SUCCESS] IP-Binding BYPASS created for ${finalMac || ip}.`,
+        `[AUTH FALLBACK] IP-Binding BYPASS created for ${finalMac || ip}.`,
       );
 
-      // Stage 3: Instant-Flow Nudge (best effort only)
-      try {
-        if (ip) await api.write('/ip/arp/remove', [`?address=${ip}`]);
-        if (finalMac)
-          await api.write('/ip/arp/remove', [`?mac-address=${finalMac}`]);
-        this.logger.log(
-          `[INSTANT-FLOW] ARP Nudge sent for ${ip || finalMac}. Fluid connectivity engaged.`,
-        );
-      } catch (e: any) {
-        this.logger.warn(`[INSTANT-FLOW] ARP nudge failed: ${e.message}`);
-      }
+      await this.nudgeHotspotClient(api, ip, finalMac);
 
-      return { success: true };
+      return { success: true, authorizationMode: 'bypass' };
     } catch (e: any) {
       this.logger.error(`Hotspot Login ERROR on ${router.name}: ${e.message}`);
       throw e;
@@ -618,6 +715,7 @@ export class MikrotikService {
     mac?: string,
     ip?: string,
     username?: string,
+    options: { allowBypassBinding?: boolean } = {},
   ): Promise<boolean> {
     const api = await this.connect(router);
     const finalMac = this.normalizeMac(mac);
@@ -635,6 +733,10 @@ export class MikrotikService {
         if (active && active.length > 0) return true;
       }
 
+      if (!options.allowBypassBinding) {
+        return false;
+      }
+
       const bindingQuery = finalMac
         ? `?mac-address=${finalMac}`
         : ip
@@ -644,11 +746,28 @@ export class MikrotikService {
       if (!bindingQuery) return false;
 
       const bindings = await api.write('/ip/hotspot/ip-binding/print', [bindingQuery]);
-      return bindings.some((binding: any) => {
+      const hasBypassBinding = bindings.some((binding: any) => {
         const type = `${binding['type'] || ''}`.toLowerCase();
         const comment = `${binding['comment'] || ''}`;
         return type === 'bypassed' && (!username || comment === `Pulselynk: ${username}`);
       });
+
+      if (!hasBypassBinding) {
+        return false;
+      }
+
+      const hostQuery = finalMac
+        ? `?mac-address=${finalMac}`
+        : ip
+          ? `?address=${ip}`
+          : null;
+
+      if (!hostQuery) {
+        return false;
+      }
+
+      const hosts = await api.write('/ip/hotspot/host/print', [hostQuery]);
+      return !!(hosts && hosts.length > 0);
     } catch (e: any) {
       this.logger.warn(
         `Failed to verify hotspot connection for ${router.name}: ${e.message}`,

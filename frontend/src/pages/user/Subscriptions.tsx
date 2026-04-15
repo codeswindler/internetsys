@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Wifi, Clock, CreditCard, Smartphone, ShieldCheck, Download, Upload, Zap, RefreshCw, ChevronRight, Laptop, Monitor, ArrowRight, X, Search, AlertTriangle, Monitor as MonitorIcon, Laptop as LaptopIcon, Play, Router } from 'lucide-react';
@@ -9,32 +8,24 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 import {
   buildHotspotConnectUrl,
   consumeHotspotDeviceLimitContext,
-  hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
   matchesStoredHotspotIdentity,
-  shouldTriggerHotspotIdentify,
   syncStoredHotspotIdentity,
 } from '../../services/hotspot';
 
 export default function Subscriptions() {
   const queryClient = useQueryClient();
-  const { fireInternet } = useOutletContext<{
-    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean }) => void;
-  }>();
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   
   const [isSynced, setIsSynced] = useState(() => hasStoredHotspotIdentity());
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [discoverySubId, setDiscoverySubId] = useState<string | null>(null);
-  const [discoveredHosts, setDiscoveredHosts] = useState<Array<{ mac: string; ip: string; deviceName?: string }>>([]);
-  const [isScanning, setIsScanning] = useState(false);
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
   const [pendingStartSubId, setPendingStartSubId] = useState<string | null>(null);
   const [deviceLimitSessions, setDeviceLimitSessions] = useState<any[]>([]);
   const [deviceLimitMaxDevices, setDeviceLimitMaxDevices] = useState<number | null>(null);
-  const currentDeviceStartRef = useRef<string | null>(null);
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -46,19 +37,6 @@ export default function Subscriptions() {
     else if (/Linux/.test(ua)) setLocalDeviceName('Linux Device');
     else setLocalDeviceName('Dashboard Browser');
   }, []);
-
-  // Proximity check for 10.5.50.1
-  const checkRouterProximity = async (gateway: string) => {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      await fetch(`http://${gateway}/favicon.ico`, { mode: 'no-cors', signal: controller.signal, cache: 'no-cache' });
-      clearTimeout(timeoutId);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
 
   const { data: subsData, isLoading } = useQuery({
     queryKey: ['my-subscriptions'],
@@ -87,55 +65,20 @@ export default function Subscriptions() {
   };
 
   const startCurrentDevice = (subId: string) => {
-    startDiscovery(subId);
+    startMutation.mutate(subId);
   };
 
   const startMutation = useMutation({
-    mutationFn: (subId: string) => {
-      const identity = getStoredHotspotIdentity();
-      return api.post(`/subscriptions/${subId}/start`, {
-        mac: identity.mac,
-        ip: identity.ip,
-      });
+    mutationFn: async (subId: string) => subId,
+    onMutate: (subId) => {
+      setPendingStartSubId(subId);
     },
-    onSuccess: (res) => {
-      syncStoredHotspotIdentity({
-        mac: res.data?.resolvedMac,
-        ip: res.data?.resolvedIp,
-      });
-      setIsSynced(hasStoredHotspotIdentity());
-      currentDeviceStartRef.current = null;
-      queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+    onSuccess: (subId) => {
+      startDiscovery(subId);
+    },
+    onError: () => {
       setPendingStartSubId(null);
-      toast.success('Completing secure connection...', { icon: '📶' });
-      const sub = res.data;
-      const releaseOnly = sub?.connectionConfirmed || sub?.activationPending === false || !!sub?.startedAt;
-      setTimeout(() => {
-        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
-          subId: sub?.id,
-          routerIp: sub?.router?.localGateway,
-          redirectPath: window.location.pathname,
-          releaseOnly,
-        });
-      }, 350);
-    },
-    onError: (err: any) => {
-      const currentDeviceSubId = currentDeviceStartRef.current;
-      currentDeviceStartRef.current = null;
-
-      if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
-        startDiscovery(currentDeviceSubId);
-        return;
-      }
-
-      if (err.response?.status === 409 && err.response?.data?.subId) {
-        setPendingStartSubId(err.response.data.subId);
-        setDiscoverySubId(err.response.data.subId);
-        setShowDiscovery(true);
-      } else {
-        setPendingStartSubId(null);
-        toast.error(err.response?.data?.message || 'Failed to start session');
-      }
+      toast.error('Failed to prepare device connection');
     }
   });
 
@@ -148,23 +91,16 @@ export default function Subscriptions() {
       if (pendingStartSubId) {
         const nextSubId = pendingStartSubId;
         setPendingStartSubId(null);
-        startMutation.mutate(nextSubId);
+        startDiscovery(nextSubId);
       }
-      // We keep the modal open so they can visibly see the slot freed up, 
-      // they can click 'X' manually when satisfied.
     }
   });
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mac = params.get('mac');
     const ip = params.get('ip');
-    const autoStartId = params.get('auto_start');
     const deviceLimitRequested = params.get('device_limit') === '1';
     const deviceLimitSubId = params.get('subId');
-    const storedIdentity = getStoredHotspotIdentity();
-    const hasIdentity = !!(mac || ip || storedIdentity.mac || storedIdentity.ip);
-    const hasFreshIdentity = !!(mac || ip) || hasFreshHotspotIdentity();
 
     if (deviceLimitRequested && deviceLimitSubId) {
       const context = consumeHotspotDeviceLimitContext();
@@ -187,24 +123,19 @@ export default function Subscriptions() {
       return;
     }
 
-    if (!mac && !ip && !autoStartId) return;
-
-    syncStoredHotspotIdentity({
-      mac: mac || undefined,
-      ip: ip || undefined,
-    });
-    if (hasIdentity) {
+    if (mac || ip) {
+      syncStoredHotspotIdentity({
+        mac: mac || undefined,
+        ip: ip || undefined,
+      });
       setIsSynced(hasStoredHotspotIdentity());
+      toast.success('Device Identified Successfully!', { id: 'subscription-url-sync' });
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
     }
 
-    if (autoStartId && hasFreshIdentity) {
-      setPendingStartSubId(autoStartId);
-      startMutation.mutate(autoStartId);
-    }
-
-    window.history.replaceState({}, '', window.location.pathname);
+    setIsSynced(hasStoredHotspotIdentity());
   }, []);
-
   // Traffic Polling
   useEffect(() => {
     const activeSub = activeSubs.find(s => s.status === 'ACTIVE');
@@ -253,14 +184,14 @@ export default function Subscriptions() {
   if (isLoading) return (
     <div className="flex items-center justify-center p-20">
        <RefreshCw className="animate-spin text-cyan-500 mr-2" size={20} />
-       <span className="text-muted font-bold uppercase tracking-widest text-xs">Loading Subscriptions...</span>
+       <span className="text-muted font-bold uppercase tracking-widest text-xs">X</span>
     </div>
   );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
-      {/* ── 🌓 PERMANENT ELITE DARK HEADER (FOR PEAK READABILITY) ── */}
+      {/* Header */}
       <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-900 via-slate-950 to-black shadow-[0_20px_50px_rgba(0,0,0,0.5)] p-10 md:p-14 transition-all duration-500 border border-white/10">
         <div className="absolute inset-0 bg-noise opacity-5 pointer-events-none" />
         <div className="absolute top-0 right-0 p-4 opacity-10 group pointer-events-none">
@@ -268,10 +199,10 @@ export default function Subscriptions() {
         </div>
         <div className="relative z-10">
           <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4 leading-none">
-             My <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">Subscriptions</span>
+             My <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">X</span>
           </h1>
           <p className="text-blue-100/60 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest leading-relaxed">
-             Track your active sessions, traffic usage, and historical plans with <span className="text-cyan-400">PulseLynk</span> precision.
+             Track your active sessions, traffic usage, and historical plans with <span className="text-cyan-400">X</span> precision.
           </p>
         </div>
       </div>
@@ -280,7 +211,7 @@ export default function Subscriptions() {
         <div className="flex items-center gap-4 px-4 overflow-x-auto pb-4 no-scrollbar">
            <div className="flex items-center gap-2 whitespace-nowrap px-6 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/20">
               <Zap size={14} className="text-cyan-500" />
-              <span className="text-[10px] font-black text-cyan-500 uppercase tracking-widest">{activeSubs.length} Active Plans</span>
+              <span className="text-[10px] font-black text-cyan-500 uppercase tracking-widest">X</span>
            </div>
         </div>
 
@@ -316,18 +247,18 @@ export default function Subscriptions() {
                           <div className="flex items-center gap-3 mt-2">
                              <div className="flex items-center gap-1.5 font-black text-[10px] text-slate-900 dark:text-muted uppercase tracking-widest">
                                <Clock size={12} className="text-cyan-500/50" />
-                               Acquired: <span className="opacity-80 font-bold dark:font-normal">{sub.createdAt ? format(new Date(sub.createdAt), 'MMM d, HH:mm') : 'Unknown'}</span>
+                               Acquired: <span className="opacity-80 font-bold dark:font-normal">X</span>
                              </div>
                              <div className="w-1 h-1 rounded-full bg-slate-500/20" />
                              <div className="flex items-center gap-1.5 font-black text-[10px] text-slate-900 dark:text-muted uppercase tracking-widest">
                                <CreditCard size={12} className="text-emerald-500/50" />
-                               Via: <span className="text-emerald-600 dark:text-emerald-500 font-bold dark:font-normal opacity-80 dark:opacity-60">{sub.paymentMethod || 'Manual'}</span>
+                               Via: <span className="text-emerald-600 dark:text-emerald-500 font-bold dark:font-normal opacity-80 dark:opacity-60">X</span>
                              </div>
                           </div>
                         </div>
                          <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-muted uppercase tracking-widest opacity-80 dark:opacity-60">
                            <Wifi size={14} className="text-cyan-500" />
-                           Location: <span className="text-main font-bold dark:font-normal">{sub.router?.name || 'Pulselynk'}</span>
+                           Location: <span className="text-main font-bold dark:font-normal">X</span>
                          </div>
                       </div>
                       <div className="flex flex-col items-center lg:items-end">
@@ -352,7 +283,7 @@ export default function Subscriptions() {
                               </h4>
                               <div className="flex items-center gap-2 mt-2">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none truncate">Verified Identity</span>
+                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none truncate">X</span>
                               </div>
                             </div>
                           </div>
@@ -366,7 +297,7 @@ export default function Subscriptions() {
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
                               <div className="flex items-center gap-4 relative z-10">
                                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                                <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">SURFING LIVE</span>
+                                <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">X</span>
                               </div>
                                <button 
                                  onClick={async (e) => {
@@ -383,13 +314,13 @@ export default function Subscriptions() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="bg-main/5 rounded-2xl p-5 border border-main/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-main/10 transition-colors">
                                 <Download size={20} className="text-cyan-400 mb-1" />
-                                <span className="text-base font-black text-main">{traffic.downloadSpeed}</span>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">DOWNLOAD</span>
+                                <span className="text-base font-black text-main">X</span>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">X</span>
                               </div>
                               <div className="bg-main/5 rounded-2xl p-5 border border-main/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-main/10 transition-colors">
                                 <Upload size={20} className="text-emerald-400 mb-1" />
-                                <span className="text-base font-black text-main">{traffic.uploadSpeed}</span>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">UPLOAD</span>
+                                <span className="text-base font-black text-main">X</span>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">X</span>
                               </div>
                             </div>
 
@@ -402,27 +333,23 @@ export default function Subscriptions() {
                             }`}>
                               <div className="flex items-center gap-3">
                                 <div className={`w-2 h-2 rounded-full ${hasActiveSession ? 'bg-cyan-400 animate-[pulse_2s_ease-in-out_infinite]' : 'bg-slate-600'}`} />
-                                <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${hasActiveSession ? 'text-cyan-400' : 'text-slate-400'}`}>
-                                  {hasActiveSession ? 'SURFING LIVE' : 'OFFLINE'}
-                                </span>
+                                <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${hasActiveSession ? 'text-cyan-400' : 'text-slate-400'}`}>X</span>
                               </div>
                               
-                              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isThisDeviceLive ? 'text-cyan-400/70' : isOtherDeviceLive ? 'text-amber-500/80' : 'text-slate-500'}`}>
-                                {isThisDeviceLive ? 'THIS DEVICE CONNECTED' : isOtherDeviceLive ? 'IN USE BY ANOTHER DEVICE' : 'AWAITING CONNECTION'}
-                              </span>
+                              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isThisDeviceLive ? 'text-cyan-400/70' : isOtherDeviceLive ? 'text-amber-500/80' : 'text-slate-500'}`}>X</span>
                             </div>
 
                             <div className="w-full flex items-center justify-between px-6 pt-4 mt-2">
                                <div className="flex items-center gap-4">
                                  <div className="flex items-center gap-2">
                                    <Clock size={16} className="text-muted" />
-                                   <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em]">EXPIRES IN</span>
+                                   <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em]">X</span>
                                  </div>
                                  <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="lg" />
                                </div>
                                <div className="px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center gap-3">
                                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
-                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">SYSTEM LIVE</span>
+                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">X</span>
                                </div>
                             </div>
                           </>
@@ -464,18 +391,18 @@ export default function Subscriptions() {
 
                                <div className="w-full lg:w-48 bg-main/5 border border-main/5 rounded-3xl px-8 py-4 text-center">
                                   <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">TOTAL TIME</p>
-                                  <span className="text-xl font-black text-main">{sub.package?.durationText || 'Ready'}</span>
+                                  <span className="text-xl font-black text-main">X</span>
                                </div>
                              </div>
 
                              <div className="flex items-center justify-between w-full px-2 opacity-50">
                                 <div className="flex items-center gap-2">
                                   <Router size={14} className="text-muted" />
-                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">Router: {sub.router?.name}</span>
+                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">X</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <RefreshCw size={14} className="text-muted" />
-                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">Sync Active</span>
+                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">X</span>
                                 </div>
                              </div>
                           </div>
@@ -490,7 +417,7 @@ export default function Subscriptions() {
         )}
       </div>
 
-      {/* ── MANAGE LINKED DEVICES MODAL ── */}
+      {/* Manage Linked Devices Modal */}
       {showDiscovery && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in duration-500 overflow-y-auto">
           <div className="relative w-full max-w-xl mx-auto transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-3xl md:rounded-[3rem]">
@@ -506,7 +433,7 @@ export default function Subscriptions() {
                   aria-label="Close linked devices"
                   className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/10 dark:bg-slate-800/95 border border-white/30 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 backdrop-blur-md hover:text-white hover:bg-red-500 hover:border-red-300/70 hover:scale-110 transition-all active:scale-95 group relative z-10"
                 >
-                  <span aria-hidden className="text-[30px] font-black leading-none text-white translate-y-[-1px]">×</span>
+                  <span aria-hidden className="text-[30px] font-black leading-none text-white translate-y-[-1px]">X</span>
                 </button>
             </div>
 
@@ -539,7 +466,7 @@ export default function Subscriptions() {
                                <div className="flex items-center gap-4 opacity-70">
                                  <div className="flex items-center gap-2">
                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
-                                   <span className="text-[11px] font-black text-slate-600 dark:text-cyan-500/60 font-mono italic">{session.macAddress}</span>
+                                   <span className="text-[11px] font-black text-slate-600 dark:text-cyan-500/60 font-mono italic">X</span>
                                  </div>
                                </div>
                             </div>
@@ -555,7 +482,7 @@ export default function Subscriptions() {
                             ) : (
                               <>
                                 <X size={20} className="md:hidden stroke-[3px]" />
-                                <span className="hidden md:inline text-[10px] font-black uppercase tracking-[0.3em]">KICK</span>
+                                <span className="hidden md:inline text-[10px] font-black uppercase tracking-[0.3em]">X</span>
                               </>
                             )}
                           </button>
@@ -598,7 +525,7 @@ export default function Subscriptions() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                     <span className="text-[9px] font-black text-muted uppercase tracking-[0.2em]">{sub.status}</span>
+                     <span className="text-[9px] font-black text-muted uppercase tracking-[0.2em]">X</span>
                      <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="sm" />
                   </div>
                </div>

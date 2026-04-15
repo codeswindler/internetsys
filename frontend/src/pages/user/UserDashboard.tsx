@@ -9,11 +9,9 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 import {
   buildHotspotConnectUrl,
   consumeHotspotDeviceLimitContext,
-  hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
   matchesStoredHotspotIdentity,
-  shouldTriggerHotspotIdentify,
   syncStoredHotspotIdentity,
 } from '../../services/hotspot';
 
@@ -23,7 +21,6 @@ export default function UserDashboard() {
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
   const [isSynced, setIsSynced] = useState(() => hasStoredHotspotIdentity());
-  const currentDeviceStartRef = useRef<string | null>(null);
   const [deviceManager, setDeviceManager] = useState<{ 
     open: boolean; 
     subId: string | null;
@@ -47,20 +44,12 @@ export default function UserDashboard() {
     currentUser: any 
   }>();
 
-  // URL Parameter Capture (from Router Round-Trip)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const mac = params.get('mac');
-    const ip = params.get('ip');
-    const autoStartId = params.get('auto_start');
-    const isReturningSuccess = params.get('success');
     const deviceLimitRequested = params.get('device_limit') === '1';
     const deviceLimitSubId = params.get('subId');
-    const storedIdentity = getStoredHotspotIdentity();
-    const finalMac = mac || storedIdentity.mac;
-    const finalIp = ip || storedIdentity.ip;
-    const hasIdentity = !!(finalMac || finalIp);
-    const hasFreshIdentity = !!(mac || ip) || hasFreshHotspotIdentity();
+    const mac = params.get('mac');
+    const ip = params.get('ip');
 
     if (deviceLimitRequested && deviceLimitSubId) {
       const context = consumeHotspotDeviceLimitContext();
@@ -83,43 +72,20 @@ export default function UserDashboard() {
       return;
     }
 
-    if (isReturningSuccess && currentUser?.id) {
-       console.log('Returning from Router Success. Invalidating Cache...');
-       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser.id] });
-    }
-
     if (mac || ip) {
       syncStoredHotspotIdentity({ mac: mac || undefined, ip: ip || undefined });
-      setIsSynced(hasStoredHotspotIdentity());
-      
-      // CRITICAL: Force a full dashboard refresh because we just mapped a new hardware ID!
       if (currentUser?.id) {
         queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser.id] });
       }
-      
-      if (!isReturningSuccess) {
-        toast.success("Device Identified Successfully!", { id: 'url-sync' });
-      }
     }
 
-    if (!mac && !ip && hasIdentity) {
-      setIsSynced(hasStoredHotspotIdentity());
-    }
+    setIsSynced(hasStoredHotspotIdentity());
 
-    if (autoStartId && hasFreshIdentity) {
-      startMutation.mutate(autoStartId);
-      window.history.replaceState({}, '', window.location.pathname);
-      return;
-    }
-
-    if (isReturningSuccess && !hasFreshIdentity) {
-      toast.error('We could not identify this device yet. Tap Manual Identify and keep Wi-Fi connected.');
-    }
-
-    if (isReturningSuccess || autoStartId) {
+    if (mac || ip) {
+      toast.success('Device Identified Successfully!', { id: 'url-sync' });
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [window.location.search, currentUser?.id]);
+  }, [currentUser?.id, queryClient]);
   
   const identifyCurrentDevice = (subId: string) => {
     const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
@@ -187,106 +153,67 @@ export default function UserDashboard() {
   const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
 
   const linkDevice = (host: { mac: string; ip?: string }) => {
-    syncStoredHotspotIdentity({
+    const targetSubId = deviceManager.pendingSubId || deviceManager.subId;
+    if (!targetSubId) return;
+
+    startMutation.mutate({
+      subId: targetSubId,
       mac: host.mac,
       ip: host.ip,
     });
-    if (!host.ip) localStorage.removeItem('hotspot_ip');
-    setIsSynced(true);
-    const pendingSubId = deviceManager.pendingSubId;
-    setDeviceManager(prev => ({ ...prev, open: false }));
-
-    if (pendingSubId) {
-      toast.success('Device linked. Completing connection...', { icon: '🔗' });
-      startMutation.mutate(pendingSubId);
-      return;
-    }
-
-    toast.success('Device linked successfully! Ready to start.', { icon: '🔗' });
   };
 
   const startMutation = useMutation({
-    mutationFn: (subId: string) => {
-      const identity = getStoredHotspotIdentity();
+    mutationFn: ({ subId, mac, ip }: { subId: string; mac?: string; ip?: string }) => {
       return api.post(`/subscriptions/${subId}/start`, {
-        mac: identity.mac,
-        ip: identity.ip,
+        mac,
+        ip,
       });
     },
-    onSuccess: (res) => {
-      syncStoredHotspotIdentity({
-        mac: res.data?.resolvedMac,
-        ip: res.data?.resolvedIp,
-      });
-      setIsSynced(hasStoredHotspotIdentity());
-      currentDeviceStartRef.current = null;
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
-      setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null })); // Close manager if open
-      
-      const sub = res.data;
-      const releaseOnly = sub?.connectionConfirmed || sub?.activationPending === false || !!sub?.startedAt;
-      toast.success('Completing secure connection...', { icon: '📶' });
-      setTimeout(() => {
-        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
-          subId: sub?.id,
-          routerIp: sub?.router?.localGateway,
-          redirectPath: window.location.pathname,
-          releaseOnly,
-        });
-      }, 350);
+      setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null }));
+      toast.success('Device linked successfully!');
     },
     onError: (err: any) => {
-      const currentDeviceSubId = currentDeviceStartRef.current;
-      currentDeviceStartRef.current = null;
-
-      if (currentDeviceSubId && shouldTriggerHotspotIdentify(err)) {
-        identifyCurrentDevice(currentDeviceSubId);
-        return;
-      }
-
       if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
-        // Open the device manager in 'Limit Reached' mode
         setDeviceManager({
           open: true,
           subId: err.response.data.subId,
-          isScanning: true, // We still scan because maybe they want to link a different device
+          isScanning: true,
           connectedDevices: err.response.data.connectedDevices,
           discoveredHosts: [],
           maxDevices: err.response.data.maxDevices,
           pendingSubId: err.response.data.subId
         });
-        
-        // Background scan for nearby devices too
-        api.get(`/subscriptions/${err.response.data.subId}/discover-hosts`)
-           .then(res => setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
-           .catch(() => setDeviceManager(prev => ({ ...prev, isScanning: false })));
 
+        api.get(`/subscriptions/${err.response.data.subId}/discover-hosts`)
+          .then(res => setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
+          .catch(() => setDeviceManager(prev => ({ ...prev, isScanning: false })));
       } else {
-        toast.error(err.response?.data?.message || 'Failed to start session');
+        toast.error(err.response?.data?.message || 'Failed to link device');
       }
     }
   });
 
   const disconnectMutation = useMutation({
     mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
-    onSuccess: (data, sessionId) => {
-      toast.success('Device disconnected! Slot cleared.', { icon: '🔓' });
+    onSuccess: (_data, sessionId) => {
+      const pendingSubId = deviceManager.pendingSubId;
+      toast.success('Device disconnected! Slot cleared.');
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
-      
-      // Update local state for immediate UI feedback
+
       setDeviceManager(prev => ({
         ...prev,
         connectedDevices: prev.connectedDevices.filter(d => d.id !== sessionId)
       }));
 
-      // If we were waiting to start a session after a kick
-      if (deviceManager.pendingSubId) {
-        startMutation.mutate(deviceManager.pendingSubId);
+      if (pendingSubId) {
+        setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null }));
+        startCurrentDevice(pendingSubId);
       }
     }
   });
-
-
   const openDeviceManager = async (sub: any) => {
     setDeviceManager({
       open: true,
@@ -358,7 +285,7 @@ export default function UserDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 animate-fade-in space-y-12">
       
-      {/* ── 🌓 PERMANENT ELITE DARK BANNER (FOR PEAK READABILITY) ── */}
+      {/* Header Banner */}
       <div className="relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-slate-900 to-slate-950 shadow-2xl p-8 md:p-12 transition-all duration-500 border border-white/5">
         <div className="absolute top-0 right-0 p-4 opacity-10 group">
           <Zap size={140} className="text-white transform group-hover:rotate-12 transition-transform duration-700" />
@@ -628,7 +555,7 @@ export default function UserDashboard() {
         )}
       </div>
 
-      {/* ── 🚀 QUICK ACTION SHORTCUTS (RESTORATION) ── */}
+      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-12">
         <button 
           onClick={() => navigate('/user/packages')}
@@ -671,7 +598,7 @@ export default function UserDashboard() {
         </button>
       </div>
 
-      {/* ── 💎 UNIFIED DEVICE MANAGER MODAL ── */}
+      {/* Device Manager Modal */}
       {deviceManager.open && (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 backdrop-blur-[30px] bg-slate-950/60 animate-fade-in duration-500 overflow-y-auto">
           <div className="relative w-full max-w-xl mx-auto transition-all duration-700 overflow-hidden bg-white dark:bg-slate-900 border border-white/20 dark:border-white/5 shadow-[0_0_150px_rgba(34,211,238,0.25)] rounded-3xl md:rounded-[3rem]">
@@ -689,7 +616,7 @@ export default function UserDashboard() {
                 aria-label="Close device manager"
                 className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/10 dark:bg-slate-800/95 border border-white/30 flex items-center justify-center text-white shadow-lg shadow-slate-950/30 backdrop-blur-md hover:text-white hover:bg-red-500 hover:border-red-300/70 hover:scale-110 transition-all active:scale-95 group relative z-10"
               >
-                <span aria-hidden className="text-[30px] font-black leading-none text-white translate-y-[-1px]">×</span>
+                <span aria-hidden className="text-[30px] font-black leading-none text-white translate-y-[-1px]">X</span>
               </button>
             </div>
 
