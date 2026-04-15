@@ -60,7 +60,7 @@ export const buildHotspotConnectUrl = (
   routerIp?: string,
   currentOrigin?: string,
 ) => {
-  const connectUrl = new URL('/connect', currentOrigin || window.location.origin);
+  const connectUrl = new URL('/user/connect', currentOrigin || window.location.origin);
   const attemptId = `hc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   persistHotspotConnectContext(attemptId, {

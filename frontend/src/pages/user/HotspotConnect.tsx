@@ -55,7 +55,7 @@ export default function HotspotConnect() {
       return;
     }
 
-    const continueUrl = new URL('/connect', window.location.origin);
+    const continueUrl = new URL('/user/connect', window.location.origin);
     continueUrl.searchParams.set('sub', subId);
     continueUrl.searchParams.set('from', requestedFrom);
     if (attemptId) {

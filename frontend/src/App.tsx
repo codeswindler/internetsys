@@ -26,9 +26,9 @@ function RootRedirect() {
   return <Navigate to="/login" replace state={{ from: location }} search={location.search} />;
 }
 
-function LegacyUserConnectRedirect() {
+function ConnectRedirect() {
   const location = useLocation();
-  return <Navigate to={`/connect${location.search}`} replace />;
+  return <Navigate to={`/user/connect${location.search}`} replace />;
 }
 
 function App() {
@@ -42,8 +42,7 @@ function App() {
         <Route path="/register" element={<Register />} />
       </Route>
 
-      <Route path="/connect" element={<HotspotConnect />} />
-      <Route path="/user/connect" element={<LegacyUserConnectRedirect />} />
+      <Route path="/connect" element={<ConnectRedirect />} />
 
       {/* Admin Routes */}
       <Route path="/admin" element={<MainLayout role="admin" />}>
@@ -64,6 +63,7 @@ function App() {
         <Route path="dashboard" element={<UserDashboard />} />
         <Route path="packages" element={<UserPackages />} />
         <Route path="subscriptions" element={<UserSubscriptions />} />
+        <Route path="connect" element={<HotspotConnect />} />
         <Route index element={<Navigate to="/user/dashboard" replace />} />
       </Route>
     </Routes>
