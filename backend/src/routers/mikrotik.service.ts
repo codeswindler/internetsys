@@ -784,12 +784,32 @@ export class MikrotikService {
     mac?: string,
   ): Promise<void> {
     try {
+      const leaseIds = new Set<string>();
       const arpIds = new Set<string>();
       const normalizedMac = this.normalizeMac(mac);
+      const leaseQueries = [
+        ip ? `?active-address=${ip}` : null,
+        ip ? `?address=${ip}` : null,
+        normalizedMac ? `?active-mac-address=${normalizedMac}` : null,
+        normalizedMac ? `?mac-address=${normalizedMac}` : null,
+      ].filter(Boolean) as string[];
       const arpQueries = [
         ip ? `?address=${ip}` : null,
         normalizedMac ? `?mac-address=${normalizedMac}` : null,
       ].filter(Boolean) as string[];
+
+      for (const query of leaseQueries) {
+        const leases = await api.write('/ip/dhcp-server/lease/print', [query]);
+        for (const lease of leases) {
+          if (lease['.id']) {
+            leaseIds.add(lease['.id']);
+          }
+        }
+      }
+
+      for (const leaseId of leaseIds) {
+        await api.write('/ip/dhcp-server/lease/remove', [`=.id=${leaseId}`]);
+      }
 
       for (const query of arpQueries) {
         const arpEntries = await api.write('/ip/arp/print', [query]);
@@ -802,6 +822,12 @@ export class MikrotikService {
 
       for (const arpId of arpIds) {
         await api.write('/ip/arp/remove', [`=.id=${arpId}`]);
+      }
+
+      if (leaseIds.size > 0) {
+        this.logger.log(
+          `[INSTANT-FLOW] DHCP lease reset for ${ip || normalizedMac}.`,
+        );
       }
 
       if (arpIds.size > 0) {

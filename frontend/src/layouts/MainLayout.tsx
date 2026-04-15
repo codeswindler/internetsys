@@ -11,7 +11,9 @@ import SupportChat from '../components/SupportChat';
 import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import {
+  buildHotspotIdentifyUrl,
   buildHotspotConnectUrl,
+  hasFreshHotspotIdentity,
   resolveHotspotReleaseUrl,
   submitHotspotLoginRelease,
 } from '../services/hotspot';
@@ -54,6 +56,8 @@ export default function MainLayout({ role }: LayoutProps) {
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
   const trackedLiveSessionRef = useRef<string | null>(null);
+  const endedRouterIpRef = useRef<string | null>(null);
+  const captivePortalKickRef = useRef<string | null>(null);
 
   const redeemMutation = useMutation({
     mutationFn: async (data: { code: string; routerId: string }) => {
@@ -243,6 +247,25 @@ export default function MainLayout({ role }: LayoutProps) {
     }, 2500);
   };
 
+  const reopenCaptivePortal = (routerIp?: string | null, returnPath = '/user/packages') => {
+    const target = routerIp
+      ? buildHotspotIdentifyUrl(routerIp, `${window.location.origin}${returnPath}`)
+      : resolveHotspotReleaseUrl(window.location.origin);
+
+    window.location.replace(target);
+  };
+
+  const scheduleCaptivePortalReopen = (subId: string, routerIp?: string | null) => {
+    if (!hasFreshHotspotIdentity() || captivePortalKickRef.current === subId) {
+      return;
+    }
+
+    captivePortalKickRef.current = subId;
+    window.setTimeout(() => {
+      reopenCaptivePortal(routerIp);
+    }, 1200);
+  };
+
   useEffect(() => {
     if (!activeSub || !activeSub.expiresAt || !activeSub.startedAt || !token) return;
 
@@ -252,8 +275,10 @@ export default function MainLayout({ role }: LayoutProps) {
 
       if (remaining <= 0 && expiredRef.current !== activeSub.id) {
         expiredRef.current = activeSub.id;
+        endedRouterIpRef.current = activeSub?.router?.localGateway || null;
         setIsExpiredModalOpen(true);
         toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+        scheduleCaptivePortalReopen(activeSub.id, endedRouterIpRef.current);
 
         axios.post(
           `${API_URL}/subscriptions/${activeSub.id}/expire-now`,
@@ -293,8 +318,10 @@ export default function MainLayout({ role }: LayoutProps) {
     expiredRef.current = endedSub.id;
     warnedRef.current = endedSub.id;
     trackedLiveSessionRef.current = null;
+    endedRouterIpRef.current = endedSub?.router?.localGateway || null;
     setIsExpiredModalOpen(true);
     toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+    scheduleCaptivePortalReopen(endedSub.id, endedRouterIpRef.current);
   }, [allSubsData, role]);
 
   // User must explicitly choose which plan to start, so automatic firing is disabled.
@@ -774,6 +801,13 @@ export default function MainLayout({ role }: LayoutProps) {
               <p className="text-slate-400 font-medium mb-8">Your subscription has ended. Please buy a new plan to continue browsing.</p>
               
               <div className="space-y-3">
+                <button
+                  onClick={() => reopenCaptivePortal(endedRouterIpRef.current)}
+                  className="w-full py-4 bg-white text-slate-900 font-black uppercase tracking-widest rounded-2xl shadow-lg hover:scale-[1.02] transition-all active:scale-95"
+                >
+                  Open Login Portal
+                </button>
+
                 <button 
                   onClick={() => {
                     setIsExpiredModalOpen(false);
