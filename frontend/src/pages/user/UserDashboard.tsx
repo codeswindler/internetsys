@@ -12,6 +12,7 @@ import {
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
   matchesStoredHotspotIdentity,
+  shouldTriggerHotspotIdentify,
   syncStoredHotspotIdentity,
 } from '../../services/hotspot';
 
@@ -99,7 +100,13 @@ export default function UserDashboard() {
   };
 
   const startCurrentDevice = (subId: string) => {
-    identifyCurrentDevice(subId);
+    const identity = getStoredHotspotIdentity();
+    startMutation.mutate({
+      subId,
+      mac: identity.mac,
+      ip: identity.ip,
+      currentDevice: true,
+    });
   };
 
   const startDiscovery = async (subId: string) => {
@@ -164,18 +171,42 @@ export default function UserDashboard() {
   };
 
   const startMutation = useMutation({
-    mutationFn: ({ subId, mac, ip }: { subId: string; mac?: string; ip?: string }) => {
+    mutationFn: ({
+      subId,
+      mac,
+      ip,
+      currentDevice,
+    }: {
+      subId: string;
+      mac?: string;
+      ip?: string;
+      currentDevice?: boolean;
+    }) => {
       return api.post(`/subscriptions/${subId}/start`, {
         mac,
         ip,
       });
     },
-    onSuccess: () => {
+    onSuccess: (response, variables) => {
+      const sub = response.data;
+      syncStoredHotspotIdentity({
+        mac: sub?.resolvedMac,
+        ip: sub?.resolvedIp,
+      });
+      setIsSynced(hasStoredHotspotIdentity());
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
       setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null }));
       toast.success('Device linked successfully!');
+
+      if (variables.currentDevice) {
+        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
+          subId: sub?.id || variables.subId,
+          routerIp: sub?.router?.localGateway,
+          redirectPath: window.location.pathname,
+        });
+      }
     },
-    onError: (err: any) => {
+    onError: (err: any, variables) => {
       if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
         setDeviceManager({
           open: true,
@@ -190,6 +221,8 @@ export default function UserDashboard() {
         api.get(`/subscriptions/${err.response.data.subId}/discover-hosts`)
           .then(res => setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
           .catch(() => setDeviceManager(prev => ({ ...prev, isScanning: false })));
+      } else if (variables.currentDevice && shouldTriggerHotspotIdentify(err)) {
+        identifyCurrentDevice(variables.subId);
       } else {
         toast.error(err.response?.data?.message || 'Failed to link device');
       }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useOutletContext } from 'react-router-dom';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Wifi, Clock, CreditCard, Smartphone, ShieldCheck, Download, Upload, Zap, RefreshCw, ChevronRight, Laptop, Monitor, ArrowRight, X, Search, AlertTriangle, Monitor as MonitorIcon, Laptop as LaptopIcon, Play, Router } from 'lucide-react';
@@ -11,6 +12,7 @@ import {
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
   matchesStoredHotspotIdentity,
+  shouldTriggerHotspotIdentify,
   syncStoredHotspotIdentity,
 } from '../../services/hotspot';
 
@@ -26,6 +28,9 @@ export default function Subscriptions() {
   const [pendingStartSubId, setPendingStartSubId] = useState<string | null>(null);
   const [deviceLimitSessions, setDeviceLimitSessions] = useState<any[]>([]);
   const [deviceLimitMaxDevices, setDeviceLimitMaxDevices] = useState<number | null>(null);
+  const { fireInternet } = useOutletContext<{
+    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean }) => void
+  }>();
 
   useEffect(() => {
     const ua = navigator.userAgent;
@@ -65,36 +70,91 @@ export default function Subscriptions() {
   };
 
   const startCurrentDevice = (subId: string) => {
-    startMutation.mutate(subId);
+    const identity = getStoredHotspotIdentity();
+    startMutation.mutate({
+      subId,
+      mac: identity.mac,
+      ip: identity.ip,
+      currentDevice: true,
+    });
   };
 
   const startMutation = useMutation({
-    mutationFn: async (subId: string) => subId,
-    onMutate: (subId) => {
+    mutationFn: ({
+      subId,
+      mac,
+      ip,
+      currentDevice,
+    }: {
+      subId: string;
+      mac?: string;
+      ip?: string;
+      currentDevice?: boolean;
+    }) =>
+      api.post(`/subscriptions/${subId}/start`, {
+        mac,
+        ip,
+      }),
+    onMutate: ({ subId }) => {
       setPendingStartSubId(subId);
     },
-    onSuccess: (subId) => {
-      startDiscovery(subId);
-    },
-    onError: () => {
+    onSuccess: (response, variables) => {
+      const sub = response.data;
+      syncStoredHotspotIdentity({
+        mac: sub?.resolvedMac,
+        ip: sub?.resolvedIp,
+      });
+      setIsSynced(hasStoredHotspotIdentity());
       setPendingStartSubId(null);
-      toast.error('Failed to prepare device connection');
+      setShowDiscovery(false);
+      queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+      toast.success('Device linked successfully!');
+
+      if (variables.currentDevice) {
+        fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
+          subId: sub?.id || variables.subId,
+          routerIp: sub?.router?.localGateway,
+          redirectPath: window.location.pathname,
+        });
+      }
+    },
+    onError: (err: any, variables) => {
+      setPendingStartSubId(null);
+      if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
+        setPendingStartSubId(err.response.data.subId || variables.subId);
+        setDiscoverySubId(err.response.data.subId || variables.subId);
+        setDeviceLimitMaxDevices(err.response.data.maxDevices || 1);
+        setDeviceLimitSessions(
+          (err.response.data.connectedDevices || []).map((device: any) => ({
+            id: device.id,
+            macAddress: device.mac,
+            ipAddress: device.ip,
+            deviceModel: device.model,
+            isActive: true,
+          })),
+        );
+        setShowDiscovery(true);
+      } else if (variables.currentDevice && shouldTriggerHotspotIdentify(err)) {
+        startDiscovery(variables.subId);
+      } else {
+        toast.error(err.response?.data?.message || 'Failed to prepare device connection');
+      }
     }
   });
 
   const disconnectMutation = useMutation({
     mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
     onSuccess: (_data, sessionId) => {
-      toast.success('Device disconnected! You have a free slot.');
-      queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
-      setDeviceLimitSessions((prev) => prev.filter((session) => session.id !== sessionId));
-      if (pendingStartSubId) {
-        const nextSubId = pendingStartSubId;
-        setPendingStartSubId(null);
-        startDiscovery(nextSubId);
+        toast.success('Device disconnected! You have a free slot.');
+        queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
+        setDeviceLimitSessions((prev) => prev.filter((session) => session.id !== sessionId));
+        if (pendingStartSubId) {
+          const nextSubId = pendingStartSubId;
+          setPendingStartSubId(null);
+          startCurrentDevice(nextSubId);
+        }
       }
-    }
-  });
+    });
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const mac = params.get('mac');
