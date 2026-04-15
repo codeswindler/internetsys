@@ -3,6 +3,8 @@ const HOTSPOT_RELEASE_FALLBACK_URL = 'http://connectivitycheck.gstatic.com/gener
 const HOTSPOT_IDENTITY_UPDATED_AT_KEY = 'hotspot_identity_updated_at';
 const HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY = 'hotspot_device_limit_context';
 const HOTSPOT_CONNECT_CONTEXT_PREFIX = 'hotspot_connect_context:';
+const HOTSPOT_LOGIN_PAGE_KEY = 'hotspot_link_login';
+const HOTSPOT_LOGIN_ONLY_KEY = 'hotspot_link_login_only';
 
 type HotspotConnectContext = {
   subId: string;
@@ -11,8 +13,25 @@ type HotspotConnectContext = {
   releaseUrl?: string;
 };
 
-export const resolveHotspotLoginUrl = (routerIp: string) => {
-  const storedLoginUrl = localStorage.getItem('hotspot_link_login');
+const pickStoredHotspotLoginUrl = (preferDirectPost = false) => {
+  if (preferDirectPost) {
+    return (
+      localStorage.getItem(HOTSPOT_LOGIN_ONLY_KEY) ||
+      localStorage.getItem(HOTSPOT_LOGIN_PAGE_KEY)
+    );
+  }
+
+  return (
+    localStorage.getItem(HOTSPOT_LOGIN_PAGE_KEY) ||
+    localStorage.getItem(HOTSPOT_LOGIN_ONLY_KEY)
+  );
+};
+
+export const resolveHotspotLoginUrl = (
+  routerIp: string,
+  options: { preferDirectPost?: boolean } = {},
+) => {
+  const storedLoginUrl = pickStoredHotspotLoginUrl(!!options.preferDirectPost);
   const routerIdentity = localStorage.getItem('hotspot_router_id');
 
   if (storedLoginUrl) {
@@ -207,7 +226,6 @@ export const storeHotspotContext = (params: URLSearchParams, currentOrigin?: str
   const routerIdentity = params.get('router');
   const linkLogin =
     params.get('link-login') ||
-    params.get('link-login-only') ||
     params.get('link-login-esc');
   const originalDestination =
     params.get('link-orig') ||
@@ -221,7 +239,13 @@ export const storeHotspotContext = (params: URLSearchParams, currentOrigin?: str
   if (ip) localStorage.setItem('hotspot_ip', ip);
   if (mac || ip) touchHotspotIdentity();
   if (routerIdentity) localStorage.setItem('hotspot_router_id', routerIdentity);
-  if (linkLogin) localStorage.setItem('hotspot_link_login', linkLogin);
+  const linkLoginOnly =
+    params.get('link-login-only') ||
+    params.get('link-login-only-esc') ||
+    params.get('link-login-esc');
+
+  if (linkLogin) localStorage.setItem(HOTSPOT_LOGIN_PAGE_KEY, linkLogin);
+  if (linkLoginOnly) localStorage.setItem(HOTSPOT_LOGIN_ONLY_KEY, linkLoginOnly);
 
   const parsedOriginal = parseHotspotUrl(originalDestination, currentOrigin);
   if (parsedOriginal && !isAppOrRouterDestination(parsedOriginal, currentOrigin)) {
@@ -274,7 +298,7 @@ export const submitHotspotLoginRelease = ({
 
   const form = document.createElement('form');
   form.method = 'POST';
-  form.action = resolveHotspotLoginUrl(routerIp);
+  form.action = resolveHotspotLoginUrl(routerIp, { preferDirectPost: true });
   form.style.display = 'none';
 
   const payload: Record<string, string> = {
