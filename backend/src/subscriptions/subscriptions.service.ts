@@ -81,6 +81,14 @@ export class SubscriptionsService {
       }
     }
 
+    const inferredHost = await this.mikrotikService.inferLikelyHotspotHost(router);
+    if (inferredHost) {
+      this.logger.warn(
+        `[SYNC] Falling back to inferred hotspot host ${inferredHost.mac} (${inferredHost.ip}) for user ${userId}`,
+      );
+      return inferredHost;
+    }
+
     this.logger.warn(`[SYNC] Device with IP ${clientIp} not found on router ${router.name}`);
     throw new BadRequestException(
       'Could not find your device on the hotspot Wi-Fi. Make sure you are connected to the hotspot and visit the login page first.',
@@ -716,10 +724,29 @@ export class SubscriptionsService {
 
     // Resolve the current device from the router itself so device-limit state
     // and "this device" UI stay aligned with the actual connected hardware.
-    const finalIp = ip || undefined;
+    let finalIp = ip || undefined;
     let finalMac = mac || undefined;
 
-    if (!finalMac && finalIp) {
+    const shouldInferHostFromRouter =
+      sub.router.connectionMode !== 'pppoe' &&
+      (!finalMac || !finalIp || this.isPublicIpv4(finalIp));
+
+    if (shouldInferHostFromRouter) {
+      const inferredHost = await this.mikrotikService.inferLikelyHotspotHost(sub.router);
+      if (inferredHost) {
+        if (!finalMac) {
+          finalMac = inferredHost.mac;
+        }
+        if (!finalIp || this.isPublicIpv4(finalIp)) {
+          finalIp = inferredHost.ip || finalIp;
+        }
+        this.logger.warn(
+          `[HOST-INFER] Using hotspot host ${inferredHost.mac} (${inferredHost.ip}) for sub ${sub.id}. Incoming MAC=${mac || 'none'}, IP=${ip || 'none'}`,
+        );
+      }
+    }
+
+    if (!finalMac && finalIp && !this.isPublicIpv4(finalIp)) {
       finalMac = (await this.mikrotikService.findMacByIp(sub.router, finalIp)) || undefined;
     }
 
@@ -998,6 +1025,42 @@ export class SubscriptionsService {
 
   private wait(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private isPublicIpv4(ip?: string): boolean {
+    if (!ip) {
+      return false;
+    }
+
+    const octets = ip
+      .trim()
+      .split('.')
+      .map((part) => Number(part));
+
+    if (
+      octets.length !== 4 ||
+      octets.some((part) => Number.isNaN(part) || part < 0 || part > 255)
+    ) {
+      return false;
+    }
+
+    if (octets[0] === 10 || octets[0] === 127 || octets[0] === 0) {
+      return false;
+    }
+    if (octets[0] === 192 && octets[1] === 168) {
+      return false;
+    }
+    if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) {
+      return false;
+    }
+    if (octets[0] === 169 && octets[1] === 254) {
+      return false;
+    }
+    if (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127) {
+      return false;
+    }
+
+    return true;
   }
 
   private activateSubscriptionClock(sub: Subscription) {

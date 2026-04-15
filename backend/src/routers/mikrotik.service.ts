@@ -125,6 +125,69 @@ export class MikrotikService {
     }
   }
 
+  async inferLikelyHotspotHost(
+    router: Router,
+  ): Promise<{ mac: string; ip: string } | null> {
+    const api = await this.connect(router);
+    try {
+      const hosts = await api.write('/ip/hotspot/host/print');
+      if (!hosts || hosts.length === 0) {
+        return null;
+      }
+
+      const normalizedHosts = hosts
+        .filter((host: any) => host['mac-address'])
+        .map((host: any) => ({
+          mac: this.normalizeMac(host['mac-address']) || host['mac-address'],
+          ip: host['address'] || '',
+        }));
+
+      if (normalizedHosts.length === 1) {
+        this.logger.warn(
+          `[SYNC] Falling back to the only hotspot host on ${router.name}: ${normalizedHosts[0].mac}`,
+        );
+        return normalizedHosts[0];
+      }
+
+      const hostByMac = new Map(
+        normalizedHosts.map((host) => [host.mac, host]),
+      );
+
+      const leases = await api.write('/ip/dhcp-server/lease/print', [
+        '?status=bound',
+      ]);
+
+      const rankedLeaseHosts = (leases || [])
+        .map((lease: any) => ({
+          mac: this.normalizeMac(
+            lease['active-mac-address'] || lease['mac-address'],
+          ),
+          lastSeenScore: this.parseLastSeenScore(lease['last-seen']),
+        }))
+        .filter((lease) => !!lease.mac && hostByMac.has(lease.mac))
+        .sort((a, b) => a.lastSeenScore - b.lastSeenScore);
+
+      if (rankedLeaseHosts.length > 0) {
+        const candidate = hostByMac.get(rankedLeaseHosts[0].mac!);
+        if (candidate) {
+          this.logger.warn(
+            `[SYNC] Public IP mismatch, using most recent hotspot host ${candidate.mac} on ${router.name}`,
+          );
+          return candidate;
+        }
+      }
+
+      return null;
+    } catch (e: any) {
+      this.logger.warn(
+        `[SYNC] Failed to infer hotspot host on ${router.name}: ${e.message}`,
+      );
+      return null;
+    } finally {
+      api.close();
+    }
+  }
+
   async testConnection(
     router: Router,
   ): Promise<{ success: boolean; message?: string }> {
@@ -526,6 +589,30 @@ export class MikrotikService {
       .toUpperCase();
   }
 
+  private parseLastSeenScore(lastSeen?: string): number {
+    const input = `${lastSeen || ''}`.trim().toLowerCase();
+    if (!input || input === 'never') {
+      return Number.MAX_SAFE_INTEGER;
+    }
+
+    let totalSeconds = 0;
+    let matched = false;
+    const unitSeconds: Record<string, number> = {
+      w: 7 * 24 * 60 * 60,
+      d: 24 * 60 * 60,
+      h: 60 * 60,
+      m: 60,
+      s: 1,
+    };
+
+    for (const match of input.matchAll(/(\d+)(w|d|h|m|s)/g)) {
+      totalSeconds += parseInt(match[1], 10) * unitSeconds[match[2]];
+      matched = true;
+    }
+
+    return matched ? totalSeconds : Number.MAX_SAFE_INTEGER - 1;
+  }
+
   private normalizeLoginBy(loginBy?: string) {
     const desiredOrder = [
       'http-pap',
@@ -884,8 +971,10 @@ export class MikrotikService {
       if (recentLeases && recentLeases.length > 0) {
         // Find the lease that was updated most recently (last-seen)
         // This is a "best guess" but works well for 1-click connect
-        const latest = recentLeases.sort((a, b) =>
-          (b['last-seen'] || '').localeCompare(a['last-seen'] || ''),
+        const latest = recentLeases.sort(
+          (a, b) =>
+            this.parseLastSeenScore(a['last-seen']) -
+            this.parseLastSeenScore(b['last-seen']),
         )[0];
         this.logger.warn(
           `Public IP mismatch! Best guess MAC: ${latest['active-mac-address']}`,
