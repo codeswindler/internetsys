@@ -579,7 +579,7 @@ export class MikrotikService {
       );
     } finally {
       if (ip || mac) {
-        await this.nudgeHotspotClient(api, ip, mac);
+        await this.nudgeHotspotClient(api, ip, mac, { resetDhcpLease: true });
       }
       api.close();
     }
@@ -782,33 +782,37 @@ export class MikrotikService {
     api: RouterOSAPI,
     ip?: string,
     mac?: string,
+    options: { resetDhcpLease?: boolean } = {},
   ): Promise<void> {
     try {
       const leaseIds = new Set<string>();
       const arpIds = new Set<string>();
       const normalizedMac = this.normalizeMac(mac);
-      const leaseQueries = [
-        ip ? `?active-address=${ip}` : null,
-        ip ? `?address=${ip}` : null,
-        normalizedMac ? `?active-mac-address=${normalizedMac}` : null,
-        normalizedMac ? `?mac-address=${normalizedMac}` : null,
-      ].filter(Boolean) as string[];
       const arpQueries = [
         ip ? `?address=${ip}` : null,
         normalizedMac ? `?mac-address=${normalizedMac}` : null,
       ].filter(Boolean) as string[];
 
-      for (const query of leaseQueries) {
-        const leases = await api.write('/ip/dhcp-server/lease/print', [query]);
-        for (const lease of leases) {
-          if (lease['.id']) {
-            leaseIds.add(lease['.id']);
+      if (options.resetDhcpLease) {
+        const leaseQueries = [
+          ip ? `?active-address=${ip}` : null,
+          ip ? `?address=${ip}` : null,
+          normalizedMac ? `?active-mac-address=${normalizedMac}` : null,
+          normalizedMac ? `?mac-address=${normalizedMac}` : null,
+        ].filter(Boolean) as string[];
+
+        for (const query of leaseQueries) {
+          const leases = await api.write('/ip/dhcp-server/lease/print', [query]);
+          for (const lease of leases) {
+            if (lease['.id']) {
+              leaseIds.add(lease['.id']);
+            }
           }
         }
-      }
 
-      for (const leaseId of leaseIds) {
-        await api.write('/ip/dhcp-server/lease/remove', [`=.id=${leaseId}`]);
+        for (const leaseId of leaseIds) {
+          await api.write('/ip/dhcp-server/lease/remove', [`=.id=${leaseId}`]);
+        }
       }
 
       for (const query of arpQueries) {
@@ -840,7 +844,7 @@ export class MikrotikService {
         );
       }
     } catch (e: any) {
-      this.logger.warn(`[INSTANT-FLOW] ARP nudge failed: ${e.message}`);
+      this.logger.warn(`[INSTANT-FLOW] Hotspot nudge failed: ${e.message}`);
     }
   }
 
