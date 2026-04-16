@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, LessThan, Repository } from 'typeorm';
+import { Between, LessThan, MoreThan, Repository } from 'typeorm';
 import {
   Subscription,
   SubscriptionStatus,
@@ -32,8 +32,22 @@ export class ExpiryJob {
 
     this.isRunning = true;
     this.logger.debug('Running subscription expiry check...');
+    let hasDatabaseLock = false;
 
     try {
+      const lockResult = await this.subRepo.query(
+        'SELECT GET_LOCK(?, 0) AS lockStatus',
+        ['pulselynk_expiry_job'],
+      );
+      hasDatabaseLock = Number(lockResult?.[0]?.lockStatus || 0) === 1;
+
+      if (!hasDatabaseLock) {
+        this.logger.warn(
+          'Skipping subscription expiry check because another app instance holds the scheduler lock.',
+        );
+        return;
+      }
+
       const now = new Date();
 
       const expiredSubs = await this.subRepo.find({
@@ -56,6 +70,7 @@ export class ExpiryJob {
         where: {
           status: SubscriptionStatus.EXPIRED,
           finalExpiryNotified: false,
+          updatedAt: MoreThan(new Date(now.getTime() - 2 * 60000)),
         },
         relations: ['user', 'package'],
       });
@@ -117,6 +132,18 @@ export class ExpiryJob {
         }
       }
     } finally {
+      if (hasDatabaseLock) {
+        try {
+          await this.subRepo.query('SELECT RELEASE_LOCK(?)', [
+            'pulselynk_expiry_job',
+          ]);
+        } catch (e: any) {
+          this.logger.warn(
+            `Failed to release expiry scheduler lock: ${e.message}`,
+          );
+        }
+      }
+
       this.isRunning = false;
     }
   }
