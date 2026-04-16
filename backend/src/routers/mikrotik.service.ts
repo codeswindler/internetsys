@@ -912,7 +912,7 @@ export class MikrotikService {
       }
 
       // Compatibility fallback for routers/devices that still refuse direct active login.
-      await this.removeHotspotHosts(api, ip, finalMac);
+      // Keep the hotspot host intact so the browser-side handoff can still complete cleanly.
       const bindingArgs = [
         '=type=bypassed',
         `=comment=Pulselynk: ${username}`,

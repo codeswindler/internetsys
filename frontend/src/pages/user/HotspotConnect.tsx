@@ -107,10 +107,19 @@ export default function HotspotConnect() {
           sub?.router?.localGateway ||
           localStorage.getItem('hotspot_router_id') ||
           '10.5.50.1';
+        const authorizationMode =
+          sub?.authorizationMode === 'active-login' ? 'active-login' : 'bypass';
 
         setStage('Completing router handoff...');
         toast.success('Device linked. Opening internet...');
         clearHotspotConnectContext(attemptId);
+
+        if (authorizationMode === 'bypass') {
+          window.setTimeout(() => {
+            window.location.replace(releaseUrl);
+          }, 700);
+          return;
+        }
 
         const submitted = submitHotspotLoginRelease({
           routerIp: routerGateway,

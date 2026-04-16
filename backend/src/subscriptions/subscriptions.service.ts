@@ -921,8 +921,9 @@ export class SubscriptionsService {
     }
 
     // 2. ALWAYS attempt login on MikroTik
+    let authorizationMode: 'active-login' | 'bypass' = 'bypass';
+
     if (finalMac || finalIp) {
-      let authorizationMode: 'active-login' | 'bypass' = 'bypass';
       try {
         const loginRes = await this.mikrotikService.loginUser(
           sub.router,
@@ -974,6 +975,7 @@ export class SubscriptionsService {
       handshakeRequired: false,
       activationPending: false,
       connectionConfirmed: true,
+      authorizationMode,
       resolvedMac: finalMac,
       resolvedIp: finalIp,
     };
