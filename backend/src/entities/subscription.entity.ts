@@ -65,6 +65,9 @@ export class Subscription {
   @Column({ default: false })
   expiryNotified: boolean;
 
+  @Column({ default: false })
+  finalExpiryNotified: boolean;
+
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   amountPaid: number;
 

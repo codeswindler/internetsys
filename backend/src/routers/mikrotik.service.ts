@@ -925,6 +925,9 @@ export class MikrotikService {
         `[AUTH FALLBACK] IP-Binding BYPASS created for ${finalMac || ip}.`,
       );
 
+      // Force the host to be recreated under the new bypass rule.
+      await this.removeHotspotHosts(api, ip, finalMac);
+
       await this.nudgeHotspotClient(api, ip, finalMac);
 
       return { success: true, authorizationMode: 'bypass' };

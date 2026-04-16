@@ -231,6 +231,8 @@ export class SubscriptionsService {
     sub.mikrotikPassword = Math.random().toString(36).slice(-6);
     sub.startedAt = null;
     sub.expiresAt = null;
+    sub.expiryNotified = false;
+    sub.finalExpiryNotified = false;
 
     const savedSub = await this.subRepo.save(sub);
 
@@ -521,6 +523,8 @@ export class SubscriptionsService {
     sub.status = SubscriptionStatus.PENDING;
     sub.startedAt = null;
     sub.expiresAt = null;
+    sub.expiryNotified = false;
+    sub.finalExpiryNotified = false;
 
     return this.subRepo.save(sub);
   }
@@ -1119,6 +1123,8 @@ export class SubscriptionsService {
   private activateSubscriptionClock(sub: Subscription) {
     sub.startedAt = new Date();
     sub.status = SubscriptionStatus.ACTIVE;
+    sub.expiryNotified = false;
+    sub.finalExpiryNotified = false;
 
     const duration = sub.package.durationValue;
     const type = sub.package.durationType;
