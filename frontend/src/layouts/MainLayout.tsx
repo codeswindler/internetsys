@@ -12,6 +12,7 @@ import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import {
   buildHotspotIdentifyUrl,
+  buildHotspotReleaseBridgeUrl,
   buildHotspotConnectUrl,
   hasFreshHotspotIdentity,
   resolveHotspotReleaseUrl,
@@ -27,6 +28,7 @@ interface FireInternetOptions {
   routerIp?: string;
   redirectPath?: string;
   releaseOnly?: boolean;
+  authorizationMode?: 'active-login' | 'bypass';
 }
 
 export default function MainLayout({ role }: LayoutProps) {
@@ -229,8 +231,22 @@ export default function MainLayout({ role }: LayoutProps) {
     }
 
     const releaseUrl = resolveHotspotReleaseUrl(window.location.origin);
+    const routerGateway =
+      options.routerIp || activeSub?.router?.localGateway || '10.5.50.1';
+
+    if (options.authorizationMode === 'bypass') {
+      window.location.replace(
+        buildHotspotReleaseBridgeUrl(
+          routerGateway,
+          releaseUrl,
+          window.location.origin,
+        ),
+      );
+      return;
+    }
+
     const submitted = submitHotspotLoginRelease({
-      routerIp: options.routerIp || activeSub?.router?.localGateway || '10.5.50.1',
+      routerIp: routerGateway,
       username: _customUser || activeSub?.mikrotikUsername,
       password: _customPass || activeSub?.mikrotikPassword,
       releaseUrl,

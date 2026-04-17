@@ -159,6 +159,16 @@ export class SubscriptionsService {
     if (!sub.mpesaCheckoutId) {
       throw new BadRequestException('No M-Pesa transaction ID found for this subscription');
     }
+    if (
+      sub.status === SubscriptionStatus.PAID ||
+      sub.status === SubscriptionStatus.ACTIVE
+    ) {
+      return {
+        success: true,
+        status: sub.status,
+        alreadyProcessed: true,
+      };
+    }
 
     try {
       const result = await this.mpesaService.queryStkStatus(sub.mpesaCheckoutId);

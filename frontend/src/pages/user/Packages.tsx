@@ -279,6 +279,7 @@ export default function Packages() {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       
       setVerifyingSubId(variables.subId);
+      setPollCount(0);
       setIsVerifying(true);
       toast.success('STK Push Sent! Enter your M-Pesa PIN.', { icon: '📲' });
     },
@@ -293,6 +294,7 @@ export default function Packages() {
   useEffect(() => {
     if (!isVerifying || !verifyingSubId) return;
 
+    let attempts = 0;
     const pollInterval = setInterval(async () => {
       try {
         const res = await api.get(`/subscriptions/${verifyingSubId}/stk-status`);
@@ -315,8 +317,9 @@ export default function Packages() {
           clearInterval(pollInterval);
         }
 
-        setPollCount(prev => prev + 1);
-        if (pollCount > 30) { // Timeout after ~60s
+        attempts += 1;
+        setPollCount(attempts);
+        if (attempts > 30) { // Timeout after ~60s
           setIsVerifying(false);
           setVerifyingSubId(null);
           toast.error('Payment timeout. If you paid, it will appear in your subscriptions shortly.');
@@ -328,7 +331,7 @@ export default function Packages() {
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [isVerifying, verifyingSubId, pollCount, navigate]);
+  }, [isVerifying, verifyingSubId, navigate]);
 
   const deleteSubMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/subscriptions/${id}`),

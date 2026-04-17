@@ -29,7 +29,7 @@ export default function Subscriptions() {
   const [deviceLimitSessions, setDeviceLimitSessions] = useState<any[]>([]);
   const [deviceLimitMaxDevices, setDeviceLimitMaxDevices] = useState<number | null>(null);
   const { fireInternet } = useOutletContext<{
-    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean }) => void
+    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean; authorizationMode?: 'active-login' | 'bypass' }) => void
   }>();
 
   useEffect(() => {
@@ -115,6 +115,7 @@ export default function Subscriptions() {
           subId: sub?.id || variables.subId,
           routerIp: sub?.router?.localGateway,
           redirectPath: window.location.pathname,
+          authorizationMode: sub?.authorizationMode,
         });
       }
     },
