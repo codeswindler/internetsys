@@ -247,9 +247,9 @@ export class SubscriptionsController {
 
       return { success: true, message: 'STK push sent', daraja: mpesaRes };
     } catch (e: any) {
+      const detail = e?.response?.data?.errorMessage || e.message;
       this.logger.error(
-        'Daraja STK push failed: ' + e?.response?.data?.errorMessage ||
-          e.message,
+        `Daraja STK push failed: ${detail}`,
       );
       // Fallback: If push fails initially, maybe keep it AWAITING_APPROVAL/PENDING
       await this.subscriptionsService.setStatus(body.subId, 'AWAITING_APPROVAL' as any);

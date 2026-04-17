@@ -54,6 +54,19 @@ export const buildHotspotIdentifyUrl = (routerIp: string, returnUrl: string) => 
   return loginUrl.toString();
 };
 
+export const buildHotspotReleaseBridgeUrl = (
+  routerIp: string,
+  releaseUrl?: string,
+  currentOrigin?: string,
+) => {
+  const loginUrl = new URL(resolveHotspotLoginUrl(routerIp));
+  loginUrl.searchParams.set(
+    'dst',
+    resolveHotspotReleaseUrl(currentOrigin, releaseUrl),
+  );
+  return loginUrl.toString();
+};
+
 export const buildHotspotConnectUrl = (
   subId: string,
   fromPath: string,

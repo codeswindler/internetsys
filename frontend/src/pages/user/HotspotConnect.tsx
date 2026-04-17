@@ -5,6 +5,7 @@ import { AlertTriangle, RefreshCw, ShieldCheck, Wifi } from 'lucide-react';
 import api from '../../services/api';
 import {
   buildHotspotIdentifyUrl,
+  buildHotspotReleaseBridgeUrl,
   clearHotspotConnectContext,
   getStoredHotspotIdentity,
   readHotspotConnectContext,
@@ -115,9 +116,14 @@ export default function HotspotConnect() {
         clearHotspotConnectContext(attemptId);
 
         if (authorizationMode === 'bypass') {
-          window.setTimeout(() => {
-            window.location.replace(releaseUrl);
-          }, 700);
+          setStage('Finalizing hotspot release...');
+          window.location.replace(
+            buildHotspotReleaseBridgeUrl(
+              routerGateway,
+              releaseUrl,
+              window.location.origin,
+            ),
+          );
           return;
         }
 

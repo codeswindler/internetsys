@@ -443,6 +443,7 @@ export class SubscriptionsService {
 
     sub.status = SubscriptionStatus.EXPIRED;
     await this.subRepo.save(sub);
+    await this.sendExpiryNotice(sub);
   }
 
   async expireIfDue(userId: string, subId: string): Promise<{ expired: boolean; status: SubscriptionStatus | string }> {
@@ -723,6 +724,65 @@ export class SubscriptionsService {
     }
   }
 
+  private async sendActivationConfirmationNotice(sub: Subscription): Promise<void> {
+    if (!sub.user?.phone || sub.user.phone.length < 9 || !sub.expiresAt) {
+      return;
+    }
+
+    const packageName = sub.package?.name || 'internet';
+    const routerName = sub.router?.name || 'PulseLynk hotspot';
+    const expiryLabel = this.formatNoticeDate(sub.expiresAt);
+    const message = `PulseLynk: Your ${packageName} plan is now active on ${routerName}. It expires ${expiryLabel}. Enjoy browsing.`;
+
+    try {
+      const sent = await this.smsService.sendSms(sub.user.phone, message);
+      if (sent) {
+        this.logger.log(`[SMS] Sent activation confirmation to ${sub.user.phone}`);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `[SMS] Failed to send activation confirmation for sub ${sub.id}: ${e.message}`,
+      );
+    }
+  }
+
+  private async sendExpiryNotice(sub: Subscription): Promise<void> {
+    if (sub.finalExpiryNotified) {
+      return;
+    }
+
+    if (!sub.user?.phone || sub.user.phone.length < 9) {
+      sub.finalExpiryNotified = true;
+      await this.subRepo.save(sub);
+      return;
+    }
+
+    const packageName = sub.package?.name || 'internet';
+    const message = `PulseLynk: Your ${packageName} plan has expired. To continue browsing, please purchase a new package.`;
+
+    try {
+      const sent = await this.smsService.sendSms(sub.user.phone, message);
+      if (sent) {
+        sub.finalExpiryNotified = true;
+        await this.subRepo.save(sub);
+        this.logger.log(`[SMS] Sent expiry notice to ${sub.user.phone}`);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `[SMS] Failed to send expiry notice for sub ${sub.id}: ${e.message}`,
+      );
+    }
+  }
+
+  private formatNoticeDate(date: Date): string {
+    return new Intl.DateTimeFormat('en-KE', {
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(date));
+  }
+
   async startSession(
     userId: string,
     id: string,
@@ -968,11 +1028,20 @@ export class SubscriptionsService {
       }
     }
 
-    if (!sub.startedAt) {
+    const activatedNow = !sub.startedAt;
+    if (activatedNow) {
       this.activateSubscriptionClock(sub);
     }
 
     const savedSub = await this.subRepo.save(sub);
+
+    if (activatedNow) {
+      await this.sendActivationConfirmationNotice(savedSub);
+    }
+
+    this.logger.log(
+      `[CONNECT-SUCCESS] Sub ${savedSub.id} authorized via ${authorizationMode} | MAC: ${finalMac} | IP: ${finalIp} | Expires: ${savedSub.expiresAt?.toISOString() || 'pending'}`,
+    );
 
     return {
       ...savedSub,
@@ -1034,11 +1103,21 @@ export class SubscriptionsService {
       });
     }
 
-    if (!sub.startedAt) {
+    const activatedNow = !sub.startedAt;
+    if (activatedNow) {
       this.activateSubscriptionClock(sub);
     }
 
     const savedSub = await this.subRepo.save(sub);
+
+    if (activatedNow) {
+      await this.sendActivationConfirmationNotice(savedSub);
+    }
+
+    this.logger.log(
+      `[CONNECT-CONFIRMED] Sub ${savedSub.id} active | MAC: ${finalMac} | IP: ${finalIp} | Expires: ${savedSub.expiresAt?.toISOString() || 'pending'}`,
+    );
+
     return {
       ...savedSub,
       handshakeRequired: false,
