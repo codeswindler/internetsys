@@ -1,6 +1,8 @@
+import { config as loadEnv } from 'dotenv';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { resolve } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -25,9 +27,19 @@ import { DeviceSession } from './entities/device-session.entity';
 import { Permission } from './entities/permission.entity';
 import { Otp } from './entities/otp.entity';
 
+// Prefer the backend-local .env file on every process start so a simple PM2
+// restart picks up updated credentials instead of reusing stale cached values.
+loadEnv({
+  path: resolve(process.cwd(), '.env'),
+  override: true,
+});
+
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: resolve(process.cwd(), '.env'),
+    }),
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: process.env.DB_HOST || 'localhost',
