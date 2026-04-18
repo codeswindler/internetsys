@@ -14,7 +14,6 @@ import {
   buildHotspotIdentifyUrl,
   buildHotspotReleaseBridgeUrl,
   buildHotspotConnectUrl,
-  hasFreshHotspotIdentity,
   resolveHotspotReleaseUrl,
   submitHotspotLoginRelease,
 } from '../services/hotspot';
@@ -57,6 +56,7 @@ export default function MainLayout({ role }: LayoutProps) {
   const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
+  const expiryUiRef = useRef<string | null>(null);
   const trackedLiveSessionRef = useRef<string | null>(null);
   const endedRouterIpRef = useRef<string | null>(null);
   const captivePortalKickRef = useRef<string | null>(null);
@@ -264,21 +264,29 @@ export default function MainLayout({ role }: LayoutProps) {
   };
 
   const reopenCaptivePortal = (routerIp?: string | null, returnPath = '/user/packages') => {
-    const target = routerIp
-      ? buildHotspotIdentifyUrl(routerIp, `${window.location.origin}${returnPath}`)
+    const targetRouterIp = routerIp || localStorage.getItem('hotspot_router_id');
+    const target = targetRouterIp
+      ? buildHotspotIdentifyUrl(targetRouterIp, `${window.location.origin}${returnPath}`)
       : resolveHotspotReleaseUrl(window.location.origin);
 
     window.location.replace(target);
   };
 
   const scheduleCaptivePortalReopen = (subId: string, routerIp?: string | null) => {
-    if (!hasFreshHotspotIdentity() || captivePortalKickRef.current === subId) {
+    const targetRouterIp = routerIp || localStorage.getItem('hotspot_router_id');
+    const hasPortalTarget = !!(
+      targetRouterIp ||
+      localStorage.getItem('hotspot_link_login') ||
+      localStorage.getItem('hotspot_link_login_only')
+    );
+
+    if (!hasPortalTarget || captivePortalKickRef.current === subId) {
       return;
     }
 
     captivePortalKickRef.current = subId;
     window.setTimeout(() => {
-      reopenCaptivePortal(routerIp);
+      reopenCaptivePortal(targetRouterIp);
     }, 1200);
   };
 
@@ -289,12 +297,11 @@ export default function MainLayout({ role }: LayoutProps) {
       const expiresAt = new Date(activeSub.expiresAt).getTime();
       const remaining = expiresAt - Date.now();
 
-      if (remaining <= 0 && expiredRef.current !== activeSub.id) {
-        expiredRef.current = activeSub.id;
+      if (remaining <= 0 && expiryUiRef.current !== activeSub.id) {
+        expiryUiRef.current = activeSub.id;
         endedRouterIpRef.current = activeSub?.router?.localGateway || null;
         setIsExpiredModalOpen(true);
         toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
-        scheduleCaptivePortalReopen(activeSub.id, endedRouterIpRef.current);
 
         axios.post(
           `${API_URL}/subscriptions/${activeSub.id}/expire-now`,
@@ -335,8 +342,11 @@ export default function MainLayout({ role }: LayoutProps) {
     warnedRef.current = endedSub.id;
     trackedLiveSessionRef.current = null;
     endedRouterIpRef.current = endedSub?.router?.localGateway || null;
-    setIsExpiredModalOpen(true);
-    toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+    if (expiryUiRef.current !== endedSub.id) {
+      expiryUiRef.current = endedSub.id;
+      setIsExpiredModalOpen(true);
+      toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+    }
     scheduleCaptivePortalReopen(endedSub.id, endedRouterIpRef.current);
   }, [allSubsData, role]);
 
