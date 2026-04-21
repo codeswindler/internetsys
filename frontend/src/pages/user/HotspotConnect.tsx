@@ -5,7 +5,6 @@ import { AlertTriangle, RefreshCw, ShieldCheck, Wifi } from 'lucide-react';
 import api from '../../services/api';
 import {
   buildHotspotIdentifyUrl,
-  buildHotspotReleaseBridgeUrl,
   clearHotspotConnectContext,
   getStoredHotspotIdentity,
   readHotspotConnectContext,
@@ -108,24 +107,10 @@ export default function HotspotConnect() {
           sub?.router?.localGateway ||
           localStorage.getItem('hotspot_router_id') ||
           '10.5.50.1';
-        const authorizationMode =
-          sub?.authorizationMode === 'active-login' ? 'active-login' : 'bypass';
 
         setStage('Completing router handoff...');
         toast.success('Device linked. Opening internet...');
         clearHotspotConnectContext(attemptId);
-
-        if (authorizationMode === 'bypass') {
-          setStage('Finalizing hotspot release...');
-          window.location.replace(
-            buildHotspotReleaseBridgeUrl(
-              routerGateway,
-              releaseUrl,
-              window.location.origin,
-            ),
-          );
-          return;
-        }
 
         const submitted = submitHotspotLoginRelease({
           routerIp: routerGateway,

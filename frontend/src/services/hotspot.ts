@@ -5,6 +5,7 @@ const HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY = 'hotspot_device_limit_context';
 const HOTSPOT_CONNECT_CONTEXT_PREFIX = 'hotspot_connect_context:';
 const HOTSPOT_LOGIN_PAGE_KEY = 'hotspot_link_login';
 const HOTSPOT_LOGIN_ONLY_KEY = 'hotspot_link_login_only';
+const HOTSPOT_LOGIN_RELEASE_FRAME = 'hotspot-login-release-frame';
 
 type HotspotConnectContext = {
   subId: string;
@@ -309,9 +310,22 @@ export const submitHotspotLoginRelease = ({
     return false;
   }
 
+  let frame = document.querySelector<HTMLIFrameElement>(
+    `iframe[name="${HOTSPOT_LOGIN_RELEASE_FRAME}"]`,
+  );
+
+  if (!frame) {
+    frame = document.createElement('iframe');
+    frame.name = HOTSPOT_LOGIN_RELEASE_FRAME;
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.display = 'none';
+    document.body.appendChild(frame);
+  }
+
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = resolveHotspotLoginUrl(routerIp, { preferDirectPost: true });
+  form.target = HOTSPOT_LOGIN_RELEASE_FRAME;
   form.style.display = 'none';
 
   const payload: Record<string, string> = {
@@ -332,6 +346,7 @@ export const submitHotspotLoginRelease = ({
   document.body.appendChild(form);
   form.submit();
   window.setTimeout(() => form.remove(), 1000);
+  window.setTimeout(() => frame?.remove(), 8000);
   return true;
 };
 

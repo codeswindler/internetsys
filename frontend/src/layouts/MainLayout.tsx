@@ -12,7 +12,6 @@ import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import {
   buildHotspotIdentifyUrl,
-  buildHotspotReleaseBridgeUrl,
   buildHotspotConnectUrl,
   resolveHotspotReleaseUrl,
   submitHotspotLoginRelease,
@@ -234,17 +233,8 @@ export default function MainLayout({ role }: LayoutProps) {
     const routerGateway =
       options.routerIp || activeSub?.router?.localGateway || '10.5.50.1';
 
-    if (options.authorizationMode === 'bypass') {
-      window.location.replace(
-        buildHotspotReleaseBridgeUrl(
-          routerGateway,
-          releaseUrl,
-          window.location.origin,
-        ),
-      );
-      return;
-    }
-
+    // Keep the router login response out of the top-level SPA so it cannot
+    // bounce the user back to the dashboard before the release redirect.
     const submitted = submitHotspotLoginRelease({
       routerIp: routerGateway,
       username: _customUser || activeSub?.mikrotikUsername,
