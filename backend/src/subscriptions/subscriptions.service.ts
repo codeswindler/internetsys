@@ -25,6 +25,9 @@ import { SmsService } from '../sms/sms.service';
 @Injectable()
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
+  private readonly stkStillProcessingCodes = new Set(['4999']);
+  private readonly stkUserCancelledCodes = new Set(['1032']);
+  private readonly staleStkVerificationMs = 5 * 60 * 1000;
 
   constructor(
     @InjectRepository(Subscription) private subRepo: Repository<Subscription>,
@@ -169,30 +172,94 @@ export class SubscriptionsService {
         alreadyProcessed: true,
       };
     }
+    if (sub.status === SubscriptionStatus.CANCELLED) {
+      return {
+        success: false,
+        failed: true,
+        cancelled: true,
+        status: SubscriptionStatus.CANCELLED,
+        failureReason: 'Payment was not completed. Please try again.',
+      };
+    }
 
     try {
       const result = await this.mpesaService.queryStkStatus(sub.mpesaCheckoutId);
-      this.logger.log(`[STK QUERY] Sub ${subId} Result: ${result.ResultCode} - ${result.ResultDesc}`);
+      const resultCode = this.normalizeStkResultCode(result?.ResultCode);
+      this.logger.log(`[STK QUERY] Sub ${subId} Result: ${resultCode || 'unknown'} - ${result.ResultDesc}`);
 
       // ResultCode "0" means Success
-      if (result.ResultCode === '0') {
+      if (resultCode === '0') {
         await this.activate(sub.id, PaymentMethod.MPESA, `STK-${sub.mpesaCheckoutId.substring(0, 10)}`);
         return { success: true, status: SubscriptionStatus.PAID, result };
       } 
-      
-      // ResultCode "1032" means Cancelled by User
-      if (result.ResultCode === '1032') {
-        sub.status = SubscriptionStatus.PENDING; 
-        await this.subRepo.save(sub);
-        return { success: false, status: SubscriptionStatus.PENDING, cancelled: true, result };
+
+      if (this.isStkStillProcessing(result)) {
+        return { success: false, status: sub.status, processing: true, result };
       }
 
-      // Other codes (Timeout, etc)
-      return { success: false, status: sub.status, result };
+      return this.markStkPaymentFailed(sub, result);
     } catch (e: any) {
       this.logger.error(`STK Status Query failed for ${subId}: ${e.message}`);
       throw e;
     }
+  }
+
+  async activateMpesaCheckout(
+    checkoutRequestId: string,
+    paymentRef?: string,
+  ): Promise<Subscription | null> {
+    const sub = await this.subRepo.findOne({
+      where: { mpesaCheckoutId: checkoutRequestId },
+      relations: ['user', 'package', 'router'],
+    });
+
+    if (!sub) {
+      this.logger.warn(
+        `[STK CALLBACK] Success for unknown checkout ${checkoutRequestId}`,
+      );
+      return null;
+    }
+
+    if (
+      sub.status === SubscriptionStatus.PAID ||
+      sub.status === SubscriptionStatus.ACTIVE
+    ) {
+      return sub;
+    }
+
+    if (sub.status === SubscriptionStatus.CANCELLED) {
+      this.logger.warn(
+        `[STK CALLBACK] Success arrived after sub ${sub.id} was marked cancelled. Reopening it for activation.`,
+      );
+      sub.status = SubscriptionStatus.VERIFYING;
+      await this.subRepo.save(sub);
+    }
+
+    return this.activate(
+      sub.id,
+      PaymentMethod.MPESA,
+      paymentRef || `STK-${checkoutRequestId.substring(0, 10)}`,
+    );
+  }
+
+  async failMpesaCheckout(
+    checkoutRequestId: string,
+    result: any,
+  ): Promise<Subscription | null> {
+    const sub = await this.subRepo.findOne({
+      where: { mpesaCheckoutId: checkoutRequestId },
+      relations: ['user', 'package', 'router'],
+    });
+
+    if (!sub) {
+      this.logger.warn(
+        `[STK CALLBACK] Failure for unknown checkout ${checkoutRequestId}: ${result?.ResultCode} - ${result?.ResultDesc}`,
+      );
+      return null;
+    }
+
+    await this.markStkPaymentFailed(sub, result);
+    return sub;
   }
 
   async delete(subId: string, userId?: string): Promise<void> {
@@ -793,6 +860,71 @@ export class SubscriptionsService {
     }).format(new Date(date));
   }
 
+  private normalizeStkResultCode(code: any): string {
+    return `${code ?? ''}`.trim();
+  }
+
+  private isStkStillProcessing(result: any): boolean {
+    const code = this.normalizeStkResultCode(result?.ResultCode);
+    const detail = `${result?.ResultDesc || ''}`.toLowerCase();
+
+    return (
+      this.stkStillProcessingCodes.has(code) ||
+      detail.includes('still under processing')
+    );
+  }
+
+  private getStkFailureReason(result: any): string {
+    const code = this.normalizeStkResultCode(result?.ResultCode);
+    const detail = `${result?.ResultDesc || ''}`.trim();
+
+    if (code === '2001') {
+      return 'The M-Pesa PIN was incorrect. Please try the purchase again.';
+    }
+
+    if (code === '1032') {
+      return 'Payment was cancelled on your phone.';
+    }
+
+    if (code === '1037') {
+      return 'No response was received from your phone. Please try again.';
+    }
+
+    return detail || 'Payment was not completed. Please try again.';
+  }
+
+  private async markStkPaymentFailed(
+    sub: Subscription,
+    result: any,
+  ): Promise<any> {
+    const resultCode = this.normalizeStkResultCode(result?.ResultCode) || 'UNKNOWN';
+    const failureReason = this.getStkFailureReason(result);
+    const cancelled = this.stkUserCancelledCodes.has(resultCode);
+
+    if (
+      sub.status !== SubscriptionStatus.CANCELLED &&
+      sub.status !== SubscriptionStatus.PAID &&
+      sub.status !== SubscriptionStatus.ACTIVE
+    ) {
+      sub.status = SubscriptionStatus.CANCELLED;
+      sub.paymentMethod = PaymentMethod.MPESA;
+      sub.paymentRef = `STK-FAILED-${resultCode}`.substring(0, 255);
+      await this.subRepo.save(sub);
+      this.logger.warn(
+        `[STK FAILED] Sub ${sub.id} marked CANCELLED | code=${resultCode} | detail=${failureReason}`,
+      );
+    }
+
+    return {
+      success: false,
+      failed: true,
+      cancelled,
+      status: SubscriptionStatus.CANCELLED,
+      failureReason,
+      result,
+    };
+  }
+
   async startSession(
     userId: string,
     id: string,
@@ -1299,6 +1431,26 @@ export class SubscriptionsService {
       if (sub.expiresAt && sub.expiresAt <= new Date()) {
         await this.expireSubscription(sub.id);
       }
+    }
+
+    const staleVerifyingSubs = await this.subRepo.find({
+      where: {
+        user: { id: userId },
+        status: SubscriptionStatus.VERIFYING,
+      },
+      relations: ['user', 'package', 'router'],
+    });
+
+    const staleBefore = Date.now() - this.staleStkVerificationMs;
+    for (const sub of staleVerifyingSubs) {
+      if (!sub.updatedAt || sub.updatedAt.getTime() > staleBefore) {
+        continue;
+      }
+
+      await this.markStkPaymentFailed(sub, {
+        ResultCode: 'TIMEOUT',
+        ResultDesc: 'Payment verification timed out before completion.',
+      });
     }
   }
 }

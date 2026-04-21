@@ -298,7 +298,7 @@ export default function Packages() {
     const pollInterval = setInterval(async () => {
       try {
         const res = await api.get(`/subscriptions/${verifyingSubId}/stk-status`);
-        const { success, status, cancelled, result } = res.data;
+        const { success, status, cancelled, failed, failureReason } = res.data;
 
         if (success || status?.toLowerCase() === 'active' || status?.toLowerCase() === 'paid') {
           setIsVerifying(false);
@@ -310,11 +310,14 @@ export default function Packages() {
           }, 2000);
           
           clearInterval(pollInterval);
-        } else if (cancelled) {
+        } else if (failed || cancelled || status?.toLowerCase() === 'cancelled') {
           setIsVerifying(false);
           setVerifyingSubId(null);
-          toast.error('Payment cancelled on your phone.', { icon: '📲' });
+          queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+          queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+          toast.error(failureReason || 'Payment failed. Please try again.');
           clearInterval(pollInterval);
+          return;
         }
 
         attempts += 1;
@@ -331,7 +334,7 @@ export default function Packages() {
     }, 2000);
 
     return () => clearInterval(pollInterval);
-  }, [isVerifying, verifyingSubId, navigate]);
+  }, [isVerifying, verifyingSubId, navigate, queryClient]);
 
   const deleteSubMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/subscriptions/${id}`),

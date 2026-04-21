@@ -15,8 +15,9 @@ export class MpesaWebhookController {
     try {
       const result = body.Body?.stkCallback;
       if (!result) return 'OK'; // Ignore malformed requests silently
+      const resultCode = `${result.ResultCode ?? ''}`.trim();
 
-      if (result.ResultCode === 0) {
+      if (resultCode === '0') {
         // Success
         // CheckoutRequestID can be mapped to a subId if we stored it in the DB,
         // but Safaricom also returns the AccountReference inside Item if we passed it there.
@@ -37,6 +38,16 @@ export class MpesaWebhookController {
           });
         }
 
+        if (result.CheckoutRequestID) {
+          const activated = await this.subscriptionsService.activateMpesaCheckout(
+            result.CheckoutRequestID,
+            receipt,
+          );
+          if (activated) {
+            return { ResultCode: 0, ResultDesc: 'Success' };
+          }
+        }
+
         if (phoneStr) {
           // Attempt to auto-activate the most recent pending sub for this phone
           await this.subscriptionsService.activatePendingByPhone(
@@ -49,6 +60,12 @@ export class MpesaWebhookController {
         this.logger.log(
           `STK Push failed for Checkout ID ${result.CheckoutRequestID}: ${result.ResultDesc}`,
         );
+        if (result.CheckoutRequestID) {
+          await this.subscriptionsService.failMpesaCheckout(
+            result.CheckoutRequestID,
+            result,
+          );
+        }
       }
     } catch (e: any) {
       this.logger.error('Failed to process MPESA webhook: ' + e.message);
