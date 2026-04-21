@@ -506,80 +506,152 @@ export class MikrotikService {
     username?: string,
   ): Promise<void> {
     const api = await this.connect(router);
+    const macs = new Set<string>();
+    const ips = new Set<string>();
+    const activeIds = new Set<string>();
+    const hostIds = new Set<string>();
+    const bindingIds = new Set<string>();
+    const userIds = new Set<string>();
+
+    const addMac = (value?: string) => {
+      const normalized = this.normalizeMac(value);
+      if (normalized) macs.add(normalized);
+    };
+
+    const addIp = (value?: string) => {
+      if (value) ips.add(value);
+    };
+
+    const addIdentity = (row: any) => {
+      addMac(row?.['mac-address'] || row?.['active-mac-address']);
+      addIp(row?.['address'] || row?.['active-address'] || row?.['to-address']);
+    };
+
+    const print = async (path: string, args?: string[]) => {
+      const rows = args ? await api.write(path, args) : await api.write(path);
+      return Array.isArray(rows) ? rows : [];
+    };
+
+    const rememberRows = (
+      rows: any[],
+      ids: Set<string>,
+      collectIdentity = true,
+    ) => {
+      for (const row of rows) {
+        if (row?.['.id']) ids.add(row['.id']);
+        if (collectIdentity) addIdentity(row);
+      }
+    };
+
+    const removeIds = async (path: string, ids: Set<string>) => {
+      for (const id of ids) {
+        await api.write(path, [`=.id=${id}`]);
+      }
+    };
+
+    addMac(mac);
+    addIp(ip);
+
     try {
       if (username) {
         this.logger.log(
-          `[CLEANUP] Removing user ${username} from router ${router.name}...`,
+          `[CLEANUP] Deauthorizing hotspot user ${username} on router ${router.name}...`,
         );
         const users = await api.write('/ip/hotspot/user/print', [
           `?name=${username}`,
         ]);
-        for (const u of users) {
-          await api.write('/ip/hotspot/user/remove', [`=.id=${u['.id']}`]);
-        }
+        rememberRows(users, userIds, false);
+
+        rememberRows(
+          await print('/ip/hotspot/active/print', [`?user=${username}`]),
+          activeIds,
+        );
+
+        const usernameBindings = (await print('/ip/hotspot/ip-binding/print')).filter(
+          (binding: any) => `${binding?.comment || ''}`.includes(username),
+        );
+        rememberRows(usernameBindings, bindingIds);
+      }
+
+      for (const targetMac of [...macs]) {
+        this.logger.log(
+          `[FORCE LOGOUT] Clearing MAC ${targetMac} on router ${router.name}...`,
+        );
+        rememberRows(
+          await print('/ip/hotspot/active/print', [`?mac-address=${targetMac}`]),
+          activeIds,
+        );
+        rememberRows(
+          await print('/ip/hotspot/host/print', [`?mac-address=${targetMac}`]),
+          hostIds,
+        );
+        rememberRows(
+          await print('/ip/hotspot/ip-binding/print', [`?mac-address=${targetMac}`]),
+          bindingIds,
+        );
+      }
+
+      for (const targetIp of [...ips]) {
+        this.logger.log(
+          `[FORCE LOGOUT] Clearing IP ${targetIp} on router ${router.name}...`,
+        );
+        rememberRows(
+          await print('/ip/hotspot/active/print', [`?address=${targetIp}`]),
+          activeIds,
+        );
+        rememberRows(
+          await print('/ip/hotspot/host/print', [`?address=${targetIp}`]),
+          hostIds,
+        );
+        rememberRows(
+          await print('/ip/hotspot/ip-binding/print', [`?address=${targetIp}`]),
+          bindingIds,
+        );
+      }
+
+      // One more pass catches MAC/IP values discovered from active sessions or bypass bindings.
+      for (const targetMac of [...macs]) {
+        rememberRows(
+          await print('/ip/hotspot/host/print', [`?mac-address=${targetMac}`]),
+          hostIds,
+        );
+      }
+      for (const targetIp of [...ips]) {
+        rememberRows(
+          await print('/ip/hotspot/host/print', [`?address=${targetIp}`]),
+          hostIds,
+        );
+      }
+
+      await removeIds('/ip/hotspot/active/remove', activeIds);
+      await removeIds('/ip/hotspot/ip-binding/remove', bindingIds);
+      await removeIds('/ip/hotspot/host/remove', hostIds);
+      await removeIds('/ip/hotspot/user/remove', userIds);
+
+      if (username) {
         await this.removeHotspotCookies(api, username);
       }
-      if (mac) {
-        this.logger.log(
-          `[FORCE LOGOUT] Clearing MAC ${mac} on router ${router.name}...`,
-        );
-        // Remove from Active sessions
-        const actives = await api.write('/ip/hotspot/active/print', [
-          `?mac-address=${mac}`,
-        ]);
-        for (const act of actives) {
-          await api.write('/ip/hotspot/active/remove', [`=.id=${act['.id']}`]);
-        }
-        // Remove from Hosts list (crucial for resetting "waiting" state)
-        const hosts = await api.write('/ip/hotspot/host/print', [
-          `?mac-address=${mac}`,
-        ]);
-        for (const host of hosts) {
-          await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
-        }
-        // Remove from IP Bindings
-        const bindings = await api.write('/ip/hotspot/ip-binding/print', [
-          `?mac-address=${mac}`,
-        ]);
-        for (const bind of bindings) {
-          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${bind['.id']}`]);
-        }
-        await this.removeHotspotCookies(api, undefined, mac);
+      for (const targetMac of macs) {
+        await this.removeHotspotCookies(api, undefined, targetMac);
       }
-      if (ip) {
-        this.logger.log(
-          `[FORCE LOGOUT] Clearing IP ${ip} on router ${router.name}...`,
-        );
-        const actives = await api.write('/ip/hotspot/active/print', [
-          `?address=${ip}`,
-        ]);
-        for (const act of actives) {
-          await api.write('/ip/hotspot/active/remove', [`=.id=${act['.id']}`]);
-        }
-        
-        // CRITICAL: Also remove from Hosts list by IP. This forces the device to re-trigger CPD.
-        const hosts = await api.write('/ip/hotspot/host/print', [
-          `?address=${ip}`,
-        ]);
-        for (const host of hosts) {
-          await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
-        }
 
-        // Remove from IP Bindings
-        const bindings = await api.write('/ip/hotspot/ip-binding/print', [
-          `?address=${ip}`,
-        ]);
-        for (const bind of bindings) {
-          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${bind['.id']}`]);
-        }
-      }
-    } catch (e) {
+      this.logger.log(
+        `[CAPTIVE-RESET] Cleared hotspot state on ${router.name} | user=${username || 'n/a'} | active=${activeIds.size} | bindings=${bindingIds.size} | hosts=${hostIds.size} | macs=${macs.size} | ips=${ips.size}`,
+      );
+    } catch (e: any) {
       this.logger.warn(
-        `Failed to force logout ${mac || ip} on ${router.name}: ${e.message}`,
+        `Failed to force logout ${username || mac || ip || 'unknown device'} on ${router.name}: ${e.message}`,
       );
     } finally {
-      if (ip || mac) {
-        await this.nudgeHotspotClient(api, ip, mac, { resetDhcpLease: true });
+      const firstMac = [...macs][0];
+      if (ips.size > 0) {
+        for (const targetIp of ips) {
+          await this.nudgeHotspotClient(api, targetIp, firstMac, { resetDhcpLease: true });
+        }
+      } else {
+        for (const targetMac of macs) {
+          await this.nudgeHotspotClient(api, undefined, targetMac, { resetDhcpLease: true });
+        }
       }
       api.close();
     }

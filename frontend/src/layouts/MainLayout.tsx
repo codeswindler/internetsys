@@ -307,7 +307,12 @@ export default function MainLayout({ role }: LayoutProps) {
           `${API_URL}/subscriptions/${activeSub.id}/expire-now`,
           {},
           { headers: { Authorization: `Bearer ${token}` } },
-        ).catch(() => {
+        ).then((res) => {
+          const status = `${res.data?.status || ''}`.toUpperCase();
+          if (res.data?.expired || status === 'EXPIRED') {
+            scheduleCaptivePortalReopen(activeSub.id, endedRouterIpRef.current);
+          }
+        }).catch(() => {
           // The cron/self-healing backend path will still clean up if this immediate nudge fails.
         }).finally(() => {
           invalidateSubscriptionQueries();
