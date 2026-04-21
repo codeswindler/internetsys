@@ -58,6 +58,7 @@ export default function MainLayout({ role }: LayoutProps) {
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
   const expiryUiRef = useRef<string | null>(null);
   const trackedLiveSessionRef = useRef<string | null>(null);
+  const [trackedSessionId, setTrackedSessionId] = useState<string | null>(null);
   const endedRouterIpRef = useRef<string | null>(null);
   const captivePortalKickRef = useRef<string | null>(null);
 
@@ -212,11 +213,17 @@ export default function MainLayout({ role }: LayoutProps) {
   })[0]) || null;
 
   useEffect(() => {
-    if (role !== 'user') return;
+    if (role !== 'user') {
+      setTrackedSessionId(null);
+      return;
+    }
+
     if (`${activeSub?.status || ''}`.toUpperCase() === 'ACTIVE' && activeSub?.id) {
       trackedLiveSessionRef.current = activeSub.id;
+      endedRouterIpRef.current = activeSub?.router?.localGateway || endedRouterIpRef.current;
+      setTrackedSessionId((current) => current === activeSub.id ? current : activeSub.id);
     }
-  }, [activeSub?.id, activeSub?.status, role]);
+  }, [activeSub?.id, activeSub?.router?.localGateway, activeSub?.status, role]);
 
   const invalidateSubscriptionQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
@@ -281,6 +288,47 @@ export default function MainLayout({ role }: LayoutProps) {
     }, 1200);
   };
 
+  const handleTrackedSessionEnded = (subId: string, endedStatus: string, routerIp?: string | null) => {
+    const normalizedStatus = endedStatus.toUpperCase();
+    if (!['EXPIRED', 'CANCELLED'].includes(normalizedStatus)) return;
+    if (expiredRef.current === subId) return;
+
+    const resolvedRouterIp = routerIp || endedRouterIpRef.current || localStorage.getItem('hotspot_router_id');
+    const isCancelled = normalizedStatus === 'CANCELLED';
+
+    expiredRef.current = subId;
+    warnedRef.current = subId;
+    trackedLiveSessionRef.current = null;
+    setTrackedSessionId((current) => current === subId ? null : current);
+    endedRouterIpRef.current = resolvedRouterIp || null;
+
+    if (expiryUiRef.current !== subId) {
+      expiryUiRef.current = subId;
+      setEndedSessionReason(isCancelled ? 'cancelled' : 'expired');
+      setIsExpiredModalOpen(true);
+      toast.error(isCancelled ? 'Session Cancelled!' : 'Session Expired!', {
+        id: 'expiry-toast',
+        duration: 10000,
+      });
+    }
+
+    scheduleCaptivePortalReopen(subId, resolvedRouterIp);
+  };
+
+  const { data: trackedSessionStatus } = useQuery({
+    queryKey: ['tracked-subscription-status', trackedSessionId],
+    queryFn: async () => {
+      if (!trackedSessionId || !token) return null;
+      const res = await axios.get(`${API_URL}/subscriptions/${trackedSessionId}/status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    },
+    refetchInterval: 5000,
+    enabled: role === 'user' && !!token && !!trackedSessionId,
+    retry: false,
+  });
+
   useEffect(() => {
     if (!activeSub || !activeSub.expiresAt || !activeSub.startedAt || !token) return;
 
@@ -326,30 +374,20 @@ export default function MainLayout({ role }: LayoutProps) {
   }, [activeSub?.id, activeSub?.expiresAt, activeSub?.startedAt, token, API_URL]);
 
   useEffect(() => {
+    if (role !== 'user' || !trackedSessionId) return;
+
+    const endedStatus = `${trackedSessionStatus?.status || ''}`.toUpperCase();
+    handleTrackedSessionEnded(trackedSessionId, endedStatus, endedRouterIpRef.current);
+  }, [trackedSessionId, trackedSessionStatus?.status, role]);
+
+  useEffect(() => {
     if (role !== 'user' || !trackedLiveSessionRef.current) return;
 
     const endedSub = allSubsData.find((sub: any) => sub.id === trackedLiveSessionRef.current);
     if (!endedSub) return;
 
     const endedStatus = `${endedSub.status || ''}`.toUpperCase();
-    if (!['EXPIRED', 'CANCELLED'].includes(endedStatus)) return;
-    if (expiredRef.current === endedSub.id) return;
-
-    expiredRef.current = endedSub.id;
-    warnedRef.current = endedSub.id;
-    trackedLiveSessionRef.current = null;
-    endedRouterIpRef.current = endedSub?.router?.localGateway || null;
-    if (expiryUiRef.current !== endedSub.id) {
-      expiryUiRef.current = endedSub.id;
-      const isCancelled = endedStatus === 'CANCELLED';
-      setEndedSessionReason(isCancelled ? 'cancelled' : 'expired');
-      setIsExpiredModalOpen(true);
-      toast.error(isCancelled ? 'Session Cancelled!' : 'Session Expired!', {
-        id: 'expiry-toast',
-        duration: 10000,
-      });
-    }
-    scheduleCaptivePortalReopen(endedSub.id, endedRouterIpRef.current);
+    handleTrackedSessionEnded(endedSub.id, endedStatus, endedSub?.router?.localGateway);
   }, [allSubsData, role]);
 
   // User must explicitly choose which plan to start, so automatic firing is disabled.
