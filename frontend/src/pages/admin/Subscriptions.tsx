@@ -74,6 +74,7 @@ export default function Subscriptions() {
   const queryClient = useQueryClient();
 
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+  const [cancellingSubId, setCancellingSubId] = useState<string | null>(null);
 
   // Allocate Package State
   const [showAllocateModal, setShowAllocateModal] = useState(false);
@@ -127,8 +128,20 @@ export default function Subscriptions() {
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => api.post(`/subscriptions/${id}/cancel`),
-    onSuccess: () => { invalidate(); toast.success('Subscription cancelled'); },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Cancel failed'),
+    onMutate: (id: string) => {
+      setCancellingSubId(id);
+      toast.loading('Disconnecting subscriber from hotspot...', { id: `cancel-${id}` });
+    },
+    onSuccess: (_res, id) => {
+      invalidate();
+      toast.success('Subscription cancelled. Router cleanup is processing.', { id: `cancel-${id}` });
+      setConfirmState(st => ({ ...st, isOpen: false }));
+    },
+    onError: (err: any, id) => {
+      toast.error(err.response?.data?.message || 'Cancel failed', { id: `cancel-${id}` });
+      setConfirmState(st => ({ ...st, isOpen: false }));
+    },
+    onSettled: () => setCancellingSubId(null),
   });
 
   const reactivateMutation = useMutation({
@@ -206,11 +219,16 @@ export default function Subscriptions() {
                   if (statusFilter === 'pending') return ['pending', 'awaiting_approval', 'verifying'].includes(status);
                   return status === statusFilter.toLowerCase();
                 })
-                ?.map((s: any) => (
+                ?.map((s: any) => {
+                  const status = s.status?.toString().toLowerCase();
+                  const isCancelling = cancellingSubId === s.id;
+
+                  return (
                 <tr
                   key={s.id}
                   className={`border-b border-[rgba(255,255,255,0.04)] last:border-0 hover:bg-[rgba(255,255,255,0.02)] transition-colors align-top
-                    ${s.status?.toString().toLowerCase() === 'cancelled' || s.status?.toString().toLowerCase() === 'expired' ? 'opacity-60' : ''}`}
+                    ${status === 'cancelled' || status === 'expired' ? 'opacity-60' : ''}
+                    ${isCancelling ? 'bg-cyan-500/[0.03] ring-1 ring-cyan-500/20 opacity-100' : ''}`}
                 >
                   {/* User */}
                   <td className="p-4">
@@ -237,9 +255,20 @@ export default function Subscriptions() {
 
                   {/* Status */}
                   <td className="p-4">
-                    <span className={`badge text-[11px] uppercase tracking-widest ${STATUS_STYLES[s.status?.toString().toLowerCase()] ?? 'badge-danger'}`}>
-                      {s.status === 'PAID' ? 'READY' : s.status}
-                    </span>
+                    {isCancelling ? (
+                      <div>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[10px] font-black uppercase tracking-[0.18em]">
+                          <Loader2 size={11} className="animate-spin" /> Disconnecting
+                        </span>
+                        <div className="mt-2 h-1 w-24 overflow-hidden rounded-full bg-cyan-950/70">
+                          <div className="h-full w-2/3 animate-pulse bg-gradient-to-r from-cyan-400 via-blue-400 to-transparent" />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className={`badge text-[11px] uppercase tracking-widest ${STATUS_STYLES[status] ?? 'badge-danger'}`}>
+                        {s.status === 'PAID' ? 'READY' : s.status}
+                      </span>
+                    )}
                   </td>
 
                   {/* Countdown */}
@@ -288,18 +317,19 @@ export default function Subscriptions() {
                         </button>
                       )}
 
-                      {['active', 'paid', 'verifying', 'awaiting_approval'].includes(s.status?.toLowerCase()) && (
+                      {['active', 'paid', 'verifying', 'awaiting_approval'].includes(status) && (
                         <button
-                          className="flex items-center gap-1 text-xs font-bold text-red-400 hover:bg-red-500/10 border border-red-500/30 hover:border-red-500/60 px-3 py-1.5 rounded-lg transition-colors"
+                          className={`flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border
+                            ${isCancelling ? 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30 cursor-wait' : 'text-red-400 hover:bg-red-500/10 border-red-500/30 hover:border-red-500/60'}`}
                           onClick={() => setConfirmState({
                             isOpen: true,
                             title: 'Cancel Subscription',
-                            message: 'Cancel this subscription? If active, the user will lose access immediately.',
-                            onConfirm: () => { cancelMutation.mutate(s.id); setConfirmState(st => ({...st, isOpen: false})); }
+                            message: 'Cancel this subscription? PulseLynk will revoke router access, clear hotspot state, and send the customer an SMS. This may take a few seconds.',
+                            onConfirm: () => cancelMutation.mutate(s.id)
                           })}
                           disabled={cancelMutation.isPending}
                         >
-                          <XCircle size={13} /> Cancel
+                          {isCancelling ? <><Loader2 size={13} className="animate-spin" /> Severing...</> : <><XCircle size={13} /> Cancel</>}
                         </button>
                       )}
 
@@ -315,7 +345,8 @@ export default function Subscriptions() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                  );
+                })}
 
               {subs?.length === 0 && (
                 <tr>

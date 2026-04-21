@@ -57,14 +57,14 @@ function ActivePlansPopup({
   onClose,
   onCancelClick,
   onReactivate,
-  cancelPending,
+  cancellingSubId,
   reactivatePending,
 }: {
   user: CustomerUser;
   onClose: () => void;
   onCancelClick: (id: string) => void;
   onReactivate: (id: string, status: string) => void;
-  cancelPending: boolean;
+  cancellingSubId: string | null;
   reactivatePending: boolean;
 }) {
   const activeSubs = getActiveSubs(user);
@@ -92,8 +92,11 @@ function ActivePlansPopup({
             <div>
               <p className="text-[10px] font-bold text-green-400 uppercase tracking-widest mb-3">Active Plans ({activeSubs.length})</p>
               <div className="space-y-3">
-                {activeSubs.map(s => (
-                  <div key={s.id} className="bg-green-500/5 border border-green-500/20 rounded-xl p-4">
+                {activeSubs.map(s => {
+                  const isCancelling = cancellingSubId === s.id;
+
+                  return (
+                  <div key={s.id} className={`rounded-xl p-4 transition-all ${isCancelling ? 'bg-cyan-500/[0.06] border border-cyan-500/30 shadow-[0_0_30px_rgba(34,211,238,0.08)]' : 'bg-green-500/5 border border-green-500/20'}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="font-bold text-white text-sm">{s.package.name}</p>
@@ -105,21 +108,33 @@ function ActivePlansPopup({
                         )}
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
-                        <CountdownBadge expiresAt={s.expiresAt} startedAt={s.startedAt} variant="inline" />
+                        {isCancelling ? (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[9px] font-black uppercase tracking-[0.18em]">
+                            <Loader2 size={11} className="animate-spin" /> Disconnecting
+                          </span>
+                        ) : (
+                          <CountdownBadge expiresAt={s.expiresAt} startedAt={s.startedAt} variant="inline" />
+                        )}
                         <button
                           onClick={() => onCancelClick(s.id)}
-                          disabled={cancelPending}
-                          className="flex items-center gap-1 text-[11px] font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 px-2 py-1 rounded-lg transition-colors"
+                          disabled={!!cancellingSubId}
+                          className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg transition-colors ${isCancelling ? 'text-cyan-300 cursor-wait' : 'text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-50'}`}
                         >
-                          <XCircle size={12} /> Cancel Plan
+                          {isCancelling ? <><Loader2 size={12} className="animate-spin" /> Severing...</> : <><XCircle size={12} /> Cancel Plan</>}
                         </button>
                       </div>
                     </div>
+                    {isCancelling && (
+                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-cyan-950/70">
+                        <div className="h-full w-2/3 animate-pulse bg-gradient-to-r from-cyan-400 via-blue-400 to-transparent" />
+                      </div>
+                    )}
                     <p className="text-[10px] text-slate-500 mt-2">
                       Expires {s.expiresAt ? new Date(s.expiresAt).toLocaleString() : '—'}
                     </p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -180,6 +195,7 @@ export default function Users() {
   const [allocateForm, setAllocateForm] = useState({ packageId: '', routerId: '' });
 
   const [plansPopupUserId, setPlansPopupUserId] = useState<string | null>(null);
+  const [cancellingSubId, setCancellingSubId] = useState<string | null>(null);
 
   const [generatedCreds, setGeneratedCreds] = useState<any>(null);
 
@@ -248,15 +264,20 @@ export default function Users() {
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => api.post(`/subscriptions/${id}/cancel`),
-    onSuccess: () => {
+    onMutate: (id: string) => {
+      setCancellingSubId(id);
+      toast.loading('Disconnecting subscriber from hotspot...', { id: `cancel-${id}` });
+    },
+    onSuccess: (_res, id) => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Subscription cancelled');
+      toast.success('Subscription cancelled. Router cleanup is processing.', { id: `cancel-${id}` });
       setConfirmState(s => ({ ...s, isOpen: false }));
     },
-    onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Cancel failed');
+    onError: (err: any, id) => {
+      toast.error(err.response?.data?.message || 'Cancel failed', { id: `cancel-${id}` });
       setConfirmState(s => ({ ...s, isOpen: false }));
     },
+    onSettled: () => setCancellingSubId(null),
   });
 
   const reactivateMutation = useMutation({
@@ -298,10 +319,12 @@ export default function Users() {
 
   // Handlers
   const handleCancelClick = (subId: string) => {
+    if (cancellingSubId || cancelMutation.isPending) return;
+
     setConfirmState({
       isOpen: true,
       title: 'Cancel Subscription',
-      message: 'Are you sure you want to cancel this plan? The user will instantly lose internet access.',
+      message: 'Cancel this plan? PulseLynk will revoke router access, clear hotspot state, and send the customer an SMS. This can take a few seconds.',
       confirmText: 'Cancel Plan',
       onConfirm: () => cancelMutation.mutate(subId)
     });
@@ -398,6 +421,7 @@ export default function Users() {
         {filteredUsers?.map((u) => {
           const activeSubs = getActiveSubs(u);
           const mostRecentActive = activeSubs[0] ?? null;
+          const isCancellingActive = cancellingSubId === mostRecentActive?.id;
           const totalSubs = u.subscriptions?.length ?? 0;
           const activeCount = activeSubs.length;
           const inactiveCount = getInactiveSubs(u).length;
@@ -454,10 +478,10 @@ export default function Users() {
               {/* ── Active Plan ── */}
               <div className="p-5 flex-1">
                 {mostRecentActive ? (
-                  <div className="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20">
+                  <div className={`p-3 rounded-xl border transition-all ${isCancellingActive ? 'bg-cyan-500/[0.08] border-cyan-400/40 shadow-[0_0_30px_rgba(34,211,238,0.08)]' : 'bg-cyan-500/5 border-cyan-500/20'}`}>
                     <div className="flex items-center gap-1.5 mb-2">
-                      <Wifi size={12} className="text-cyan-400" />
-                      <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wide">Active Plan</span>
+                      {isCancellingActive ? <Loader2 size={12} className="text-cyan-300 animate-spin" /> : <Wifi size={12} className="text-cyan-400" />}
+                      <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wide">{isCancellingActive ? 'Disconnecting Plan' : 'Active Plan'}</span>
                       {activeCount > 1 && (
                         <button
                           className="ml-auto text-[10px] font-bold text-purple-400 hover:text-purple-300 underline underline-offset-2 transition-colors"
@@ -472,14 +496,18 @@ export default function Users() {
                       <RouterIcon size={10} /> {mostRecentActive.router.name}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
-                      <CountdownBadge expiresAt={mostRecentActive.expiresAt} startedAt={mostRecentActive.startedAt} variant="inline" />
+                      {isCancellingActive ? (
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Router cleanup in progress</span>
+                      ) : (
+                        <CountdownBadge expiresAt={mostRecentActive.expiresAt} startedAt={mostRecentActive.startedAt} variant="inline" />
+                      )}
                       <div className="flex items-center gap-2">
                         <button
-                          className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1 transition-colors"
+                          className={`text-[10px] font-bold flex items-center gap-1 transition-colors ${isCancellingActive ? 'text-cyan-300 cursor-wait' : 'text-red-400 hover:text-red-300 disabled:opacity-50'}`}
                           onClick={() => handleCancelClick(mostRecentActive.id)}
-                          disabled={cancelMutation.isPending}
+                          disabled={!!cancellingSubId}
                         >
-                          <XCircle size={11} /> Cancel
+                          {isCancellingActive ? <><Loader2 size={11} className="animate-spin" /> Severing...</> : <><XCircle size={11} /> Cancel</>}
                         </button>
                         {activeCount > 1 && (
                           <button
@@ -491,6 +519,11 @@ export default function Users() {
                         )}
                       </div>
                     </div>
+                    {isCancellingActive && (
+                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-cyan-950/70">
+                        <div className="h-full w-2/3 animate-pulse bg-gradient-to-r from-cyan-400 via-blue-400 to-transparent" />
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="p-3 rounded-xl bg-slate-800/30 border border-slate-700/30 flex items-center gap-2">
@@ -572,7 +605,7 @@ export default function Users() {
           onReactivate={(id, status) => {
              reactivateMutation.mutate(id);
           }}
-          cancelPending={cancelMutation.isPending}
+          cancellingSubId={cancellingSubId}
           reactivatePending={reactivateMutation.isPending}
         />
       )}
@@ -585,7 +618,7 @@ export default function Users() {
         confirmText={confirmState.confirmText}
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(s => ({ ...s, isOpen: false }))}
-        isLoading={cancelMutation.isPending || toggleMutation.isPending || reactivateMutation.isPending}
+        isLoading={!!cancellingSubId || toggleMutation.isPending || reactivateMutation.isPending}
       />
 
       {/* ── Create Customer Modal ── */}
