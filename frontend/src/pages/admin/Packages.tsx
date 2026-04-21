@@ -75,10 +75,15 @@ export default function Packages() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/packages/${id}`),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['packages', 'all'] });
-      toast.success('Package deleted');
+      if (res.data?.action === 'archived') {
+        toast.success('Package archived and hidden from users');
+      } else {
+        toast.success('Unused package deleted');
+      }
     },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to archive package'),
   });
 
   const openEditModal = (pkg: any) => {
@@ -178,12 +183,12 @@ export default function Packages() {
                 className="text-red-400 hover:text-red-300 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors"
                 onClick={() => setConfirmState({
                   isOpen: true,
-                  title: 'Delete Package',
-                  message: 'Are you sure you want to delete this package? This cannot be undone.',
+                  title: 'Archive Package',
+                  message: 'Archive this package? It will be hidden from users, while old subscriptions, vouchers, and transactions stay intact.',
                   onConfirm: () => { deleteMutation.mutate(pkg.id); setConfirmState(s => ({ ...s, isOpen: false })); }
                 })}
               >
-                <Trash2 size={12} /> Delete
+                <Trash2 size={12} /> Archive
               </button>
             </div>
           </div>
@@ -333,6 +338,7 @@ export default function Packages() {
         isOpen={confirmState.isOpen}
         title={confirmState.title}
         message={confirmState.message}
+        confirmText="Archive"
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(s => ({ ...s, isOpen: false }))}
         isLoading={deleteMutation.isPending}
