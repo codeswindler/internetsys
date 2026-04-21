@@ -41,7 +41,7 @@ export default function UserDashboard() {
   });
 
   const { fireInternet, currentUser } = useOutletContext<{ 
-    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean; authorizationMode?: 'active-login' | 'bypass' }) => void,
+    fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean }) => void,
     currentUser: any 
   }>();
 
@@ -203,7 +203,6 @@ export default function UserDashboard() {
           subId: sub?.id || variables.subId,
           routerIp: sub?.router?.localGateway,
           redirectPath: window.location.pathname,
-          authorizationMode: sub?.authorizationMode,
         });
       }
     },
@@ -509,7 +508,6 @@ export default function UserDashboard() {
                                       routerIp: sub.router?.localGateway,
                                       redirectPath: window.location.pathname,
                                       releaseOnly: true,
-                                      authorizationMode: sub.authorizationMode,
                                     });
                                      toast.success('Refreshing Handshake...');
                                    }}

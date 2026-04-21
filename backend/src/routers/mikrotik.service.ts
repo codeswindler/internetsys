@@ -253,7 +253,7 @@ export class MikrotikService {
         `?name=${username}`,
       ]);
       if (users.length > 0) {
-        await api.write('/ip/hotspot/user/remove', [`=.id=${users[0]['.id']}`]);
+        await this.safeRouterRemove(api, '/ip/hotspot/user/remove', users[0]['.id']);
       }
 
       // Also remove from active sessions if any
@@ -261,9 +261,7 @@ export class MikrotikService {
         `?user=${username}`,
       ]);
       for (const session of active) {
-        await api.write('/ip/hotspot/active/remove', [
-          `=.id=${session['.id']}`,
-        ]);
+        await this.safeRouterRemove(api, '/ip/hotspot/active/remove', session['.id']);
         
         // Also remove from Hosts table using the MAC from the active session. This forces the immediate Captive Portal popup!
         if (session['mac-address']) {
@@ -271,7 +269,7 @@ export class MikrotikService {
             `?mac-address=${session['mac-address']}`
           ]);
           for (const host of hosts) {
-            await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+            await this.safeRouterRemove(api, '/ip/hotspot/host/remove', host['.id']);
           }
         }
       }
@@ -281,9 +279,7 @@ export class MikrotikService {
         `?comment=Pulselynk: ${username}`,
       ]);
       for (const binding of bindings) {
-        await api.write('/ip/hotspot/ip-binding/remove', [
-          `=.id=${binding['.id']}`,
-        ]);
+        await this.safeRouterRemove(api, '/ip/hotspot/ip-binding/remove', binding['.id']);
         
         // Ensure the host is removed using the mac from the binding!
         if (binding['mac-address']) {
@@ -291,7 +287,7 @@ export class MikrotikService {
              `?mac-address=${binding['mac-address']}`
            ]);
            for (const host of hosts) {
-             await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+             await this.safeRouterRemove(api, '/ip/hotspot/host/remove', host['.id']);
            }
         }
       }
@@ -416,7 +412,7 @@ export class MikrotikService {
         `?name=${username}`,
       ]);
       if (secrets.length > 0) {
-        await api.write('/ppp/secret/remove', [`=.id=${secrets[0]['.id']}`]);
+        await this.safeRouterRemove(api, '/ppp/secret/remove', secrets[0]['.id']);
       }
 
       // Force disconnect active PPPoE session
@@ -424,7 +420,7 @@ export class MikrotikService {
         `?name=${username}`,
       ]);
       for (const session of active) {
-        await api.write('/ppp/active/remove', [`=.id=${session['.id']}`]);
+        await this.safeRouterRemove(api, '/ppp/active/remove', session['.id']);
       }
     } catch (e) {
       this.logger.error(
@@ -468,9 +464,7 @@ export class MikrotikService {
         `?name=${name}`,
       ]);
       if (existing.length > 0) {
-        await api.write('/ip/hotspot/user/profile/remove', [
-          `=.id=${existing[0]['.id']}`,
-        ]);
+        await this.safeRouterRemove(api, '/ip/hotspot/user/profile/remove', existing[0]['.id']);
       }
     } catch (e) {
       this.logger.error(
@@ -487,7 +481,7 @@ export class MikrotikService {
     try {
       const existing = await api.write('/ppp/profile/print', [`?name=${name}`]);
       if (existing.length > 0) {
-        await api.write('/ppp/profile/remove', [`=.id=${existing[0]['.id']}`]);
+        await this.safeRouterRemove(api, '/ppp/profile/remove', existing[0]['.id']);
       }
     } catch (e) {
       this.logger.error(
@@ -545,7 +539,7 @@ export class MikrotikService {
 
     const removeIds = async (path: string, ids: Set<string>) => {
       for (const id of ids) {
-        await api.write(path, [`=.id=${id}`]);
+        await this.safeRouterRemove(api, path, id);
       }
     };
 
@@ -671,9 +665,32 @@ export class MikrotikService {
       const cookies = await api.write('/ip/hotspot/cookie/print', [query]);
       for (const cookie of cookies) {
         if (cookie['.id']) {
-          await api.write('/ip/hotspot/cookie/remove', [`=.id=${cookie['.id']}`]);
+          await this.safeRouterRemove(api, '/ip/hotspot/cookie/remove', cookie['.id']);
         }
       }
+    }
+  }
+
+  private isRouterMissingItemError(error: any): boolean {
+    return `${error?.message || error || ''}`.toLowerCase().includes('no such item');
+  }
+
+  private async safeRouterRemove(
+    api: RouterOSAPI,
+    path: string,
+    id?: string,
+  ): Promise<boolean> {
+    if (!id) return false;
+
+    try {
+      await api.write(path, [`=.id=${id}`]);
+      return true;
+    } catch (e: any) {
+      if (this.isRouterMissingItemError(e)) {
+        this.logger.debug(`[ROUTER-CLEANUP] ${path} skipped missing item ${id}`);
+        return false;
+      }
+      throw e;
     }
   }
 
@@ -810,7 +827,7 @@ export class MikrotikService {
       const activeSessions = await api.write('/ip/hotspot/active/print', [query]);
       for (const session of activeSessions) {
         if (session['.id']) {
-          await api.write('/ip/hotspot/active/remove', [`=.id=${session['.id']}`]);
+          await this.safeRouterRemove(api, '/ip/hotspot/active/remove', session['.id']);
         }
       }
     }
@@ -824,7 +841,7 @@ export class MikrotikService {
       const bindings = await api.write('/ip/hotspot/ip-binding/print', [query]);
       for (const binding of bindings) {
         if (binding['.id']) {
-          await api.write('/ip/hotspot/ip-binding/remove', [`=.id=${binding['.id']}`]);
+          await this.safeRouterRemove(api, '/ip/hotspot/ip-binding/remove', binding['.id']);
         }
       }
     }
@@ -844,7 +861,7 @@ export class MikrotikService {
       const hosts = await api.write('/ip/hotspot/host/print', [query]);
       for (const host of hosts) {
         if (host['.id']) {
-          await api.write('/ip/hotspot/host/remove', [`=.id=${host['.id']}`]);
+          await this.safeRouterRemove(api, '/ip/hotspot/host/remove', host['.id']);
         }
       }
     }
@@ -883,7 +900,7 @@ export class MikrotikService {
         }
 
         for (const leaseId of leaseIds) {
-          await api.write('/ip/dhcp-server/lease/remove', [`=.id=${leaseId}`]);
+          await this.safeRouterRemove(api, '/ip/dhcp-server/lease/remove', leaseId);
         }
       }
 
@@ -897,7 +914,7 @@ export class MikrotikService {
       }
 
       for (const arpId of arpIds) {
-        await api.write('/ip/arp/remove', [`=.id=${arpId}`]);
+        await this.safeRouterRemove(api, '/ip/arp/remove', arpId);
       }
 
       if (leaseIds.size > 0) {
