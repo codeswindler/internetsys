@@ -12,7 +12,6 @@ import ProfileModal, { renderAvatar } from '../components/ProfileModal';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import {
   buildHotspotIdentifyUrl,
-  buildHotspotReleaseBridgeUrl,
   buildHotspotConnectUrl,
   resolveHotspotReleaseUrl,
   submitHotspotLoginRelease,
@@ -226,7 +225,7 @@ export default function MainLayout({ role }: LayoutProps) {
   };
 
   const fireInternet = (_customUser?: string, _customPass?: string, options: FireInternetOptions = {}) => {
-    if (!options.releaseOnly && !activeSub?.id) {
+    if (!options.releaseOnly && !options.subId && !activeSub?.id) {
       return;
     }
 
@@ -235,13 +234,11 @@ export default function MainLayout({ role }: LayoutProps) {
       options.routerIp || activeSub?.router?.localGateway || '10.5.50.1';
 
     if (options.authorizationMode === 'bypass') {
-      window.location.replace(
-        buildHotspotReleaseBridgeUrl(
-          routerGateway,
-          releaseUrl,
-          window.location.origin,
-        ),
-      );
+      // IP-binding bypass is already applied server-side, so do not bounce
+      // through the MikroTik login page again.
+      window.setTimeout(() => {
+        window.location.replace(releaseUrl);
+      }, 800);
       return;
     }
 

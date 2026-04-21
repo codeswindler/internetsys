@@ -40,7 +40,7 @@ export default function Packages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const formRef = useRef<HTMLFormElement>(null);
-  const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean }) => void }>();
+  const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean; authorizationMode?: 'active-login' | 'bypass' }) => void }>();
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [routerId, setRouterId] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);
@@ -237,10 +237,17 @@ export default function Packages() {
       const ip = localStorage.getItem('hotspot_ip');
       return api.post(`/subscriptions/${subId}/start`, { mac, ip });
     },
-    onSuccess: () => {
+    onSuccess: (response, subId) => {
+      const sub = response.data;
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       toast.success('Internet Activated!');
+      fireInternet(sub?.mikrotikUsername, sub?.mikrotikPassword, {
+        subId: sub?.id || subId,
+        routerIp: sub?.router?.localGateway,
+        redirectPath: window.location.pathname,
+        authorizationMode: sub?.authorizationMode,
+      });
     },
     onError: (err: any) => {
       const msg = err.response?.data?.message || 'Connection failed. Try "Verify Device" again.';
