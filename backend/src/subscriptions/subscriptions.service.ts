@@ -560,7 +560,10 @@ export class SubscriptionsService {
       );
     }
 
-    // Remove from MikroTik
+    let captiveResetRequested = false;
+
+    // Remove from MikroTik. For hotspot cancellations, force the device logout
+    // first so the active session identity is still available for captive reset.
     if (sub.mikrotikUsername) {
       try {
         if (sub.router.connectionMode === 'pppoe') {
@@ -569,6 +572,8 @@ export class SubscriptionsService {
             sub.mikrotikUsername,
           );
         } else {
+          await this.forceDisconnectSubscriptionDevices(sub, 'cancel');
+          captiveResetRequested = true;
           await this.mikrotikService.removeHotspotUser(
             sub.router,
             sub.mikrotikUsername,
@@ -581,7 +586,9 @@ export class SubscriptionsService {
       }
     }
 
-    await this.forceDisconnectSubscriptionDevices(sub, 'cancel');
+    if (!captiveResetRequested) {
+      await this.forceDisconnectSubscriptionDevices(sub, 'cancel');
+    }
 
     sub.status = SubscriptionStatus.CANCELLED;
     const saved = await this.subRepo.save(sub);
@@ -784,6 +791,24 @@ export class SubscriptionsService {
       } catch (e) {
         this.logger.warn(
           `[${scopeLabel}] Last-known device logout fallback failed for sub ${sub.id}: ${e.message}`,
+        );
+      }
+    }
+
+    if (seenIdentities.size === 0 && sub.mikrotikUsername) {
+      try {
+        await this.mikrotikService.forceLogoutHotspot(
+          sub.router,
+          undefined,
+          undefined,
+          sub.mikrotikUsername,
+        );
+        this.logger.log(
+          `[${scopeLabel}] Applied username-only captive reset fallback for sub ${sub.id}.`,
+        );
+      } catch (e) {
+        this.logger.warn(
+          `[${scopeLabel}] Username-only captive reset fallback failed for sub ${sub.id}: ${e.message}`,
         );
       }
     }

@@ -53,6 +53,7 @@ export default function MainLayout({ role }: LayoutProps) {
 
   // Expiry Monitor State
   const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false);
+  const [endedSessionReason, setEndedSessionReason] = useState<'expired' | 'cancelled'>('expired');
   const warnedRef = useRef<string | null>(null); // To avoid double-toasting for the same sub
   const expiredRef = useRef<string | null>(null); // To avoid double-modals
   const expiryUiRef = useRef<string | null>(null);
@@ -290,6 +291,7 @@ export default function MainLayout({ role }: LayoutProps) {
       if (remaining <= 0 && expiryUiRef.current !== activeSub.id) {
         expiryUiRef.current = activeSub.id;
         endedRouterIpRef.current = activeSub?.router?.localGateway || null;
+        setEndedSessionReason('expired');
         setIsExpiredModalOpen(true);
         toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
 
@@ -339,8 +341,13 @@ export default function MainLayout({ role }: LayoutProps) {
     endedRouterIpRef.current = endedSub?.router?.localGateway || null;
     if (expiryUiRef.current !== endedSub.id) {
       expiryUiRef.current = endedSub.id;
+      const isCancelled = endedStatus === 'CANCELLED';
+      setEndedSessionReason(isCancelled ? 'cancelled' : 'expired');
       setIsExpiredModalOpen(true);
-      toast.error('Session Expired!', { id: 'expiry-toast', duration: 10000 });
+      toast.error(isCancelled ? 'Session Cancelled!' : 'Session Expired!', {
+        id: 'expiry-toast',
+        duration: 10000,
+      });
     }
     scheduleCaptivePortalReopen(endedSub.id, endedRouterIpRef.current);
   }, [allSubsData, role]);
@@ -818,8 +825,14 @@ export default function MainLayout({ role }: LayoutProps) {
                 <Clock size={40} className="text-red-500 animate-pulse" />
               </div>
               
-              <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Session Expired</h3>
-              <p className="text-slate-400 font-medium mb-8">Your subscription has ended. Please buy a new plan to continue browsing.</p>
+              <h3 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">
+                {endedSessionReason === 'cancelled' ? 'Session Cancelled' : 'Session Expired'}
+              </h3>
+              <p className="text-slate-400 font-medium mb-8">
+                {endedSessionReason === 'cancelled'
+                  ? 'This subscription was cancelled and access has been disconnected. Open the login portal or buy a new plan to continue browsing.'
+                  : 'Your subscription has ended. Please buy a new plan to continue browsing.'}
+              </p>
               
               <div className="space-y-3">
                 <button
