@@ -647,6 +647,10 @@ export class MikrotikService {
           await this.nudgeHotspotClient(api, undefined, targetMac, { resetDhcpLease: true });
         }
       }
+
+      for (const targetMac of macs) {
+        await this.kickWirelessClient(api, targetMac, router.name);
+      }
       api.close();
     }
   }
@@ -934,6 +938,61 @@ export class MikrotikService {
       }
     } catch (e: any) {
       this.logger.warn(`[INSTANT-FLOW] Hotspot nudge failed: ${e.message}`);
+    }
+  }
+
+  private async kickWirelessClient(
+    api: RouterOSAPI,
+    mac?: string,
+    routerName = 'router',
+  ): Promise<void> {
+    const normalizedMac = this.normalizeMac(mac);
+    if (!normalizedMac) return;
+
+    const registrationTables = [
+      {
+        label: 'wireless',
+        print: '/interface/wireless/registration-table/print',
+        remove: '/interface/wireless/registration-table/remove',
+      },
+      {
+        label: 'wifi',
+        print: '/interface/wifi/registration-table/print',
+        remove: '/interface/wifi/registration-table/remove',
+      },
+      {
+        label: 'caps-man',
+        print: '/caps-man/registration-table/print',
+        remove: '/caps-man/registration-table/remove',
+      },
+    ];
+
+    let removed = 0;
+
+    for (const table of registrationTables) {
+      try {
+        const stations = await api.write(table.print, [`?mac-address=${normalizedMac}`]);
+        for (const station of stations || []) {
+          if (station?.['.id']) {
+            const didRemove = await this.safeRouterRemove(api, table.remove, station['.id']);
+            if (didRemove) removed += 1;
+          }
+        }
+      } catch (e: any) {
+        this.logger.debug(
+          `[CAPTIVE-KICK] ${table.label} station kick unavailable on ${routerName}: ${e.message}`,
+        );
+      }
+    }
+
+    if (removed > 0) {
+      this.logger.log(
+        `[CAPTIVE-KICK] Requested Wi-Fi reconnect for ${normalizedMac} on ${routerName} | stations=${removed}.`,
+      );
+    } else {
+      this.logger.debug(
+        `[CAPTIVE-KICK] No MikroTik wireless station found for ${normalizedMac} on ${routerName}.`,
+      );
     }
   }
 
