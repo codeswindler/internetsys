@@ -950,17 +950,20 @@ export class MikrotikService {
       [`=user=${username}`, `=password=${pass}`, `=mac-address=${mac}`, `=ip=${ip}`],
       [`=user=${username}`, `=password=${pass}`, `=mac-address=${mac}`, `=address=${ip}`],
     ];
+    const failures: string[] = [];
 
     for (const args of attempts) {
       try {
         await api.write('/ip/hotspot/active/login', args);
         return true;
       } catch (e: any) {
-        this.logger.warn(
-          `[ACTIVE-LOGIN] Direct hotspot login attempt failed on ${args[3]} for ${mac}: ${e.message}`,
-        );
+        failures.push(`${args[3]}: ${e.message}`);
       }
     }
+
+    this.logger.debug(
+      `[ACTIVE-LOGIN] Direct hotspot login unavailable for ${mac}/${ip}; bypass fallback will be used. attempts=${failures.join(' | ')}`,
+    );
 
     return false;
   }
