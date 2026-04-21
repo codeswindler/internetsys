@@ -332,6 +332,10 @@ export class SubscriptionsService {
           : undefined,
     });
 
+    if (paymentMethod === PaymentMethod.MPESA) {
+      await this.sendPaymentConfirmedNotice(savedSub);
+    }
+
     return savedSub;
   }
 
@@ -785,6 +789,9 @@ export class SubscriptionsService {
 
   private async sendCancellationNotice(sub: Subscription): Promise<void> {
     if (!sub.user?.phone || sub.user.phone.length < 9) {
+      this.logger.warn(
+        `[SMS] Skipping cancellation notice for sub ${sub.id}: missing valid phone`,
+      );
       return;
     }
 
@@ -802,7 +809,17 @@ export class SubscriptionsService {
   }
 
   private async sendActivationConfirmationNotice(sub: Subscription): Promise<void> {
-    if (!sub.user?.phone || sub.user.phone.length < 9 || !sub.expiresAt) {
+    if (!sub.user?.phone || sub.user.phone.length < 9) {
+      this.logger.warn(
+        `[SMS] Skipping activation confirmation for sub ${sub.id}: missing valid phone`,
+      );
+      return;
+    }
+
+    if (!sub.expiresAt) {
+      this.logger.warn(
+        `[SMS] Skipping activation confirmation for sub ${sub.id}: subscription has no expiry time yet`,
+      );
       return;
     }
 
@@ -823,12 +840,67 @@ export class SubscriptionsService {
     }
   }
 
+  private async sendPaymentConfirmedNotice(sub: Subscription): Promise<void> {
+    if (!sub.user?.phone || sub.user.phone.length < 9) {
+      this.logger.warn(
+        `[SMS] Skipping payment confirmation for sub ${sub.id}: missing valid phone`,
+      );
+      return;
+    }
+
+    const packageName = sub.package?.name || 'internet';
+    const message = `PulseLynk: Payment received for your ${packageName} package. Tap Join Network to activate your internet. Your time starts after connection.`;
+
+    try {
+      const sent = await this.smsService.sendSms(sub.user.phone, message);
+      if (sent) {
+        this.logger.log(`[SMS] Sent payment confirmation to ${sub.user.phone}`);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `[SMS] Failed to send payment confirmation for sub ${sub.id}: ${e.message}`,
+      );
+    }
+  }
+
+  private async sendPaymentFailureNotice(
+    sub: Subscription,
+    failureReason: string,
+  ): Promise<void> {
+    if (!sub.user?.phone || sub.user.phone.length < 9) {
+      this.logger.warn(
+        `[SMS] Skipping payment failure notice for sub ${sub.id}: missing valid phone`,
+      );
+      return;
+    }
+
+    const packageName = sub.package?.name || 'internet';
+    const message = `PulseLynk: Your ${packageName} payment was not completed. ${failureReason}`;
+
+    try {
+      const sent = await this.smsService.sendSms(sub.user.phone, message);
+      if (sent) {
+        this.logger.log(`[SMS] Sent payment failure notice to ${sub.user.phone}`);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `[SMS] Failed to send payment failure notice for sub ${sub.id}: ${e.message}`,
+      );
+    }
+  }
+
   private async sendExpiryNotice(sub: Subscription): Promise<void> {
     if (sub.finalExpiryNotified) {
+      this.logger.debug(
+        `[SMS] Skipping expiry notice for sub ${sub.id}: already notified`,
+      );
       return;
     }
 
     if (!sub.user?.phone || sub.user.phone.length < 9) {
+      this.logger.warn(
+        `[SMS] Skipping expiry notice for sub ${sub.id}: missing valid phone`,
+      );
       sub.finalExpiryNotified = true;
       await this.subRepo.save(sub);
       return;
@@ -896,10 +968,13 @@ export class SubscriptionsService {
   private async markStkPaymentFailed(
     sub: Subscription,
     result: any,
+    options: { notifyUser?: boolean } = {},
   ): Promise<any> {
     const resultCode = this.normalizeStkResultCode(result?.ResultCode) || 'UNKNOWN';
     const failureReason = this.getStkFailureReason(result);
     const cancelled = this.stkUserCancelledCodes.has(resultCode);
+    const notifyUser = options.notifyUser ?? true;
+    let markedFailedNow = false;
 
     if (
       sub.status !== SubscriptionStatus.CANCELLED &&
@@ -910,9 +985,14 @@ export class SubscriptionsService {
       sub.paymentMethod = PaymentMethod.MPESA;
       sub.paymentRef = `STK-FAILED-${resultCode}`.substring(0, 255);
       await this.subRepo.save(sub);
+      markedFailedNow = true;
       this.logger.warn(
         `[STK FAILED] Sub ${sub.id} marked CANCELLED | code=${resultCode} | detail=${failureReason}`,
       );
+    }
+
+    if (markedFailedNow && notifyUser) {
+      await this.sendPaymentFailureNotice(sub, failureReason);
     }
 
     return {
@@ -1450,6 +1530,8 @@ export class SubscriptionsService {
       await this.markStkPaymentFailed(sub, {
         ResultCode: 'TIMEOUT',
         ResultDesc: 'Payment verification timed out before completion.',
+      }, {
+        notifyUser: false,
       });
     }
   }
