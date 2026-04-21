@@ -1001,17 +1001,37 @@ export class MikrotikService {
       }
 
       // Compatibility fallback for routers/devices that still refuse direct active login.
-      // Keep the hotspot host intact so the browser-side handoff can still complete cleanly.
-      const bindingArgs = [
+      // Create redundant bindings so a stale IP or randomized MAC cannot make the
+      // bypass appear in logs while still missing the client's actual traffic.
+      const bypassBindings: string[][] = [];
+      const baseBindingArgs = [
         '=type=bypassed',
         `=comment=Pulselynk: ${username}`,
       ];
-      if (finalMac) bindingArgs.push(`=mac-address=${finalMac}`);
-      if (ip) bindingArgs.push(`=address=${ip}`);
 
-      await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
+      if (finalMac) {
+        bypassBindings.push([...baseBindingArgs, `=mac-address=${finalMac}`]);
+      }
+      if (ip) {
+        bypassBindings.push([...baseBindingArgs, `=address=${ip}`]);
+      }
+      if (finalMac && ip) {
+        bypassBindings.push([
+          ...baseBindingArgs,
+          `=mac-address=${finalMac}`,
+          `=address=${ip}`,
+        ]);
+      }
+
+      if (bypassBindings.length === 0) {
+        throw new Error('Cannot create hotspot bypass without a MAC address or hotspot IP.');
+      }
+
+      for (const bindingArgs of bypassBindings) {
+        await api.write('/ip/hotspot/ip-binding/add', bindingArgs);
+      }
       this.logger.log(
-        `[AUTH FALLBACK] IP-Binding BYPASS created for ${finalMac || ip}.`,
+        `[AUTH FALLBACK] IP-Binding BYPASS rules created for ${finalMac || ip} | rules=${bypassBindings.length}.`,
       );
 
       // Force the host to be recreated under the new bypass rule.
