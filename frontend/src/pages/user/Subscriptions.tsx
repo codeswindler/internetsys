@@ -71,6 +71,11 @@ export default function Subscriptions() {
 
   const startCurrentDevice = (subId: string) => {
     const identity = getStoredHotspotIdentity();
+    if (!identity.mac && !identity.ip) {
+      startDiscovery(subId);
+      return;
+    }
+
     startMutation.mutate({
       subId,
       mac: identity.mac,

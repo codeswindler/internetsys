@@ -29,6 +29,7 @@ import {
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
+  buildHotspotConnectUrl,
   buildHotspotIdentifyUrl,
   hasStoredHotspotIdentity,
   storeHotspotContext,
@@ -55,6 +56,9 @@ export default function Packages() {
   const [pollCount, setPollCount] = useState(0);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const initialDetectionRef = useRef(false);
+  const paymentFlowLockedRef = useRef(false);
+  const handledStkSubRef = useRef<string | null>(null);
+  const [isCreatingPayment, setIsCreatingPayment] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setShowScroll(window.scrollY > 300);
@@ -288,13 +292,22 @@ export default function Packages() {
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       
+      handledStkSubRef.current = null;
       setVerifyingSubId(variables.subId);
       setPollCount(0);
+      setIsCreatingPayment(false);
       setIsVerifying(true);
-      toast.success('STK Push Sent! Enter your M-Pesa PIN.', { icon: '📲' });
+      toast.success('STK Push Sent! Enter your M-Pesa PIN.', {
+        id: `stk-sent-${variables.subId}`,
+        icon: '📲',
+      });
     },
     onError: (err: any, variables) => {
-      toast.error(err.response?.data?.message || 'Payment initiation failed');
+      paymentFlowLockedRef.current = false;
+      setIsCreatingPayment(false);
+      toast.error(err.response?.data?.message || 'Payment initiation failed', {
+        id: `stk-init-failed-${variables.subId}`,
+      });
       setFailedSubId(variables.subId);
       setShowRetryModal(true);
     }
@@ -311,21 +324,54 @@ export default function Packages() {
         const { success, status, cancelled, failed, failureReason } = res.data;
 
         if (success || status?.toLowerCase() === 'active' || status?.toLowerCase() === 'paid') {
+          if (handledStkSubRef.current === verifyingSubId) {
+            clearInterval(pollInterval);
+            return;
+          }
+
+          handledStkSubRef.current = verifyingSubId;
           setIsVerifying(false);
           setVerifyingSubId(null);
-          toast.success('Payment Verified! Head to Dashboard to Activate.', { icon: '✅', duration: 5000 });
-          
-          setTimeout(() => {
-            navigate('/user/dashboard');
-          }, 2000);
+          paymentFlowLockedRef.current = false;
+          setIsCreatingPayment(false);
+          setSelectedPkg(null);
+          toast.success('Payment Verified! Connecting internet...', {
+            id: `stk-success-${verifyingSubId}`,
+            icon: '✅',
+            duration: 5000,
+          });
+
+          const selectedRouter = routers?.find((router: any) => router.id === routerId);
+          const routerGateway =
+            selectedRouter?.localGateway ||
+            localStorage.getItem('hotspot_router_id') ||
+            routers?.[0]?.localGateway;
+
+          window.location.replace(buildHotspotConnectUrl(
+            verifyingSubId,
+            '/user/dashboard',
+            routerGateway,
+            window.location.origin,
+          ));
           
           clearInterval(pollInterval);
+          return;
         } else if (failed || cancelled || status?.toLowerCase() === 'cancelled') {
+          if (handledStkSubRef.current === verifyingSubId) {
+            clearInterval(pollInterval);
+            return;
+          }
+
+          handledStkSubRef.current = verifyingSubId;
           setIsVerifying(false);
           setVerifyingSubId(null);
+          paymentFlowLockedRef.current = false;
+          setIsCreatingPayment(false);
           queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
           queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
-          toast.error(failureReason || 'Payment failed. Please try again.');
+          toast.error(failureReason || 'Payment failed. Please try again.', {
+            id: `stk-failed-${verifyingSubId}`,
+          });
           clearInterval(pollInterval);
           return;
         }
@@ -335,7 +381,11 @@ export default function Packages() {
         if (attempts > 30) { // Timeout after ~60s
           setIsVerifying(false);
           setVerifyingSubId(null);
-          toast.error('Payment timeout. If you paid, it will appear in your subscriptions shortly.');
+          paymentFlowLockedRef.current = false;
+          setIsCreatingPayment(false);
+          toast.error('Payment timeout. If you paid, it will appear in your subscriptions shortly.', {
+            id: `stk-timeout-${verifyingSubId}`,
+          });
           clearInterval(pollInterval);
         }
       } catch (e) {
@@ -359,13 +409,18 @@ export default function Packages() {
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (paymentFlowLockedRef.current) return;
 
     if (paymentType === 'mpesa') {
       try {
         if (!stkPhone) return toast.error('Please enter M-Pesa phone number');
+        paymentFlowLockedRef.current = true;
+        setIsCreatingPayment(true);
         const sub = await api.post('/subscriptions/purchase', { packageId: selectedPkg.id, routerId, notifyAdmins: false }).then(res => res.data);
         stkPushMutation.mutate({ subId: sub.id, phone: stkPhone, amount: selectedPkg.price });
       } catch (err: any) {
+        paymentFlowLockedRef.current = false;
+        setIsCreatingPayment(false);
         toast.error(err.response?.data?.message || 'Failed to initiate STK push');
       }
     } else {
@@ -629,8 +684,8 @@ export default function Packages() {
 
               <div className="flex justify-end gap-3 mt-4">
                 <button type="button" className="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-[rgba(255,255,255,0.05)] font-medium transition-colors" onClick={() => setSelectedPkg(null)}>Cancel</button>
-                <button type="submit" className="btn-primary text-base px-8 py-2.5 shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2" disabled={purchaseMutation.isPending || stkPushMutation.isPending}>
-                  {(purchaseMutation.isPending || stkPushMutation.isPending) ? <RefreshCw className="animate-spin" size={18} /> : null}
+                <button type="submit" className="btn-primary text-base px-8 py-2.5 shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2" disabled={purchaseMutation.isPending || stkPushMutation.isPending || isCreatingPayment || isVerifying}>
+                  {(purchaseMutation.isPending || stkPushMutation.isPending || isCreatingPayment) ? <RefreshCw className="animate-spin" size={18} /> : null}
                   {paymentType === 'mpesa' ? 'Send STK Prompt' : 'Submit Request'}
                 </button>
               </div>
