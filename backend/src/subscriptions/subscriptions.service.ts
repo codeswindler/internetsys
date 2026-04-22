@@ -1242,6 +1242,7 @@ export class SubscriptionsService {
     }
 
     // MULTI-DEVICE LOGIC: GHOST-BUSTER - Purge any existing active sessions globally for this MAC
+    let reusedCurrentActiveSession = false;
     if (finalMac) {
       this.logger.log(`[GHOST-BUSTER] Investigating MAC ${finalMac} for ghost sessions...`);
       
@@ -1253,10 +1254,13 @@ export class SubscriptionsService {
         },
         relations: ['subscription']
       });
+      const staleGlobalSessions = existingGlobalSessions.filter(
+        (s) => s.subscription?.id !== sub.id,
+      );
 
-      if (existingGlobalSessions.length > 0) {
-        this.logger.log(`[GHOST-BUSTER] Purging ${existingGlobalSessions.length} stale sessions for MAC ${finalMac}`);
-        for (const s of existingGlobalSessions) {
+      if (staleGlobalSessions.length > 0) {
+        this.logger.log(`[GHOST-BUSTER] Purging ${staleGlobalSessions.length} stale sessions for MAC ${finalMac}`);
+        for (const s of staleGlobalSessions) {
           s.isActive = false;
           await this.sessionRepo.save(s);
         }
@@ -1320,7 +1324,24 @@ export class SubscriptionsService {
         existingSessionInSub.deviceModel = model;
         existingSessionInSub.isActive = true;
         await this.sessionRepo.save(existingSessionInSub);
+        reusedCurrentActiveSession = sub.status === SubscriptionStatus.ACTIVE;
       }
+    }
+
+    if (reusedCurrentActiveSession) {
+      const savedSub = await this.subRepo.save(sub);
+      this.logger.log(
+        `[CONNECT-REUSE] Sub ${savedSub.id} already active for MAC ${finalMac} | IP: ${finalIp || 'none'} | Expires: ${savedSub.expiresAt?.toISOString() || 'pending'}`,
+      );
+      return {
+        ...savedSub,
+        handshakeRequired: false,
+        activationPending: false,
+        connectionConfirmed: true,
+        authorizationMode: 'active-login',
+        resolvedMac: finalMac,
+        resolvedIp: finalIp,
+      };
     }
 
     // 2. ALWAYS attempt login on MikroTik
