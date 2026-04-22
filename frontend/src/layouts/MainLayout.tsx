@@ -867,9 +867,7 @@ export default function MainLayout({ role }: LayoutProps) {
                 {endedSessionReason === 'cancelled' ? 'Session Cancelled' : 'Session Expired'}
               </h3>
               <p className="text-slate-400 font-medium mb-8">
-                {endedSessionReason === 'cancelled'
-                  ? 'This subscription was cancelled and access has been disconnected. Open the login portal or buy a new plan to continue browsing.'
-                  : 'Your subscription has ended. Please buy a new plan to continue browsing.'}
+                Your subscription has ended. Choose a new plan to continue browsing. If the sign in portal does not appear, reconnect to the Wi-Fi network and try again.
               </p>
               
               <div className="space-y-3">

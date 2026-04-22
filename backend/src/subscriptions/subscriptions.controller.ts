@@ -46,13 +46,14 @@ export class SubscriptionsController {
   @Post('purchase')
   purchase(
     @Request() req: any,
-    @Body() body: { packageId: string; routerId: string },
+    @Body() body: { packageId: string; routerId: string; notifyAdmins?: boolean },
   ) {
     // Only logged in user can purchase for themselves
     return this.subscriptionsService.purchase(
       req.user.id,
       body.packageId,
       body.routerId,
+      body.notifyAdmins ?? true,
     );
   }
 

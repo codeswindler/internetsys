@@ -22,6 +22,7 @@ import { TransactionMethod } from '../entities/transaction.entity';
 import { MpesaService } from './mpesa.service';
 import { SmsService } from '../sms/sms.service';
 import { AccessPointsService } from '../access-points/access-points.service';
+import { Admin } from '../entities/admin.entity';
 
 @Injectable()
 export class SubscriptionsService {
@@ -35,6 +36,7 @@ export class SubscriptionsService {
     @InjectRepository(Package) private pkgRepo: Repository<Package>,
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Router) private routerRepo: Repository<Router>,
+    @InjectRepository(Admin) private adminRepo: Repository<Admin>,
     @InjectRepository(DeviceSession)
     private sessionRepo: Repository<DeviceSession>,
     private mikrotikService: MikrotikService,
@@ -106,6 +108,7 @@ export class SubscriptionsService {
     userId: string,
     packageId: string,
     routerId?: string,
+    notifyAdmins = true,
   ): Promise<Subscription> {
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
@@ -134,7 +137,13 @@ export class SubscriptionsService {
       paymentMethod: PaymentMethod.MANUAL,
     });
 
-    return this.subRepo.save(sub);
+    const saved = await this.subRepo.save(sub);
+
+    if (notifyAdmins) {
+      await this.notifyAdminsOfPackageRequest(saved);
+    }
+
+    return saved;
   }
 
   async getStatus(subId: string): Promise<{ status: SubscriptionStatus }> {
@@ -841,8 +850,7 @@ export class SubscriptionsService {
       return;
     }
 
-    const packageName = sub.package?.name || 'internet';
-    const message = `PulseLynk: Your ${packageName} plan has been cancelled and access disconnected. Buy a new package to continue browsing.`;
+    const message = `PulseLynk: Your subscription has ended. Choose a new plan to continue browsing. If the sign in portal does not appear, reconnect to the Wi-Fi network and try again.`;
 
     try {
       const sent = await this.smsService.sendSms(sub.user.phone, message);
@@ -935,6 +943,40 @@ export class SubscriptionsService {
     }
   }
 
+  private async notifyAdminsOfPackageRequest(sub: Subscription): Promise<void> {
+    try {
+      const admins = await this.adminRepo.find();
+      const recipients = admins.filter(
+        (admin) => admin.phone && admin.phone.length >= 9,
+      );
+
+      if (!recipients.length) {
+        this.logger.warn('[SMS] No admin phone numbers available for package request alert');
+        return;
+      }
+
+      const customerName =
+        sub.user?.name || sub.user?.username || sub.user?.phone || 'a customer';
+      const phoneLabel = sub.user?.phone ? ` (${sub.user.phone})` : '';
+      const packageName = sub.package?.name || 'internet';
+      const amount = Number(sub.amountPaid || sub.package?.price || 0);
+      const amountLabel = amount > 0 ? `, KES ${amount.toLocaleString('en-KE')}` : '';
+      const routerLabel = sub.router?.name ? ` on ${sub.router.name}` : '';
+      const alert = `PulseLynk Admin: New package request from ${customerName}${phoneLabel}: ${packageName}${amountLabel}${routerLabel}. Review in Subscriptions.`;
+      const results = await Promise.all(
+        recipients.map((admin) => this.smsService.sendSms(admin.phone, alert)),
+      );
+      const sentCount = results.filter(Boolean).length;
+      this.logger.log(
+        `[SMS] Sent package request alert to ${sentCount}/${recipients.length} admins`,
+      );
+    } catch (e) {
+      this.logger.warn(
+        `[SMS] Failed to send package request alert to admins: ${e.message}`,
+      );
+    }
+  }
+
   private async sendExpiryNotice(sub: Subscription): Promise<void> {
     if (sub.finalExpiryNotified) {
       this.logger.debug(
@@ -952,8 +994,7 @@ export class SubscriptionsService {
       return;
     }
 
-    const packageName = sub.package?.name || 'internet';
-    const message = `PulseLynk: Your ${packageName} plan has expired. To continue browsing, please purchase a new package.`;
+    const message = `PulseLynk: Your subscription has ended. Choose a new plan to continue browsing. If the sign in portal does not appear, reconnect to the Wi-Fi network and try again.`;
 
     try {
       const sent = await this.smsService.sendSms(sub.user.phone, message);

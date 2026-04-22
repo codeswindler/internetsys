@@ -83,7 +83,7 @@ export class ExpiryJob {
         }
 
         try {
-          const msg = `PulseLynk: Your ${sub.package?.name} plan has expired. To continue browsing, please purchase a new package.`;
+          const msg = `PulseLynk: Your subscription has ended. Choose a new plan to continue browsing. If the sign in portal does not appear, reconnect to the Wi-Fi network and try again.`;
           const success = await this.smsService.sendSms(sub.user.phone, msg);
           if (success) {
             sub.finalExpiryNotified = true;

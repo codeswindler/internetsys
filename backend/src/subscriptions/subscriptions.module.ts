@@ -10,6 +10,7 @@ import { User } from '../entities/user.entity';
 import { Router } from '../entities/router.entity';
 import { RoutersModule } from '../routers/routers.module';
 import { DeviceSession } from '../entities/device-session.entity';
+import { Admin } from '../entities/admin.entity';
 
 import { TransactionsModule } from '../transactions/transactions.module';
 import { SmsModule } from '../sms/sms.module';
@@ -22,6 +23,7 @@ import { AccessPointsModule } from '../access-points/access-points.module';
       Package,
       User,
       Router,
+      Admin,
       DeviceSession,
     ]),
 

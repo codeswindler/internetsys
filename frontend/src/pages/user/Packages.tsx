@@ -186,6 +186,9 @@ export default function Packages() {
   const pendingPlans = allActiveSubs.filter((s: any) => !s.startedAt || new Date(s.expiresAt) <= new Date());
   const isAnyLive = !!liveSession;
   const activeSub = liveSession || (pendingPlans.length > 0 ? pendingPlans[0] : null);
+  const sortedPackages = Array.isArray(packages)
+    ? [...packages].sort((a: any, b: any) => Number(a.price || 0) - Number(b.price || 0))
+    : [];
 
 
 
@@ -257,7 +260,7 @@ export default function Packages() {
   });
 
   const purchaseMutation = useMutation({
-    mutationFn: (data: { packageId: string; routerId: string }) => api.post('/subscriptions/purchase', data),
+    mutationFn: (data: { packageId: string; routerId: string; notifyAdmins?: boolean }) => api.post('/subscriptions/purchase', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
@@ -360,13 +363,13 @@ export default function Packages() {
     if (paymentType === 'mpesa') {
       try {
         if (!stkPhone) return toast.error('Please enter M-Pesa phone number');
-        const sub = await api.post('/subscriptions/purchase', { packageId: selectedPkg.id, routerId }).then(res => res.data);
+        const sub = await api.post('/subscriptions/purchase', { packageId: selectedPkg.id, routerId, notifyAdmins: false }).then(res => res.data);
         stkPushMutation.mutate({ subId: sub.id, phone: stkPhone, amount: selectedPkg.price });
       } catch (err: any) {
         toast.error(err.response?.data?.message || 'Failed to initiate STK push');
       }
     } else {
-      purchaseMutation.mutate({ packageId: selectedPkg.id, routerId });
+      purchaseMutation.mutate({ packageId: selectedPkg.id, routerId, notifyAdmins: true });
     }
   };
 
@@ -399,7 +402,7 @@ export default function Packages() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {packages?.map((pkg: any) => (
+        {sortedPackages.map((pkg: any) => (
           <div 
             key={pkg.id} 
             className="glass-panel p-6 flex flex-col relative overflow-hidden transition-transform hover:-translate-y-1 cursor-pointer group"

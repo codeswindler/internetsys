@@ -63,6 +63,7 @@ export class VouchersService {
       user.id,
       voucher.package.id,
       routerId || undefined,
+      false,
     );
 
     // Activate immediately
