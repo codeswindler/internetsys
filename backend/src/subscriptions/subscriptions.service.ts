@@ -30,6 +30,7 @@ export class SubscriptionsService {
   private readonly stkStillProcessingCodes = new Set(['4999']);
   private readonly stkUserCancelledCodes = new Set(['1032']);
   private readonly staleStkVerificationMs = 5 * 60 * 1000;
+  private readonly startSessionLocks = new Map<string, Promise<any>>();
 
   constructor(
     @InjectRepository(Subscription) private subRepo: Repository<Subscription>,
@@ -1093,6 +1094,26 @@ export class SubscriptionsService {
   }
 
   async startSession(
+    userId: string,
+    id: string,
+    mac?: string,
+    ip?: string,
+    userAgent?: string,
+  ): Promise<any> {
+    const existingStart = this.startSessionLocks.get(id);
+    if (existingStart) {
+      this.logger.warn(`[START-LOCK] Reusing in-flight start request for sub ${id}.`);
+      return existingStart;
+    }
+
+    const startPromise = this.startSessionUnlocked(userId, id, mac, ip, userAgent)
+      .finally(() => this.startSessionLocks.delete(id));
+
+    this.startSessionLocks.set(id, startPromise);
+    return startPromise;
+  }
+
+  private async startSessionUnlocked(
     userId: string,
     id: string,
     mac?: string,
