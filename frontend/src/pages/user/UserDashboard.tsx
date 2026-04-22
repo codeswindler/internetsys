@@ -443,7 +443,7 @@ export default function UserDashboard() {
                       <div className="lg:col-span-8 space-y-4">
                         {isSubLive ? (
                           <>
-                            <div className="w-full bg-cyan-950/10 border border-cyan-500/20 rounded-2xl py-6 px-10 flex items-center justify-between group-hover:bg-cyan-900/10 transition-all duration-700 relative overflow-hidden shadow-inner">
+                            <div className="w-full bg-cyan-950/10 border border-cyan-500/20 rounded-2xl py-5 sm:py-6 px-5 sm:px-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 group-hover:bg-cyan-900/10 transition-all duration-700 relative overflow-hidden shadow-inner">
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
                               <div className="flex items-center gap-4 relative z-10">
                                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -467,7 +467,7 @@ export default function UserDashboard() {
                                   e.stopPropagation();
                                   startDiscovery(sub.id);
                                 }}
-                                className="relative z-20 flex items-center gap-2 px-4 py-2.5 bg-main/5 border border-main/10 rounded-xl hover:bg-main/10 hover:border-cyan-500/30 transition-all group/btn"
+                                className="relative z-20 w-full sm:w-auto flex flex-shrink-0 items-center justify-center gap-2 px-4 py-2.5 bg-main/5 border border-main/10 rounded-xl hover:bg-main/10 hover:border-cyan-500/30 transition-all group/btn"
                               >
                                 <Settings size={14} className="text-muted group-hover/btn:text-cyan-400 transition-colors" />
                                 <span className="text-[10px] font-black text-muted group-hover/btn:text-main uppercase tracking-widest">
@@ -489,18 +489,18 @@ export default function UserDashboard() {
                               </div>
                             </div>
 
-                            <div className="w-full flex items-center justify-between px-6 pt-4 mt-2">
-                               <div className="flex items-center gap-4">
-                                 <div className="flex items-center gap-2">
+                            <div className="w-full flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-3 sm:px-6 pt-4 mt-2">
+                               <div className="flex min-w-0 items-center justify-between sm:justify-start gap-3 sm:gap-4">
+                                 <div className="flex min-w-0 items-center gap-2">
                                    <Clock size={16} className="text-muted" />
-                                   <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em]">EXPIRES IN</span>
+                                   <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em] whitespace-nowrap">EXPIRES IN</span>
                                  </div>
                                  <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="lg" />
                                </div>
-                               <div className="flex items-center gap-2">
-                                 <div className="px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center gap-3">
+                               <div className="flex min-w-0 w-full sm:w-auto items-center justify-between sm:justify-end gap-2">
+                                 <div className="min-w-0 flex-1 sm:flex-none px-4 sm:px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center gap-3">
                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
-                                   <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">SYSTEM LIVE</span>
+                                   <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest whitespace-nowrap">SYSTEM LIVE</span>
                                  </div>
                                  <button
                                    onClick={(e) => {
