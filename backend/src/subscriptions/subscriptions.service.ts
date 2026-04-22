@@ -1130,6 +1130,10 @@ export class SubscriptionsService {
       throw new BadRequestException('You can only start your own subscription');
     }
 
+    this.logger.log(
+      `[START-STEP] Loaded sub ${sub.id} | status=${sub.status} | router=${sub.router?.name || 'n/a'} | mode=${sub.router?.connectionMode || 'n/a'} | mac=${mac || 'none'} | ip=${ip || 'none'}`,
+    );
+
     // Capture and Save Device Model if missing
     const model = userAgent ? this.parseUserAgent(userAgent) : 'Unknown Device';
 
@@ -1139,6 +1143,7 @@ export class SubscriptionsService {
         : sub.status === SubscriptionStatus.VERIFYING 
         ? 'Payment Verification in Progress' 
         : `Subscription is ${sub.status}. Please ensure payment is confirmed.`;
+      this.logger.warn(`[START-REJECT] Sub ${sub.id} rejected before router auth | status=${sub.status} | reason=${msg}`);
       throw new BadRequestException(msg);
     }
 
@@ -1188,23 +1193,32 @@ export class SubscriptionsService {
     }
 
     if (!finalMac && !finalIp) {
+      this.logger.warn(`[START-REJECT] Sub ${sub.id} missing resolved MAC/IP after identity lookup.`);
       throw new BadRequestException(
         'Missing MAC and IP address bindings to assign this package to.',
       );
     }
 
     if (!finalMac) {
+      this.logger.warn(`[START-REJECT] Sub ${sub.id} missing MAC after identity lookup | ip=${finalIp || 'none'}`);
       throw new BadRequestException(
         'Unable to identify your device on the hotspot. Please retry Link Device.',
       );
     }
 
+    this.logger.log(
+      `[START-STEP] Verifying hotspot host presence for sub ${sub.id} | mac=${finalMac} | ip=${finalIp || 'none'}`,
+    );
     const isPresent = await this.mikrotikService.verifyHostPresence(sub.router, finalMac, finalIp);
     if (!isPresent) {
+      this.logger.warn(
+        `[START-REJECT] Hotspot host not present for sub ${sub.id} | mac=${finalMac} | ip=${finalIp || 'none'}`,
+      );
       throw new BadRequestException(
         'CONNECTION REJECTED: You are not physically connected to the hotspot Wi-Fi network. Please connect to the Wi-Fi first to activate this package.',
       );
     }
+    this.logger.log(`[START-STEP] Hotspot host verified for sub ${sub.id}.`);
 
     await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
 
@@ -1219,6 +1233,9 @@ export class SubscriptionsService {
     );
 
     if (liveSub) {
+      this.logger.warn(
+        `[START-REJECT] Sub ${sub.id} blocked by live sub ${liveSub.id} (${liveSub.package?.name || 'unknown package'}).`,
+      );
       throw new BadRequestException(
         `CONFLICT: You already have a live session (${liveSub.package?.name}). You must wait for it to expire before starting a new one.`,
       );
@@ -1311,6 +1328,9 @@ export class SubscriptionsService {
 
     if (finalMac || finalIp) {
       try {
+        this.logger.log(
+          `[START-STEP] Authorizing router session for sub ${sub.id} | mac=${finalMac} | ip=${finalIp || 'none'}`,
+        );
         const loginRes = await this.mikrotikService.loginUser(
           sub.router,
           sub.mikrotikUsername,
