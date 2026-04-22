@@ -29,7 +29,6 @@ import {
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
-  buildHotspotConnectUrl,
   buildHotspotIdentifyUrl,
   hasStoredHotspotIdentity,
   storeHotspotContext,
@@ -335,24 +334,15 @@ export default function Packages() {
           paymentFlowLockedRef.current = false;
           setIsCreatingPayment(false);
           setSelectedPkg(null);
-          toast.success('Payment Verified! Connecting internet...', {
+          toast.success('Payment Verified! Head to Dashboard to Activate.', {
             id: `stk-success-${verifyingSubId}`,
             icon: '✅',
             duration: 5000,
           });
 
-          const selectedRouter = routers?.find((router: any) => router.id === routerId);
-          const routerGateway =
-            selectedRouter?.localGateway ||
-            localStorage.getItem('hotspot_router_id') ||
-            routers?.[0]?.localGateway;
-
-          window.location.replace(buildHotspotConnectUrl(
-            verifyingSubId,
-            '/user/dashboard',
-            routerGateway,
-            window.location.origin,
-          ));
+          setTimeout(() => {
+            navigate('/user/dashboard');
+          }, 2000);
           
           clearInterval(pollInterval);
           return;

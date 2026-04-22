@@ -101,11 +101,6 @@ export default function UserDashboard() {
 
   const startCurrentDevice = (subId: string) => {
     const identity = getStoredHotspotIdentity();
-    if (!identity.mac && !identity.ip) {
-      identifyCurrentDevice(subId);
-      return;
-    }
-
     startMutation.mutate({
       subId,
       mac: identity.mac,
