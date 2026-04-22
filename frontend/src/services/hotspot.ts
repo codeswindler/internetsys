@@ -98,6 +98,12 @@ export const getStoredHotspotIdentity = () => ({
   ip: localStorage.getItem('hotspot_ip') || undefined,
 });
 
+export const clearStoredHotspotIdentity = () => {
+  localStorage.removeItem('hotspot_mac');
+  localStorage.removeItem('hotspot_ip');
+  localStorage.removeItem(HOTSPOT_IDENTITY_UPDATED_AT_KEY);
+};
+
 const normalizeMac = (mac?: string | null) =>
   mac ? mac.replace(/[^a-fA-F0-9]/g, '').toUpperCase() : '';
 

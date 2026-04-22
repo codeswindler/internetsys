@@ -6,6 +6,7 @@ import api from '../../services/api';
 import {
   buildHotspotIdentifyUrl,
   clearHotspotConnectContext,
+  clearStoredHotspotIdentity,
   getStoredHotspotIdentity,
   readHotspotConnectContext,
   resolveHotspotReleaseUrl,
@@ -140,6 +141,7 @@ export default function HotspotConnect() {
         }
 
         if (shouldTriggerHotspotIdentify(err)) {
+          clearStoredHotspotIdentity();
           setError(
             'We could not confirm this device on the hotspot yet. Please reopen the hotspot login page and try again.',
           );

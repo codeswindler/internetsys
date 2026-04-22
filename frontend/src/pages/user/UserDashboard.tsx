@@ -8,6 +8,7 @@ import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
   buildHotspotConnectUrl,
+  clearStoredHotspotIdentity,
   consumeHotspotDeviceLimitContext,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
@@ -222,6 +223,7 @@ export default function UserDashboard() {
           .then(res => setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
           .catch(() => setDeviceManager(prev => ({ ...prev, isScanning: false })));
       } else if (variables.currentDevice && shouldTriggerHotspotIdentify(err)) {
+        clearStoredHotspotIdentity();
         identifyCurrentDevice(variables.subId);
       } else {
         toast.error(err.response?.data?.message || 'Failed to link device');

@@ -8,6 +8,7 @@ import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
   buildHotspotConnectUrl,
+  clearStoredHotspotIdentity,
   consumeHotspotDeviceLimitContext,
   getStoredHotspotIdentity,
   hasStoredHotspotIdentity,
@@ -136,6 +137,7 @@ export default function Subscriptions() {
         );
         setShowDiscovery(true);
       } else if (variables.currentDevice && shouldTriggerHotspotIdentify(err)) {
+        clearStoredHotspotIdentity();
         startDiscovery(variables.subId);
       } else {
         toast.error(err.response?.data?.message || 'Failed to prepare device connection');
