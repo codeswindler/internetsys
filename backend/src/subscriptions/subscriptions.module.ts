@@ -13,6 +13,7 @@ import { DeviceSession } from '../entities/device-session.entity';
 
 import { TransactionsModule } from '../transactions/transactions.module';
 import { SmsModule } from '../sms/sms.module';
+import { AccessPointsModule } from '../access-points/access-points.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { SmsModule } from '../sms/sms.module';
     ]),
 
     RoutersModule, // To use MikrotikService
+    AccessPointsModule,
     TransactionsModule,
     SmsModule,
   ],

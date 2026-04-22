@@ -21,6 +21,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { TransactionMethod } from '../entities/transaction.entity';
 import { MpesaService } from './mpesa.service';
 import { SmsService } from '../sms/sms.service';
+import { AccessPointsService } from '../access-points/access-points.service';
 
 @Injectable()
 export class SubscriptionsService {
@@ -40,6 +41,7 @@ export class SubscriptionsService {
     private mpesaService: MpesaService,
     private transactionsService: TransactionsService,
     private smsService: SmsService,
+    private accessPointsService: AccessPointsService,
   ) {}
 
   /**
@@ -743,13 +745,19 @@ export class SubscriptionsService {
     reason: 'cancel' | 'expiry',
   ): Promise<void> {
     const seenIdentities = new Set<string>();
+    const apKickMacs = new Set<string>();
     const scopeLabel = reason.toUpperCase();
+
+    const rememberApKickMac = (mac?: string | null) => {
+      if (mac) apKickMacs.add(mac);
+    };
 
     if (sub.deviceSessions && sub.deviceSessions.length > 0) {
       for (const session of sub.deviceSessions) {
         const sessionIp = session.ipAddress || undefined;
         const sessionMac = session.macAddress || undefined;
         const identityKey = `${sessionMac || ''}|${sessionIp || ''}`;
+        rememberApKickMac(sessionMac);
 
         if ((sessionIp || sessionMac) && !seenIdentities.has(identityKey)) {
           try {
@@ -776,6 +784,7 @@ export class SubscriptionsService {
     const fallbackIp = sub.user?.lastIp || undefined;
     const fallbackMac = sub.user?.lastMac || undefined;
     const fallbackKey = `${fallbackMac || ''}|${fallbackIp || ''}`;
+    rememberApKickMac(fallbackMac);
 
     if ((fallbackIp || fallbackMac) && !seenIdentities.has(fallbackKey)) {
       try {
@@ -811,6 +820,16 @@ export class SubscriptionsService {
           `[${scopeLabel}] Username-only captive reset fallback failed for sub ${sub.id}: ${e.message}`,
         );
       }
+    }
+
+    for (const mac of apKickMacs) {
+      this.accessPointsService
+        .disconnectMac(mac, `${reason}:${sub.id}`)
+        .catch((e) =>
+          this.logger.warn(
+            `[${scopeLabel}] AP kick failed for ${mac} on sub ${sub.id}: ${e.message}`,
+          ),
+        );
     }
   }
 

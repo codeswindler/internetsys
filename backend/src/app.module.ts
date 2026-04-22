@@ -15,9 +15,11 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { SupportModule } from './support/support.module';
 import { SmsModule } from './sms/sms.module';
 import { AdminsModule } from './admins/admins.module';
+import { AccessPointsModule } from './access-points/access-points.module';
 import { Admin } from './entities/admin.entity';
 import { User } from './entities/user.entity';
 import { Router } from './entities/router.entity';
+import { AccessPoint } from './entities/access-point.entity';
 import { Package } from './entities/package.entity';
 import { Subscription } from './entities/subscription.entity';
 import { Voucher } from './entities/voucher.entity';
@@ -51,6 +53,7 @@ loadEnv({
         Admin,
         User,
         Router,
+        AccessPoint,
         Package,
         Subscription,
         Voucher,
@@ -73,6 +76,7 @@ loadEnv({
     SupportModule,
     SmsModule,
     AdminsModule,
+    AccessPointsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

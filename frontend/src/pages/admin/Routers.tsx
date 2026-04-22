@@ -16,11 +16,15 @@ export default function Routers() {
   const profilesRef = useRef<HTMLDivElement>(null);
 
   const [showModal, setShowModal] = useState(false);
+  const [showApModal, setShowApModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showApPassword, setShowApPassword] = useState(false);
   const [showVpnPassword, setShowVpnPassword] = useState(false);
   const [showCardPasswords, setShowCardPasswords] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingApId, setEditingApId] = useState<string | null>(null);
   const [expandedProfiles, setExpandedProfiles] = useState<Record<string, boolean>>({});
+  const [apKickMacs, setApKickMacs] = useState<Record<string, string>>({});
   
   const [formData, setFormData] = useState({ 
     name: '', 
@@ -36,6 +40,18 @@ export default function Routers() {
     localGateway: '10.5.50.1'
   });
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; onConfirm: () => void }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+  const [apFormData, setApFormData] = useState({
+    name: '',
+    provider: 'mikrotik_routeros',
+    host: '',
+    port: 8728,
+    apiUsername: '',
+    apiPasswordEncrypted: '',
+    isNated: false,
+    vpnIp: '',
+    isActive: true,
+    notes: '',
+  });
   
   // Profile Modal State
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -50,6 +66,12 @@ export default function Routers() {
   const { data: routers, isLoading } = useQuery({
     queryKey: ['routers'],
     queryFn: () => api.get('/routers').then(res => res.data),
+    refetchInterval: 10000,
+  });
+
+  const { data: accessPoints } = useQuery({
+    queryKey: ['access-points'],
+    queryFn: () => api.get('/access-points').then(res => res.data),
     refetchInterval: 10000,
   });
 
@@ -105,10 +127,54 @@ export default function Routers() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['routers'] }); toast.success('Router deleted'); },
   });
 
+  const createApMutation = useMutation({
+    mutationFn: (newAccessPoint: any) => api.post('/access-points', newAccessPoint),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['access-points'] }); closeApModal(); toast.success('AP controller added.'); },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to add AP controller'),
+  });
+
+  const updateApMutation = useMutation({
+    mutationFn: (updatedAccessPoint: any) => api.put(`/access-points/${editingApId}`, updatedAccessPoint),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['access-points'] }); closeApModal(); toast.success('AP controller updated'); },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update AP controller'),
+  });
+
+  const testApMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/access-points/${id}/test`).then(res => res.data),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['access-points'] });
+      if (data.success) toast.success('AP controller reachable');
+      else toast.error(`AP test failed: ${data.message}`, { duration: 5000 });
+    },
+    onError: () => toast.error('Unexpected error testing AP controller'),
+  });
+
+  const testApKickMutation = useMutation({
+    mutationFn: ({ id, mac }: { id: string; mac: string }) =>
+      api.post(`/access-points/${id}/test-kick`, { mac }).then(res => res.data),
+    onSuccess: (data: any) => {
+      if (data.success) toast.success(data.message || 'AP kick requested');
+      else toast.error(data.message || 'No matching station found', { duration: 5000 });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'AP kick test failed'),
+  });
+
+  const deleteApMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/access-points/${id}`),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['access-points'] }); toast.success('AP controller deleted'); },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete AP controller'),
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) updateMutation.mutate(formData);
     else createMutation.mutate(formData);
+  };
+
+  const handleApSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingApId) updateApMutation.mutate(apFormData);
+    else createApMutation.mutate(apFormData);
   };
 
   const openEditModal = (r: any) => {
@@ -146,6 +212,41 @@ export default function Routers() {
       vpnUsername: '',
       vpnPasswordEncrypted: '',
       localGateway: '10.5.50.1'
+    });
+  };
+
+  const openEditApModal = (ap: any) => {
+    setEditingApId(ap.id);
+    setApFormData({
+      name: ap.name || '',
+      provider: ap.provider || 'mikrotik_routeros',
+      host: ap.host || '',
+      port: ap.port || 8728,
+      apiUsername: ap.apiUsername || '',
+      apiPasswordEncrypted: ap.apiPasswordEncrypted || '',
+      isNated: ap.isNated || false,
+      vpnIp: ap.vpnIp || '',
+      isActive: ap.isActive ?? true,
+      notes: ap.notes || '',
+    });
+    setShowApModal(true);
+  };
+
+  const closeApModal = () => {
+    setShowApModal(false);
+    setEditingApId(null);
+    setShowApPassword(false);
+    setApFormData({
+      name: '',
+      provider: 'mikrotik_routeros',
+      host: '',
+      port: 8728,
+      apiUsername: '',
+      apiPasswordEncrypted: '',
+      isNated: false,
+      vpnIp: '',
+      isActive: true,
+      notes: '',
     });
   };
 
@@ -229,6 +330,12 @@ export default function Routers() {
           </button>
           <button className="btn-primary flex items-center gap-2" onClick={() => setShowModal(true)}>
             <Plus size={18} /> Add Router
+          </button>
+          <button
+            className="px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:text-white hover:border-cyan-400/70 transition-all flex items-center gap-2 text-sm font-bold"
+            onClick={() => setShowApModal(true)}
+          >
+            <Wifi size={18} /> Add AP Controller
           </button>
         </div>
       </div>
@@ -391,7 +498,152 @@ export default function Routers() {
         )}
       </div>
 
-      {/* ── Bandwidth Profiles Section ── */}
+      {/* AP Controllers Section */}
+      <div className="pt-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-lg font-bold flex items-center gap-2 text-main">
+              <Wifi size={18} className="text-cyan-400" /> AP Controllers
+            </h3>
+            <p className="text-sm text-muted mt-0.5">
+              Optional Wi-Fi client kick layer for captive portal reset after cancel or expiry.
+            </p>
+          </div>
+          <button
+            className="px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:text-white hover:border-cyan-400/70 transition-all flex items-center justify-center gap-2 text-sm font-bold"
+            onClick={() => setShowApModal(true)}
+          >
+            <Wifi size={15} /> Add AP Controller
+          </button>
+        </div>
+
+        {(accessPoints?.length || 0) > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {accessPoints?.map((ap: any) => {
+              const capabilities = ap.capabilities || {};
+              const kickMac = apKickMacs[ap.id] || '';
+              const isTestingKick = testApKickMutation.isPending;
+              return (
+                <div key={ap.id} className="glass-panel overflow-hidden flex flex-col">
+                  <div className="p-5 flex-1 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-white leading-tight">{ap.name}</h4>
+                        <p className="text-[11px] text-slate-500 font-mono uppercase mt-1">
+                          {String(ap.provider || '').replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded border ${ap.isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>
+                        {ap.isOnline ? 'Online' : 'Offline'}
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl bg-black/20 border border-white/5 p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-slate-500">Reachable At</span>
+                        <span className="font-mono text-slate-200 truncate">
+                          {(ap.isNated ? ap.vpnIp : ap.host) || 'Not set'}:{ap.port || 8728}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-slate-500">Driver</span>
+                        <span className={`font-bold ${ap.provider === 'mikrotik_routeros' ? 'text-cyan-300' : 'text-amber-300'}`}>
+                          {ap.provider === 'mikrotik_routeros' ? 'Active' : 'Registered fallback'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-slate-500">Last Check</span>
+                        <span className="font-mono text-slate-400">
+                          {ap.lastCheckedAt ? new Date(ap.lastCheckedAt).toLocaleString() : 'Never'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {ap.lastError && (
+                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-[11px] text-red-300 leading-relaxed">
+                        {ap.lastError}
+                      </div>
+                    )}
+
+                    {ap.provider === 'mikrotik_routeros' && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {['wifi', 'wireless', 'caps-man'].map(key => (
+                          <span
+                            key={key}
+                            className={`text-[10px] px-2 py-1 rounded-full border font-bold ${capabilities[key] ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' : 'bg-slate-800/60 text-slate-500 border-slate-700'}`}
+                          >
+                            {key}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="rounded-xl bg-cyan-500/[0.04] border border-cyan-500/10 p-3 space-y-2">
+                      <label className="block text-[10px] font-black text-cyan-300 uppercase tracking-widest">Test Client Kick</label>
+                      <div className="flex gap-2">
+                        <input
+                          className="min-w-0 flex-1 bg-slate-950/70 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:border-cyan-500 outline-none"
+                          value={kickMac}
+                          onChange={e => setApKickMacs(prev => ({ ...prev, [ap.id]: e.target.value }))}
+                          placeholder="BE:6A:40:F0:54:7F"
+                        />
+                        <button
+                          className="px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:text-white text-xs font-bold disabled:opacity-50"
+                          disabled={!kickMac.trim() || isTestingKick}
+                          onClick={() => testApKickMutation.mutate({ id: ap.id, mac: kickMac })}
+                        >
+                          Kick
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Safe test only disconnects the matching Wi-Fi station if this controller sees it.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-3 border-t border-white/5 bg-black/10 flex items-center justify-between">
+                    <div className="flex gap-3">
+                      <button className="text-cyan-400 hover:text-cyan-300 text-xs font-semibold flex items-center gap-1" onClick={() => testApMutation.mutate(ap.id)} disabled={testApMutation.isPending}>
+                        <RefreshCw size={13} className={testApMutation.isPending ? 'animate-spin' : ''} /> Test
+                      </button>
+                      <button className="text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1" onClick={() => openEditApModal(ap)}>
+                        <Edit size={13} /> Edit
+                      </button>
+                    </div>
+                    <button
+                      className="text-red-400 hover:text-red-300 text-xs font-semibold flex items-center gap-1"
+                      onClick={() => setConfirmState({
+                        isOpen: true,
+                        title: 'Delete AP Controller',
+                        message: 'Remove this AP controller from PulseLynk? Router hotspot auth will keep working; only the optional client-kick layer is removed.',
+                        onConfirm: () => { deleteApMutation.mutate(ap.id); setConfirmState(s => ({ ...s, isOpen: false })); }
+                      })}
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="glass-panel p-6 border border-dashed border-cyan-500/15 bg-cyan-500/[0.02]">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">
+                <Wifi size={18} />
+              </div>
+              <div>
+                <p className="font-bold text-slate-200">No AP controllers configured yet.</p>
+                <p className="text-sm text-slate-500 mt-1 max-w-3xl">
+                  Your hEX gateway can still revoke access and clear bypasses. Add the actual Wi-Fi AP/controller here when you want cancel/expiry to also force the phone to reconnect without toggling Wi-Fi.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Bandwidth Profiles Section */}
       <div ref={profilesRef} className="pt-4 scroll-mt-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -471,7 +723,183 @@ export default function Routers() {
         )}
       </div>
 
-      {/* ── Add/Edit Router Modal ── */}
+      {/* AP Controller Modal */}
+      {showApModal && createPortal(
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center p-4"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeApModal(); }}
+        >
+          <div className="glass-panel w-full max-w-3xl animate-fade-in bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-2xl font-bold text-white">
+                  {editingApId ? 'Edit AP Controller' : 'Add AP Controller'}
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Used only for optional Wi-Fi client reconnect after cancel or expiry.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApFormData({ ...apFormData, isActive: !apFormData.isActive })}
+                className={`px-3 py-1 text-xs font-bold rounded uppercase tracking-wider transition-colors border ${apFormData.isActive ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-slate-700 text-slate-400 border-slate-600'}`}
+              >
+                {apFormData.isActive ? 'Active' : 'Disabled'}
+              </button>
+            </div>
+
+            <form onSubmit={handleApSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] custom-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Controller Name</label>
+                    <input
+                      className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium"
+                      value={apFormData.name}
+                      onChange={e => setApFormData({ ...apFormData, name: e.target.value })}
+                      placeholder="Main Wi-Fi AP"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Controller Driver</label>
+                    <select
+                      className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all"
+                      value={apFormData.provider}
+                      onChange={e => setApFormData({ ...apFormData, provider: e.target.value })}
+                    >
+                      <option value="mikrotik_routeros">MikroTik RouterOS (active)</option>
+                      <option value="unifi">UniFi (registered fallback)</option>
+                      <option value="omada">Omada (registered fallback)</option>
+                      <option value="generic">Generic API (registered fallback)</option>
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      MikroTik RouterOS is active now. Other drivers are stored safely until we wire their APIs.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-bold text-orange-400 flex items-center gap-2">
+                        <AlertCircle size={16} /> Controller is behind NAT?
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setApFormData({ ...apFormData, isNated: !apFormData.isNated })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${apFormData.isNated ? 'bg-orange-500' : 'bg-slate-700'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${apFormData.isNated ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Enable if PulseLynk reaches this AP through the VPN instead of a public IP.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div className="flex gap-4">
+                    <div className="flex-[3]">
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                        {apFormData.isNated ? 'Public Host (optional)' : 'IP / Host'}
+                      </label>
+                      <input
+                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono"
+                        value={apFormData.host}
+                        onChange={e => setApFormData({ ...apFormData, host: e.target.value })}
+                        placeholder="192.168.88.2"
+                        required={!apFormData.isNated}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">Port</label>
+                      <input
+                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono"
+                        type="number"
+                        min="1"
+                        value={apFormData.port}
+                        onChange={e => setApFormData({ ...apFormData, port: parseInt(e.target.value) || 8728 })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {apFormData.isNated && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">Reachable VPN IP</label>
+                      <input
+                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono"
+                        value={apFormData.vpnIp}
+                        onChange={e => setApFormData({ ...apFormData, vpnIp: e.target.value })}
+                        placeholder="10.8.0.51"
+                        required={apFormData.isNated}
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">API Username</label>
+                      <input
+                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono"
+                        value={apFormData.apiUsername}
+                        onChange={e => setApFormData({ ...apFormData, apiUsername: e.target.value })}
+                        placeholder="admin"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">API Password</label>
+                      <div className="relative">
+                        <input
+                          className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 pr-12 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium"
+                          type={showApPassword ? 'text' : 'password'}
+                          value={apFormData.apiPasswordEncrypted}
+                          onChange={e => setApFormData({ ...apFormData, apiPasswordEncrypted: e.target.value })}
+                          placeholder={editingApId ? 'Leave blank to keep' : '********'}
+                          required={!editingApId}
+                        />
+                        <button type="button" onClick={() => setShowApPassword(!showApPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-white transition-colors">
+                          {showApPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Notes</label>
+                    <textarea
+                      className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all min-h-24"
+                      value={apFormData.notes}
+                      onChange={e => setApFormData({ ...apFormData, notes: e.target.value })}
+                      placeholder="Where this AP lives, which SSID it serves, or controller notes."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/10 text-xs text-cyan-200/70 leading-relaxed">
+                This does not replace hotspot auth. It only gives PulseLynk a way to ask the AP/controller to reconnect a client after access has already been revoked.
+              </div>
+
+              <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-white/5">
+                <button type="button" className="px-6 py-2.5 rounded-lg font-bold text-slate-400 hover:text-white" onClick={closeApModal}>Cancel</button>
+                <button
+                  type="submit"
+                  className="px-8 py-2.5 rounded-lg font-bold bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg transition-all active:scale-95 disabled:opacity-60"
+                  disabled={createApMutation.isPending || updateApMutation.isPending}
+                >
+                  {(createApMutation.isPending || updateApMutation.isPending) ? 'Saving...' : (editingApId ? 'Save AP Controller' : 'Add AP Controller')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {/* Add/Edit Router Modal */}
       {showModal && createPortal(
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center p-4"
@@ -756,7 +1184,7 @@ export default function Routers() {
         message={confirmState.message}
         onConfirm={confirmState.onConfirm}
         onCancel={() => setConfirmState(s => ({ ...s, isOpen: false }))}
-        isLoading={deleteMutation.isPending}
+        isLoading={deleteMutation.isPending || deleteApMutation.isPending}
       />
     </div>
   );
