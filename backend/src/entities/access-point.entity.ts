@@ -28,13 +28,13 @@ export class AccessPoint {
   })
   provider: AccessPointProvider;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   host: string | null;
 
   @Column({ default: 8728 })
   port: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   apiUsername: string | null;
 
   @Column({ type: 'text', nullable: true })
@@ -43,7 +43,7 @@ export class AccessPoint {
   @Column({ default: false })
   isNated: boolean;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   vpnIp: string | null;
 
   @Column({ default: true })
