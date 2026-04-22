@@ -1142,25 +1142,17 @@ export class SubscriptionsService {
       throw new BadRequestException(msg);
     }
 
-    // LAZY PROVISIONING: Create on MikroTik ONLY if it's the first time (status was PAID)
-    if (sub.status === SubscriptionStatus.PAID) {
-      this.logger.log(`[LAZY-PROV] Provisioning router ${sub.router.name} for sub ${sub.id}...`);
+    // PPPoE still needs a secret before start. Hotspot users are upserted by
+    // loginUser after device validation, so retries cannot touch the router early.
+    if (sub.status === SubscriptionStatus.PAID && sub.router.connectionMode === 'pppoe') {
+      this.logger.log(`[LAZY-PROV] Provisioning PPPoE secret on ${sub.router.name} for sub ${sub.id}...`);
       try {
-        if (sub.router.connectionMode === 'pppoe') {
-          await this.mikrotikService.createPppoeSecret(
-            sub.router,
-            sub.mikrotikUsername,
-            sub.mikrotikPassword,
-            sub.package.bandwidthProfile,
-          );
-        } else {
-          await this.mikrotikService.createHotspotUser(
-            sub.router,
-            sub.mikrotikUsername,
-            sub.mikrotikPassword,
-            sub.package.bandwidthProfile,
-          );
-        }
+        await this.mikrotikService.createPppoeSecret(
+          sub.router,
+          sub.mikrotikUsername,
+          sub.mikrotikPassword,
+          sub.package.bandwidthProfile,
+        );
       } catch (error: any) {
         this.logger.error(`[LAZY-PROV] Provisioning failed: ${error.message}`);
         throw new BadRequestException(`Router connection failed: ${error.message}`);
