@@ -7,7 +7,6 @@ import {
   Wifi, 
   MapPin, 
   Clock, 
-  ArrowRight, 
   Activity, 
   ExternalLink, 
   Zap, 
@@ -49,7 +48,6 @@ export default function Packages() {
   const [stkPhone, setStkPhone] = useState(localStorage.getItem('phone') || '');
   const [traffic, setTraffic] = useState<{ downloadSpeed: string, uploadSpeed: string }>({ downloadSpeed: '0 bps', uploadSpeed: '0 bps' });
   const lastTraffic = useRef<{ bytesIn: number, bytesOut: number, time: number } | null>(null);
-  const [showScroll, setShowScroll] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyingSubId, setVerifyingSubId] = useState<string | null>(null);
   const [pollCount, setPollCount] = useState(0);
@@ -58,13 +56,6 @@ export default function Packages() {
   const paymentFlowLockedRef = useRef(false);
   const handledStkSubRef = useRef<string | null>(null);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => setShowScroll(window.scrollY > 300);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
 
   const { data: packages, isLoading: pkgsLoading } = useQuery({
     queryKey: ['packages', 'active'],
@@ -658,7 +649,7 @@ export default function Packages() {
                       <span className="text-slate-900 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">Phone Number:</span>
                       <input 
                         type="tel"
-                        className="w-full bg-slate-50 dark:bg-[rgba(15,23,42,0.8)] border border-slate-400 dark:border-[rgba(255,255,255,0.1)] focus:border-emerald-500 dark:focus:border-green-400 rounded-xl p-3 text-slate-950 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-500 font-mono text-lg tracking-widest shadow-inner outline-none transition-all caret-emerald-600"
+                        className="w-full bg-slate-50 dark:bg-[rgba(15,23,42,0.8)] border border-slate-400 dark:border-[rgba(255,255,255,0.1)] focus:border-emerald-500 dark:focus:border-green-400 rounded-xl p-3 !text-slate-950 dark:!text-white [-webkit-text-fill-color:#020617] dark:[-webkit-text-fill-color:#ffffff] placeholder:text-slate-500 dark:placeholder:text-slate-500 font-mono text-lg tracking-widest shadow-inner outline-none transition-all caret-emerald-600"
                         placeholder="254712345678"
                         value={stkPhone}
                         onChange={(e) => setStkPhone(e.target.value)}
@@ -682,14 +673,6 @@ export default function Packages() {
             </form>
           </div>
         </div>
-      )}
-      {showScroll && (
-        <button 
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="fixed bottom-8 right-8 p-4 bg-cyan-600/80 hover:bg-cyan-500 text-white rounded-full shadow-lg shadow-cyan-900/40 backdrop-blur-md z-[100] transition-all hover:scale-110 active:scale-95 animate-fade-in"
-        >
-          <ArrowRight className="-rotate-90" size={24} />
-        </button>
       )}
     </div>
   );
