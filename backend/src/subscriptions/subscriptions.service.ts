@@ -1125,6 +1125,17 @@ export class SubscriptionsService {
       .getMany();
   }
 
+  private async getRecentSessionsForSubscription(
+    subId: string,
+  ): Promise<DeviceSession[]> {
+    return this.sessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.subscription', 'subscription')
+      .where('subscription.id = :subId', { subId })
+      .orderBy('session.updatedAt', 'DESC')
+      .getMany();
+  }
+
   private async getActiveSessionsForUserMac(
     userId: string,
     macAddress: string,
@@ -1148,6 +1159,21 @@ export class SubscriptionsService {
       const bTime = (b.updatedAt || b.createdAt)?.getTime?.() || 0;
       return bTime - aTime;
     })[0];
+  }
+
+  private buildConnectedDevicesPayload(
+    sessions: Array<
+      Pick<DeviceSession, 'id' | 'macAddress' | 'ipAddress' | 'deviceModel' | 'createdAt'>
+    >,
+    packageName?: string,
+  ) {
+    return sessions.map((session) => ({
+      id: session.id,
+      mac: session.macAddress,
+      ip: session.ipAddress,
+      model: session.deviceModel || `${packageName || 'Device'} (Matched)`,
+      connectedAt: session.createdAt,
+    }));
   }
 
   async startSession(
@@ -1223,32 +1249,67 @@ export class SubscriptionsService {
 
     // Resolve the current device from the router itself so device-limit state
     // and "this device" UI stay aligned with the actual connected hardware.
-    const currentSubActiveSessions = await this.getActiveSessionsForSubscription(
-      sub.id,
+    const currentSubSessions = await this.getRecentSessionsForSubscription(sub.id);
+    const currentSubActiveSessions = currentSubSessions.filter(
+      (session) => session.isActive,
     );
+    const maxAllowed = sub.package.maxDevices || 1;
     const preferredActiveSession =
       sub.status === SubscriptionStatus.ACTIVE
         ? this.pickPreferredActiveSession(currentSubActiveSessions)
         : undefined;
+    const preferredKnownSession =
+      sub.status === SubscriptionStatus.ACTIVE && !preferredActiveSession
+        ? this.pickPreferredActiveSession(currentSubSessions)
+        : preferredActiveSession;
+    const lastKnownSessionFallback =
+      sub.status === SubscriptionStatus.ACTIVE &&
+      maxAllowed === 1 &&
+      !preferredKnownSession &&
+      sub.user?.lastMac
+        ? {
+            id: `last-known:${sub.id}`,
+            macAddress: sub.user.lastMac,
+            ipAddress: sub.user.lastIp,
+            deviceModel: 'Last Authorized Device',
+            createdAt: sub.updatedAt || sub.createdAt,
+          }
+        : undefined;
+    const limitReferenceSessions =
+      currentSubActiveSessions.length > 0
+        ? currentSubActiveSessions
+        : sub.status === SubscriptionStatus.ACTIVE &&
+            maxAllowed === 1 &&
+            preferredKnownSession
+          ? [preferredKnownSession]
+          : lastKnownSessionFallback
+            ? [lastKnownSessionFallback]
+          : [];
     let finalIp = ip || undefined;
     let finalMac = mac || undefined;
 
-    if (preferredActiveSession) {
-      const reusedMac = !finalMac && preferredActiveSession.macAddress;
+    const hasExplicitDeviceIdentity =
+      !!mac || (!!ip && !this.isPublicIpv4(ip));
+    const canReuseKnownSessionIdentity =
+      !!preferredKnownSession &&
+      (hasExplicitDeviceIdentity || currentSubActiveSessions.length === 0);
+
+    if (canReuseKnownSessionIdentity && preferredKnownSession) {
+      const reusedMac = !finalMac && preferredKnownSession.macAddress;
       const reusedIp =
         (!finalIp || this.isPublicIpv4(finalIp)) &&
-        preferredActiveSession.ipAddress;
+        preferredKnownSession.ipAddress;
 
       if (reusedMac) {
-        finalMac = preferredActiveSession.macAddress;
+        finalMac = preferredKnownSession.macAddress;
       }
       if (reusedIp) {
-        finalIp = preferredActiveSession.ipAddress;
+        finalIp = preferredKnownSession.ipAddress;
       }
 
       if (reusedMac || reusedIp) {
         this.logger.log(
-          `[START-STEP] Reusing active session identity for sub ${sub.id} | mac=${preferredActiveSession.macAddress || 'none'} | ip=${preferredActiveSession.ipAddress || 'none'}`,
+          `[START-STEP] Reusing known session identity for sub ${sub.id} | mac=${preferredKnownSession.macAddress || 'none'} | ip=${preferredKnownSession.ipAddress || 'none'}`,
         );
       }
     }
@@ -1304,8 +1365,6 @@ export class SubscriptionsService {
     }
     this.logger.log(`[START-STEP] Hotspot host verified for sub ${sub.id}.`);
 
-    await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
-
     // SEQUENTIAL CHECK: Check if any OTHER subscription is already live
     const allSubs = await this.findAllActive(sub.user.id);
     const liveSub = allSubs.find(
@@ -1346,21 +1405,22 @@ export class SubscriptionsService {
         }
       }
 
-      const existingSessionInSub = currentSubActiveSessions.find((s) => s.macAddress === finalMac);
+      const existingSessionInSub = currentSubSessions.find(
+        (s) => s.macAddress === finalMac,
+      );
+      const matchingLimitSession = limitReferenceSessions.find(
+        (s) => s.macAddress === finalMac,
+      );
 
       if (!existingSessionInSub) {
         // Check Limit
-        const activeDeviceCount = currentSubActiveSessions.length;
-        const maxAllowed = sub.package.maxDevices || 1;
+        const activeDeviceCount = limitReferenceSessions.length;
 
-        if (activeDeviceCount >= maxAllowed) {
-          const connectedDevices = currentSubActiveSessions.map((s) => ({
-            id: s.id,
-            mac: s.macAddress,
-            ip: s.ipAddress,
-            model: s.deviceModel || `${sub.package?.name || 'Device'} (Matched)`,
-            connectedAt: s.createdAt,
-          }));
+        if (activeDeviceCount >= maxAllowed && !matchingLimitSession) {
+          const connectedDevices = this.buildConnectedDevicesPayload(
+            limitReferenceSessions,
+            sub.package?.name,
+          );
 
           throw new ConflictException({
             message: `You've reached your limit of ${maxAllowed} device(s). Disconnect one below to continue.`,
@@ -1382,15 +1442,18 @@ export class SubscriptionsService {
         await this.sessionRepo.save(newSession);
       } else {
         // Update existing session
+        const wasAlreadyActive = existingSessionInSub.isActive;
         existingSessionInSub.ipAddress = finalIp || existingSessionInSub.ipAddress;
         existingSessionInSub.deviceModel = model;
         existingSessionInSub.isActive = true;
         await this.sessionRepo.save(existingSessionInSub);
-        reusedCurrentActiveSession = sub.status === SubscriptionStatus.ACTIVE;
+        reusedCurrentActiveSession =
+          sub.status === SubscriptionStatus.ACTIVE && wasAlreadyActive;
       }
     }
 
     if (reusedCurrentActiveSession) {
+      await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
       const savedSub = await this.subRepo.save(sub);
       this.logger.log(
         `[CONNECT-REUSE] Sub ${savedSub.id} already active for MAC ${finalMac} | IP: ${finalIp || 'none'} | Expires: ${savedSub.expiresAt?.toISOString() || 'pending'}`,
@@ -1459,6 +1522,7 @@ export class SubscriptionsService {
     }
 
     const savedSub = await this.subRepo.save(sub);
+    await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
 
     if (activatedNow) {
       await this.sendActivationConfirmationNotice(savedSub);

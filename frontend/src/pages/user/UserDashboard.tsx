@@ -49,6 +49,29 @@ export default function UserDashboard() {
   const getActiveDeviceSessions = (sub?: any) =>
     sub?.deviceSessions?.filter((session: any) => session.isActive) || [];
 
+  const getLatestKnownDeviceSession = (sub?: any) =>
+    [...(sub?.deviceSessions || [])].sort((a: any, b: any) => {
+      const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime();
+      const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime();
+      return bTime - aTime;
+    })[0];
+
+  const getVisibleDeviceSessions = (sub?: any) => {
+    const activeSessions = getActiveDeviceSessions(sub);
+    if (activeSessions.length > 0) {
+      return activeSessions;
+    }
+
+    if (sub?.status?.toLowerCase() === 'active') {
+      const latestSession = getLatestKnownDeviceSession(sub);
+      if (latestSession) {
+        return [{ ...latestSession, __fallback: true }];
+      }
+    }
+
+    return [];
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const deviceLimitRequested = params.get('device_limit') === '1';
@@ -119,7 +142,7 @@ export default function UserDashboard() {
       open: true,
       subId,
       isScanning: true,
-      connectedDevices: getActiveDeviceSessions(targetSub),
+      connectedDevices: getVisibleDeviceSessions(targetSub),
       discoveredHosts: [],
       maxDevices: targetSub?.package?.maxDevices || 1,
       pendingSubId: subId
@@ -167,7 +190,7 @@ export default function UserDashboard() {
     const latestSub = subHistory.find((sub: any) => sub.id === deviceManager.subId);
     if (!latestSub) return;
 
-    const latestConnectedDevices = getActiveDeviceSessions(latestSub);
+    const latestConnectedDevices = getVisibleDeviceSessions(latestSub);
     const latestMaxDevices = latestSub.package?.maxDevices || deviceManager.maxDevices || 1;
 
     setDeviceManager((prev) => {
@@ -293,7 +316,7 @@ export default function UserDashboard() {
       open: true,
       subId: targetSub.id,
       isScanning: true,
-      connectedDevices: getActiveDeviceSessions(targetSub),
+      connectedDevices: getVisibleDeviceSessions(targetSub),
       discoveredHosts: [],
       maxDevices: targetSub.package?.maxDevices || 1,
       pendingSubId: null
@@ -713,6 +736,11 @@ export default function UserDashboard() {
                           <div>
                             <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">{device.model || 'Connected Device'}</p>
                             <p className="text-[10px] text-slate-400 dark:text-muted font-mono tracking-widest">{device.macAddress || device.mac || 'No MAC'}</p>
+                            {device.__fallback && (
+                              <p className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-amber-500">
+                                Last Authorized Device
+                              </p>
+                            )}
                           </div>
                         </div>
                         <button
