@@ -206,11 +206,26 @@ export class SubscriptionsService {
       } 
 
       if (this.isStkStillProcessing(result)) {
+        await this.refreshStkVerification(sub.id);
         return { success: false, status: sub.status, processing: true, result };
       }
 
       return this.markStkPaymentFailed(sub, result);
     } catch (e: any) {
+      const detail = `${e?.message || ''}`.toLowerCase();
+      if (
+        sub.status === SubscriptionStatus.VERIFYING &&
+        detail.includes('temporarily unavailable')
+      ) {
+        await this.refreshStkVerification(sub.id);
+        return {
+          success: false,
+          status: sub.status,
+          processing: true,
+          transientError: true,
+          failureReason: 'Safaricom status checks are temporarily unavailable. Verification is still in progress.',
+        };
+      }
       this.logger.error(`STK Status Query failed for ${subId}: ${e.message}`);
       throw e;
     }
@@ -1093,6 +1108,48 @@ export class SubscriptionsService {
     };
   }
 
+  private async refreshStkVerification(subId: string): Promise<void> {
+    await this.subRepo.update(subId, {
+      status: SubscriptionStatus.VERIFYING,
+      updatedAt: new Date(),
+    });
+  }
+
+  private async getActiveSessionsForSubscription(subId: string): Promise<DeviceSession[]> {
+    return this.sessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.subscription', 'subscription')
+      .where('subscription.id = :subId', { subId })
+      .andWhere('session.isActive = :isActive', { isActive: true })
+      .orderBy('session.updatedAt', 'DESC')
+      .getMany();
+  }
+
+  private async getActiveSessionsForUserMac(
+    userId: string,
+    macAddress: string,
+  ): Promise<DeviceSession[]> {
+    return this.sessionRepo
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.subscription', 'subscription')
+      .leftJoin('subscription.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('session.isActive = :isActive', { isActive: true })
+      .andWhere('session.macAddress = :macAddress', { macAddress })
+      .orderBy('session.updatedAt', 'DESC')
+      .getMany();
+  }
+
+  private pickPreferredActiveSession(
+    sessions: DeviceSession[],
+  ): DeviceSession | undefined {
+    return [...sessions].sort((a, b) => {
+      const aTime = (a.updatedAt || a.createdAt)?.getTime?.() || 0;
+      const bTime = (b.updatedAt || b.createdAt)?.getTime?.() || 0;
+      return bTime - aTime;
+    })[0];
+  }
+
   async startSession(
     userId: string,
     id: string,
@@ -1166,8 +1223,35 @@ export class SubscriptionsService {
 
     // Resolve the current device from the router itself so device-limit state
     // and "this device" UI stay aligned with the actual connected hardware.
+    const currentSubActiveSessions = await this.getActiveSessionsForSubscription(
+      sub.id,
+    );
+    const preferredActiveSession =
+      sub.status === SubscriptionStatus.ACTIVE
+        ? this.pickPreferredActiveSession(currentSubActiveSessions)
+        : undefined;
     let finalIp = ip || undefined;
     let finalMac = mac || undefined;
+
+    if (preferredActiveSession) {
+      const reusedMac = !finalMac && preferredActiveSession.macAddress;
+      const reusedIp =
+        (!finalIp || this.isPublicIpv4(finalIp)) &&
+        preferredActiveSession.ipAddress;
+
+      if (reusedMac) {
+        finalMac = preferredActiveSession.macAddress;
+      }
+      if (reusedIp) {
+        finalIp = preferredActiveSession.ipAddress;
+      }
+
+      if (reusedMac || reusedIp) {
+        this.logger.log(
+          `[START-STEP] Reusing active session identity for sub ${sub.id} | mac=${preferredActiveSession.macAddress || 'none'} | ip=${preferredActiveSession.ipAddress || 'none'}`,
+        );
+      }
+    }
 
     const shouldInferHostFromRouter =
       sub.router.connectionMode !== 'pppoe' &&
@@ -1246,14 +1330,10 @@ export class SubscriptionsService {
     if (finalMac) {
       this.logger.log(`[GHOST-BUSTER] Investigating MAC ${finalMac} for ghost sessions...`);
       
-      const existingGlobalSessions = await this.sessionRepo.find({
-        where: { 
-          macAddress: finalMac,
-          isActive: true,
-          subscription: { user: { id: sub.user.id } }
-        },
-        relations: ['subscription']
-      });
+      const existingGlobalSessions = await this.getActiveSessionsForUserMac(
+        sub.user.id,
+        finalMac,
+      );
       const staleGlobalSessions = existingGlobalSessions.filter(
         (s) => s.subscription?.id !== sub.id,
       );
@@ -1266,14 +1346,6 @@ export class SubscriptionsService {
         }
       }
 
-      // Re-fetch current sub active sessions to ensure accurate limit check
-      const currentSubActiveSessions = await this.sessionRepo.find({
-        where: { 
-          subscription: { id: sub.id },
-          isActive: true 
-        }
-      });
-
       const existingSessionInSub = currentSubActiveSessions.find((s) => s.macAddress === finalMac);
 
       if (!existingSessionInSub) {
@@ -1282,21 +1354,11 @@ export class SubscriptionsService {
         const maxAllowed = sub.package.maxDevices || 1;
 
         if (activeDeviceCount >= maxAllowed) {
-          // Robust fallback: Query all active sessions for this user on this specific router
-          // to ensure the user can always see what to disconnect.
-          const allUserSessions = await this.sessionRepo.find({
-            where: { 
-              subscription: { user: { id: sub.user.id } },
-              isActive: true 
-            },
-            relations: ['subscription', 'subscription.package'],
-          });
-
-          const connectedDevices = allUserSessions.map((s) => ({
+          const connectedDevices = currentSubActiveSessions.map((s) => ({
             id: s.id,
             mac: s.macAddress,
             ip: s.ipAddress,
-            model: `${s.subscription?.package?.name || 'Device'} (${s.deviceModel || 'Matched'})`,
+            model: s.deviceModel || `${sub.package?.name || 'Device'} (Matched)`,
             connectedAt: s.createdAt,
           }));
 

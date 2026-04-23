@@ -46,6 +46,9 @@ export default function UserDashboard() {
     currentUser: any 
   }>();
 
+  const getActiveDeviceSessions = (sub?: any) =>
+    sub?.deviceSessions?.filter((session: any) => session.isActive) || [];
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const deviceLimitRequested = params.get('device_limit') === '1';
@@ -111,12 +114,12 @@ export default function UserDashboard() {
   };
 
   const startDiscovery = async (subId: string) => {
-    const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
+    const targetSub = subHistory.find((sub: any) => sub.id === subId);
     setDeviceManager({
       open: true,
       subId,
       isScanning: true,
-      connectedDevices: targetSub?.deviceSessions?.filter((s: any) => s.isActive) || [],
+      connectedDevices: getActiveDeviceSessions(targetSub),
       discoveredHosts: [],
       maxDevices: targetSub?.package?.maxDevices || 1,
       pendingSubId: subId
@@ -157,6 +160,41 @@ export default function UserDashboard() {
   const allActiveSubs = subHistory.filter((s: any) => 
     ['active', 'paid', 'pending', 'verified', 'allocated', 'awaiting_approval', 'verifying'].includes(s.status?.toLowerCase())
   );
+
+  useEffect(() => {
+    if (!deviceManager.open || !deviceManager.subId) return;
+
+    const latestSub = subHistory.find((sub: any) => sub.id === deviceManager.subId);
+    if (!latestSub) return;
+
+    const latestConnectedDevices = getActiveDeviceSessions(latestSub);
+    const latestMaxDevices = latestSub.package?.maxDevices || deviceManager.maxDevices || 1;
+
+    setDeviceManager((prev) => {
+      if (!prev.open || prev.subId !== latestSub.id) {
+        return prev;
+      }
+
+      const prevIds = prev.connectedDevices
+        .map((device: any) => device.id)
+        .sort()
+        .join('|');
+      const nextIds = latestConnectedDevices
+        .map((device: any) => device.id)
+        .sort()
+        .join('|');
+
+      if (prevIds === nextIds && prev.maxDevices === latestMaxDevices) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        connectedDevices: latestConnectedDevices,
+        maxDevices: latestMaxDevices,
+      };
+    });
+  }, [deviceManager.open, deviceManager.subId, deviceManager.maxDevices, subHistory]);
 
   const activeSub = allActiveSubs.find(s => s.status === 'ACTIVE');
 
@@ -250,18 +288,19 @@ export default function UserDashboard() {
     }
   });
   const openDeviceManager = async (sub: any) => {
+    const targetSub = subHistory.find((item: any) => item.id === sub.id) || sub;
     setDeviceManager({
       open: true,
-      subId: sub.id,
+      subId: targetSub.id,
       isScanning: true,
-      connectedDevices: sub.deviceSessions?.filter((s: any) => s.isActive) || [],
+      connectedDevices: getActiveDeviceSessions(targetSub),
       discoveredHosts: [],
-      maxDevices: sub.package?.maxDevices || 1,
+      maxDevices: targetSub.package?.maxDevices || 1,
       pendingSubId: null
     });
 
     try {
-      const res = await api.get(`/subscriptions/${sub.id}/discover-hosts`);
+      const res = await api.get(`/subscriptions/${targetSub.id}/discover-hosts`);
       setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false }));
     } catch (e) {
       setDeviceManager(prev => ({ ...prev, isScanning: false }));
