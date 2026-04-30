@@ -55,6 +55,7 @@ export default function Packages() {
   const initialDetectionRef = useRef(false);
   const paymentFlowLockedRef = useRef(false);
   const handledStkSubRef = useRef<string | null>(null);
+  const stkPollInFlightRef = useRef(false);
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
 
   const { data: packages, isLoading: pkgsLoading } = useQuery({
@@ -308,14 +309,38 @@ export default function Packages() {
     if (!isVerifying || !verifyingSubId) return;
 
     let attempts = 0;
-    const pollInterval = setInterval(async () => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const baseDelayMs = 4000;
+    const transientDelayMs = 6000;
+    const maxAttempts = 24;
+
+    const scheduleNext = (delayMs: number) => {
+      if (cancelled) return;
+      timer = setTimeout(runPoll, delayMs);
+    };
+
+    const runPoll = async () => {
+      if (cancelled || stkPollInFlightRef.current) {
+        scheduleNext(baseDelayMs);
+        return;
+      }
+
+      stkPollInFlightRef.current = true;
+
       try {
         const res = await api.get(`/subscriptions/${verifyingSubId}/stk-status`);
-        const { success, status, cancelled, failed, failureReason } = res.data;
+        const {
+          success,
+          status,
+          cancelled: paymentCancelled,
+          failed,
+          failureReason,
+          transientError,
+        } = res.data;
 
         if (success || status?.toLowerCase() === 'active' || status?.toLowerCase() === 'paid') {
           if (handledStkSubRef.current === verifyingSubId) {
-            clearInterval(pollInterval);
             return;
           }
 
@@ -334,12 +359,9 @@ export default function Packages() {
           setTimeout(() => {
             navigate('/user/dashboard');
           }, 2000);
-          
-          clearInterval(pollInterval);
           return;
-        } else if (failed || cancelled || status?.toLowerCase() === 'cancelled') {
+        } else if (failed || paymentCancelled || status?.toLowerCase() === 'cancelled') {
           if (handledStkSubRef.current === verifyingSubId) {
-            clearInterval(pollInterval);
             return;
           }
 
@@ -353,13 +375,12 @@ export default function Packages() {
           toast.error(failureReason || 'Payment failed. Please try again.', {
             id: `stk-failed-${verifyingSubId}`,
           });
-          clearInterval(pollInterval);
           return;
         }
 
         attempts += 1;
         setPollCount(attempts);
-        if (attempts > 30) { // Timeout after ~60s
+        if (attempts >= maxAttempts) {
           setIsVerifying(false);
           setVerifyingSubId(null);
           paymentFlowLockedRef.current = false;
@@ -367,14 +388,41 @@ export default function Packages() {
           toast.error('Payment timeout. If you paid, it will appear in your subscriptions shortly.', {
             id: `stk-timeout-${verifyingSubId}`,
           });
-          clearInterval(pollInterval);
+          return;
         }
+
+        scheduleNext(transientError ? transientDelayMs : baseDelayMs);
       } catch (e) {
         console.error('STK status poll failed', e);
-      }
-    }, 2000);
+        attempts += 1;
+        setPollCount(attempts);
 
-    return () => clearInterval(pollInterval);
+        if (attempts >= maxAttempts) {
+          setIsVerifying(false);
+          setVerifyingSubId(null);
+          paymentFlowLockedRef.current = false;
+          setIsCreatingPayment(false);
+          toast.error('Payment timeout. If you paid, it will appear in your subscriptions shortly.', {
+            id: `stk-timeout-${verifyingSubId}`,
+          });
+          return;
+        }
+
+        scheduleNext(transientDelayMs);
+      } finally {
+        stkPollInFlightRef.current = false;
+      }
+    };
+
+    runPoll();
+
+    return () => {
+      cancelled = true;
+      stkPollInFlightRef.current = false;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
   }, [isVerifying, verifyingSubId, navigate, queryClient]);
 
   const deleteSubMutation = useMutation({
@@ -515,11 +563,11 @@ export default function Packages() {
               <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-cyan-500 transition-all duration-500" 
-                  style={{ width: `${Math.min((pollCount / 30) * 100, 100)}%` }} 
+                  style={{ width: `${Math.min((pollCount / 24) * 100, 100)}%` }} 
                 />
               </div>
               <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                Waiting for callback... ({60 - pollCount * 2}s)
+                Waiting for confirmation... check {Math.min(pollCount + 1, 24)} of 24
               </p>
             </div>
           </div>

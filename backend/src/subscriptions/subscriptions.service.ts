@@ -31,6 +31,7 @@ export class SubscriptionsService {
   private readonly stkUserCancelledCodes = new Set(['1032']);
   private readonly staleStkVerificationMs = 5 * 60 * 1000;
   private readonly startSessionLocks = new Map<string, Promise<any>>();
+  private readonly stkStatusLocks = new Map<string, Promise<any>>();
 
   constructor(
     @InjectRepository(Subscription) private subRepo: Repository<Subscription>,
@@ -165,6 +166,21 @@ export class SubscriptionsService {
   }
 
   async checkStkStatus(subId: string): Promise<any> {
+    const existingStatusCheck = this.stkStatusLocks.get(subId);
+    if (existingStatusCheck) {
+      this.logger.warn(`[STK LOCK] Reusing in-flight STK status check for sub ${subId}.`);
+      return existingStatusCheck;
+    }
+
+    const statusPromise = this.checkStkStatusUnlocked(subId).finally(() =>
+      this.stkStatusLocks.delete(subId),
+    );
+
+    this.stkStatusLocks.set(subId, statusPromise);
+    return statusPromise;
+  }
+
+  private async checkStkStatusUnlocked(subId: string): Promise<any> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
       relations: ['user', 'package', 'router'],
