@@ -681,6 +681,51 @@ export class SubscriptionsService {
    * and removes the device from the MikroTik router's active/host tables.
    */
   async disconnectDevice(userId: string, sessionId: string): Promise<{ success: boolean; message: string }> {
+    if (sessionId.startsWith('last-known:')) {
+      const subId = sessionId.replace('last-known:', '');
+      const sub = await this.subRepo.findOne({
+        where: { id: subId },
+        relations: ['user', 'router', 'deviceSessions'],
+      });
+
+      if (!sub) throw new NotFoundException('Subscription not found');
+      if (sub.user?.id !== userId) {
+        throw new BadRequestException('You can only disconnect your own devices');
+      }
+
+      const activeSessions = (sub.deviceSessions || []).filter((deviceSession) => deviceSession.isActive);
+      if (activeSessions.length > 0) {
+        for (const deviceSession of activeSessions) {
+          deviceSession.isActive = false;
+        }
+        await this.sessionRepo.save(activeSessions);
+      }
+
+      if (sub.router && (sub.user?.lastMac || sub.user?.lastIp || sub.mikrotikUsername)) {
+        try {
+          await this.mikrotikService.forceLogoutHotspot(
+            sub.router,
+            sub.user?.lastIp || undefined,
+            sub.user?.lastMac || undefined,
+            sub.mikrotikUsername,
+          );
+          this.logger.log(
+            `[DISCONNECT] Applied fallback hotspot logout for sub ${sub.id} using last-known identity ${sub.user?.lastMac || 'unknown-mac'}.`,
+          );
+        } catch (e: any) {
+          this.logger.warn(
+            `[DISCONNECT] Fallback router cleanup failed for sub ${sub.id}: ${e.message}`,
+          );
+          throw new BadRequestException('Failed to disconnect the last authorized device. Please try again.');
+        }
+      }
+
+      return {
+        success: true,
+        message: `Last authorized device disconnected`,
+      };
+    }
+
     const session = await this.sessionRepo.findOne({
       where: { id: sessionId },
       relations: ['subscription', 'subscription.user', 'subscription.router'],
@@ -1287,7 +1332,7 @@ export class SubscriptionsService {
             id: `last-known:${sub.id}`,
             macAddress: sub.user.lastMac,
             ipAddress: sub.user.lastIp,
-            deviceModel: 'Last Authorized Device',
+            deviceModel: sub.user.deviceModel || 'Last Authorized Device',
             createdAt: sub.updatedAt || sub.createdAt,
           }
         : undefined;
@@ -1469,7 +1514,7 @@ export class SubscriptionsService {
     }
 
     if (reusedCurrentActiveSession) {
-      await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
+      await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp, model);
       const savedSub = await this.subRepo.save(sub);
       this.logger.log(
         `[CONNECT-REUSE] Sub ${savedSub.id} already active for MAC ${finalMac} | IP: ${finalIp || 'none'} | Expires: ${savedSub.expiresAt?.toISOString() || 'pending'}`,
@@ -1538,7 +1583,7 @@ export class SubscriptionsService {
     }
 
     const savedSub = await this.subRepo.save(sub);
-    await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp);
+    await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp, model);
 
     if (activatedNow) {
       await this.sendActivationConfirmationNotice(savedSub);
@@ -1722,7 +1767,12 @@ export class SubscriptionsService {
     sub.expiresAt = expiresAt;
   }
 
-  private async persistLatestDeviceIdentity(user: User, mac?: string, ip?: string) {
+  private async persistLatestDeviceIdentity(
+    user: User,
+    mac?: string,
+    ip?: string,
+    deviceModel?: string,
+  ) {
     let changed = false;
     if (mac && user.lastMac !== mac) {
       user.lastMac = mac;
@@ -1730,6 +1780,10 @@ export class SubscriptionsService {
     }
     if (ip && user.lastIp !== ip) {
       user.lastIp = ip;
+      changed = true;
+    }
+    if (deviceModel && user.deviceModel !== deviceModel) {
+      user.deviceModel = deviceModel;
       changed = true;
     }
 
