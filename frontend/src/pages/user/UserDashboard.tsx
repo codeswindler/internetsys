@@ -198,11 +198,21 @@ export default function UserDashboard() {
         return prev;
       }
 
+      const shouldPreserveConflictDevices =
+        latestConnectedDevices.length === 0 &&
+        prev.connectedDevices.length > 0 &&
+        !!prev.pendingSubId &&
+        prev.pendingSubId === latestSub.id;
+
+      const effectiveConnectedDevices = shouldPreserveConflictDevices
+        ? prev.connectedDevices
+        : latestConnectedDevices;
+
       const prevIds = prev.connectedDevices
         .map((device: any) => device.id)
         .sort()
         .join('|');
-      const nextIds = latestConnectedDevices
+      const nextIds = effectiveConnectedDevices
         .map((device: any) => device.id)
         .sort()
         .join('|');
@@ -213,7 +223,7 @@ export default function UserDashboard() {
 
       return {
         ...prev,
-        connectedDevices: latestConnectedDevices,
+        connectedDevices: effectiveConnectedDevices,
         maxDevices: latestMaxDevices,
       };
     });
