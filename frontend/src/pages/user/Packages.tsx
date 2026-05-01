@@ -38,7 +38,8 @@ import { format } from 'date-fns';
 export default function Packages() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const formRef = useRef<HTMLFormElement>(null);
+  const purchaseFormRef = useRef<HTMLFormElement>(null);
+  const stkPhoneInputRef = useRef<HTMLInputElement>(null);
   const { fireInternet } = useOutletContext<{ fireInternet: (u?: string, p?: string, options?: { subId?: string; routerIp?: string; redirectPath?: string; releaseOnly?: boolean; authorizationMode?: 'active-login' | 'bypass' }) => void }>();
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [routerId, setRouterId] = useState('');
@@ -156,6 +157,32 @@ export default function Packages() {
     };
     detectRouter();
   }, [routers, routersLoading, subs, subsLoading]);
+
+  useEffect(() => {
+    if (!selectedPkg) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedPkg]);
+
+  useEffect(() => {
+    if (!selectedPkg || paymentType !== 'mpesa') {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      stkPhoneInputRef.current?.focus({ preventScroll: true });
+      purchaseFormRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 150);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [selectedPkg, paymentType]);
 
   // Auto-select router silently
   useEffect(() => {
@@ -656,71 +683,90 @@ export default function Packages() {
         document.body
       )}
 
-      {selectedPkg && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedPkg(null); }}>
-          <div className="glass-panel p-8 w-full max-w-lg animate-fade-in relative z-50 bg-panel shadow-2xl overflow-y-auto max-h-[90vh]">
-            <h3 className="text-2xl font-bold mb-2 text-main">Purchase {selectedPkg.name}</h3>
-            <p className="text-muted mb-6 font-medium">Total: KES {selectedPkg.price}</p>
-            
-            <form onSubmit={handleSubscribe} className="flex flex-col gap-5">
-              <div className="bg-slate-100/50 dark:bg-[rgba(255,255,255,0.02)] p-5 rounded-2xl border border-slate-200 dark:border-[rgba(255,255,255,0.05)]">
-                <label className="block text-sm font-black text-slate-900 dark:text-slate-300 mb-3 uppercase tracking-widest">Payment Method</label>
-                <div className="flex bg-slate-200/50 dark:bg-[rgba(0,0,0,0.2)] rounded-xl p-1.5 mb-4 border border-slate-300/30 dark:border-none">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentType('mpesa')}
-                    className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
-                      paymentType === 'mpesa' 
-                        ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 active:scale-95' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    M-Pesa STK
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentType('manual')}
-                    className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${
-                      paymentType === 'manual' 
-                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20 active:scale-95' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    Admin Activation
-                  </button>
+      {selectedPkg && createPortal(
+        <div
+          className="fixed inset-0 z-[10002] overflow-y-auto bg-black/70 backdrop-blur-md"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedPkg(null); }}
+        >
+          <div className="min-h-full flex items-start justify-center p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:items-center">
+            <div
+              ref={purchaseFormRef}
+              className="glass-panel relative z-50 w-full max-w-lg animate-fade-in overflow-y-auto rounded-[1.75rem] bg-panel p-5 shadow-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[90vh] sm:rounded-[2rem] sm:p-8"
+            >
+              <div className="mb-5 sm:mb-6">
+                <h3 className="text-xl font-bold text-main sm:text-2xl">Purchase {selectedPkg.name}</h3>
+                <p className="mt-1 text-sm font-medium text-muted">Total: KES {selectedPkg.price}</p>
+              </div>
+              
+              <form onSubmit={handleSubscribe} className="flex flex-col gap-4 sm:gap-5">
+                <div className="rounded-2xl border border-slate-200 bg-slate-100/50 p-4 dark:border-[rgba(255,255,255,0.05)] dark:bg-[rgba(255,255,255,0.02)] sm:p-5">
+                  <label className="mb-3 block text-sm font-black uppercase tracking-widest text-slate-900 dark:text-slate-300">Payment Method</label>
+                  <div className="mb-4 flex rounded-xl border border-slate-300/30 bg-slate-200/50 p-1.5 dark:border-none dark:bg-[rgba(0,0,0,0.2)]">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentType('mpesa')}
+                      className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                        paymentType === 'mpesa' 
+                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 active:scale-95' 
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      M-Pesa STK
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentType('manual')}
+                      className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all ${
+                        paymentType === 'manual' 
+                          ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20 active:scale-95' 
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Admin Activation
+                    </button>
+                  </div>
+
+                  {paymentType === 'mpesa' && (
+                    <div className="animate-in slide-in-from-top-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 duration-300 dark:bg-green-500/10 sm:p-5">
+                      <p className="mb-3 block text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 dark:text-green-300">Pay with M-Pesa</p>
+                      <div className="flex flex-col gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-slate-400">Phone Number:</span>
+                        <input
+                          ref={stkPhoneInputRef}
+                          type="tel"
+                          inputMode="numeric"
+                          autoComplete="tel"
+                          className="w-full rounded-xl border border-slate-400 bg-slate-50 p-3 font-mono text-base tracking-[0.18em] text-slate-950 shadow-inner outline-none transition-all placeholder:text-slate-500 focus:border-emerald-500 dark:border-[rgba(255,255,255,0.1)] dark:bg-[rgba(15,23,42,0.8)] dark:text-white dark:placeholder:text-slate-500 dark:focus:border-green-400 sm:text-lg"
+                          style={{
+                            color: 'var(--text-main)',
+                            WebkitTextFillColor: 'var(--text-main)',
+                            caretColor: 'var(--accent-primary)',
+                          }}
+                          placeholder="254712345678"
+                          value={stkPhone}
+                          onChange={(e) => setStkPhone(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <p className="mt-3 text-[10px] font-bold italic leading-relaxed text-slate-600 dark:text-green-200/60 sm:mt-4">
+                        Confirm or edit the phone number above. An M-Pesa prompt will be sent immediately to complete your payment of KES {selectedPkg.price}.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {paymentType === 'mpesa' && (
-                  <div className="p-5 bg-emerald-500/5 dark:bg-green-500/10 rounded-2xl border border-emerald-500/20 animate-in slide-in-from-top-2 duration-300">
-                    <p className="font-black text-slate-900 dark:text-green-300 mb-4 block text-[10px] uppercase tracking-[0.2em]">Pay with M-Pesa</p>
-                    <div className="flex flex-col gap-2">
-                      <span className="text-slate-900 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest">Phone Number:</span>
-                      <input 
-                        type="tel"
-                        className="w-full bg-slate-50 dark:bg-[rgba(15,23,42,0.8)] border border-slate-400 dark:border-[rgba(255,255,255,0.1)] focus:border-emerald-500 dark:focus:border-green-400 rounded-xl p-3 !text-slate-950 dark:!text-white [-webkit-text-fill-color:#020617] dark:[-webkit-text-fill-color:#ffffff] placeholder:text-slate-500 dark:placeholder:text-slate-500 font-mono text-lg tracking-widest shadow-inner outline-none transition-all caret-emerald-600"
-                        placeholder="254712345678"
-                        value={stkPhone}
-                        onChange={(e) => setStkPhone(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-600 dark:text-green-200/60 mt-4 leading-relaxed font-bold italic">
-                      Confirm or edit the phone number above. An M-Pesa prompt will be sent immediately to complete your payment of KES {selectedPkg.price}.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-3 mt-4">
-                <button type="button" className="px-5 py-2.5 rounded-lg text-slate-300 hover:bg-[rgba(255,255,255,0.05)] font-medium transition-colors" onClick={() => setSelectedPkg(null)}>Cancel</button>
-                <button type="submit" className="btn-primary text-base px-8 py-2.5 shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2" disabled={purchaseMutation.isPending || stkPushMutation.isPending || isCreatingPayment || isVerifying}>
-                  {(purchaseMutation.isPending || stkPushMutation.isPending || isCreatingPayment) ? <RefreshCw className="animate-spin" size={18} /> : null}
-                  {paymentType === 'mpesa' ? 'Send STK Prompt' : 'Submit Request'}
-                </button>
-              </div>
-            </form>
+                <div className="mt-2 flex justify-end gap-3">
+                  <button type="button" className="rounded-lg px-5 py-2.5 font-medium text-slate-600 transition-colors hover:bg-slate-200/60 dark:text-slate-300 dark:hover:bg-[rgba(255,255,255,0.05)]" onClick={() => setSelectedPkg(null)}>Cancel</button>
+                  <button type="submit" className="btn-primary px-6 py-2.5 text-sm shadow-lg shadow-cyan-500/30 sm:px-8 sm:text-base flex items-center justify-center gap-2" disabled={purchaseMutation.isPending || stkPushMutation.isPending || isCreatingPayment || isVerifying}>
+                    {(purchaseMutation.isPending || stkPushMutation.isPending || isCreatingPayment) ? <RefreshCw className="animate-spin" size={18} /> : null}
+                    {paymentType === 'mpesa' ? 'Send STK Prompt' : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
