@@ -620,7 +620,7 @@ export default function Packages() {
                 />
               </div>
               <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-                Waiting for confirmation... check {Math.min(pollCount + 1, 24)} of 24
+                Checking payment status...
               </p>
             </div>
           </div>
