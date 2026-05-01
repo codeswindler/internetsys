@@ -28,6 +28,7 @@ import {
 import api from '../../services/api';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import {
+  buildHotspotConnectUrl,
   buildHotspotIdentifyUrl,
   hasStoredHotspotIdentity,
   storeHotspotContext,
@@ -90,6 +91,19 @@ export default function Packages() {
     return buildHotspotIdentifyUrl(
       routerGateway,
       `${window.location.origin}/user/packages`,
+    );
+  };
+
+  const getPreferredRouterGateway = () => {
+    const matchedRouter = routers?.find(
+      (router: any) => router.id === routerId || router.name === routerId,
+    );
+
+    return (
+      matchedRouter?.localGateway ||
+      localStorage.getItem('hotspot_router_id') ||
+      routers?.[0]?.localGateway ||
+      '10.5.50.1'
     );
   };
 
@@ -367,25 +381,37 @@ export default function Packages() {
         } = res.data;
 
         if (success || status?.toLowerCase() === 'active' || status?.toLowerCase() === 'paid') {
-          if (handledStkSubRef.current === verifyingSubId) {
+          const confirmedSubId = verifyingSubId;
+          if (handledStkSubRef.current === confirmedSubId) {
             return;
           }
 
-          handledStkSubRef.current = verifyingSubId;
+          handledStkSubRef.current = confirmedSubId;
           setIsVerifying(false);
           setVerifyingSubId(null);
           paymentFlowLockedRef.current = false;
           setIsCreatingPayment(false);
           setSelectedPkg(null);
-          toast.success('Payment Verified! Head to Dashboard to Activate.', {
-            id: `stk-success-${verifyingSubId}`,
+          queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions'] });
+          queryClient.invalidateQueries({ queryKey: ['my_subscriptions'] });
+          toast.success('Payment verified. Connecting this device...', {
+            id: `stk-success-${confirmedSubId}`,
             icon: '✅',
             duration: 5000,
           });
 
-          setTimeout(() => {
-            navigate('/user/dashboard');
-          }, 2000);
+          const routerGateway = getPreferredRouterGateway();
+
+          window.setTimeout(() => {
+            window.location.replace(
+              buildHotspotConnectUrl(
+                confirmedSubId,
+                window.location.pathname,
+                routerGateway,
+                window.location.origin,
+              ),
+            );
+          }, 400);
           return;
         } else if (failed || paymentCancelled || status?.toLowerCase() === 'cancelled') {
           if (handledStkSubRef.current === verifyingSubId) {
