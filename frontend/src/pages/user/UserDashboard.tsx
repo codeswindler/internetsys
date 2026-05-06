@@ -85,16 +85,12 @@ export default function UserDashboard() {
         setDeviceManager({
           open: true,
           subId: context.subId,
-          isScanning: true,
+          isScanning: false,
           connectedDevices: context.connectedDevices || [],
           discoveredHosts: [],
           maxDevices: context.maxDevices || 1,
           pendingSubId: context.subId,
         });
-
-        api.get(`/subscriptions/${deviceLimitSubId}/discover-hosts`)
-          .then((res) => setDeviceManager((prev) => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
-          .catch(() => setDeviceManager((prev) => ({ ...prev, isScanning: false })));
       }
       window.history.replaceState({}, '', window.location.pathname);
       return;
@@ -128,6 +124,11 @@ export default function UserDashboard() {
 
   const startCurrentDevice = (subId: string) => {
     const identity = getStoredHotspotIdentity();
+    if (!identity.mac && !identity.ip) {
+      identifyCurrentDevice(subId);
+      return;
+    }
+
     startMutation.mutate({
       subId,
       mac: identity.mac,
@@ -141,19 +142,12 @@ export default function UserDashboard() {
     setDeviceManager({
       open: true,
       subId,
-      isScanning: true,
+      isScanning: false,
       connectedDevices: getVisibleDeviceSessions(targetSub),
       discoveredHosts: [],
       maxDevices: targetSub?.package?.maxDevices || 1,
       pendingSubId: subId
     });
-    try {
-      const res = await api.get(`/subscriptions/${subId}/discover-hosts`);
-      setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false }));
-    } catch (e) {
-      toast.error('Failed to scan for devices. Make sure you are on Wi-Fi!');
-      setDeviceManager(prev => ({ ...prev, isScanning: false }));
-    }
   };
 
   const [localDeviceName, setLocalDeviceName] = useState('Unknown Device');
@@ -283,16 +277,12 @@ export default function UserDashboard() {
         setDeviceManager({
           open: true,
           subId: err.response.data.subId,
-          isScanning: true,
+          isScanning: false,
           connectedDevices: err.response.data.connectedDevices,
           discoveredHosts: [],
           maxDevices: err.response.data.maxDevices,
           pendingSubId: err.response.data.subId
         });
-
-        api.get(`/subscriptions/${err.response.data.subId}/discover-hosts`)
-          .then(res => setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false })))
-          .catch(() => setDeviceManager(prev => ({ ...prev, isScanning: false })));
       } else if (variables.currentDevice && shouldTriggerHotspotIdentify(err)) {
         clearStoredHotspotIdentity();
         identifyCurrentDevice(variables.subId);
@@ -327,29 +317,17 @@ export default function UserDashboard() {
       toast.error(err.response?.data?.message || 'Failed to disconnect device');
     }
   });
-  const openDeviceManager = async (sub: any, scanForNearby = false, pendingSubId: string | null = null) => {
+  const openDeviceManager = async (sub: any, pendingSubId: string | null = null) => {
     const targetSub = subHistory.find((item: any) => item.id === sub.id) || sub;
     setDeviceManager({
       open: true,
       subId: targetSub.id,
-      isScanning: scanForNearby,
+      isScanning: false,
       connectedDevices: getVisibleDeviceSessions(targetSub),
       discoveredHosts: [],
       maxDevices: targetSub.package?.maxDevices || 1,
       pendingSubId
     });
-
-    if (!scanForNearby) {
-      return;
-    }
-
-    try {
-      const res = await api.get(`/subscriptions/${targetSub.id}/discover-hosts`);
-      setDeviceManager(prev => ({ ...prev, discoveredHosts: res.data, isScanning: false }));
-    } catch (e) {
-      setDeviceManager(prev => ({ ...prev, isScanning: false }));
-      toast.error('Scan failed. Ensure you are on Wi-Fi!');
-    }
   };
 
   // Poll traffic for active session
@@ -545,13 +523,13 @@ export default function UserDashboard() {
                                 </div>
                               </div>
 
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startDiscovery(sub.id);
-                                }}
-                                className="relative z-20 w-full sm:w-auto flex flex-shrink-0 items-center justify-center gap-2 px-4 py-2.5 bg-main/5 border border-main/10 rounded-xl hover:bg-main/10 hover:border-cyan-500/30 transition-all group/btn"
-                              >
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startDiscovery(sub.id);
+                                  }}
+                                  className="relative z-20 w-full sm:w-auto flex flex-shrink-0 items-center justify-center gap-2 px-4 py-2.5 bg-main/5 border border-main/10 rounded-xl hover:bg-main/10 hover:border-cyan-500/30 transition-all group/btn"
+                                >
                                 <Settings size={14} className="text-muted group-hover/btn:text-cyan-400 transition-colors" />
                                 <span className="text-[10px] font-black text-muted group-hover/btn:text-main uppercase tracking-widest">
                                   MANAGE DEVICES
@@ -639,7 +617,7 @@ export default function UserDashboard() {
                                  'JOIN NETWORK'}
                                </button>
 
-                               <button 
+                                <button 
                                  onClick={() => openDeviceManager(sub)}
                                  className="w-full lg:w-48 bg-main/5 border border-main/10 rounded-3xl px-8 py-6 text-center hover:bg-main/10 transition-all flex flex-col items-center justify-center"
                                >
@@ -739,122 +717,66 @@ export default function UserDashboard() {
             </div>
 
             <div className="p-6 pt-0 md:p-10 md:pt-0 max-h-[70vh] overflow-y-auto custom-scrollbar space-y-10">
-              {(() => {
-                const shouldShowDiscoverySection =
-                  !!deviceManager.pendingSubId &&
-                  (deviceManager.isScanning || deviceManager.discoveredHosts.length > 0 || deviceManager.connectedDevices.length === 0);
-
-                return (
-                  <>
-              
-                    {/* SECTION 1: CONNECTED DEVICES */}
-                    {deviceManager.connectedDevices.length > 0 && (
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-1 rounded-full bg-emerald-500" />
-                          <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Active Sessions</h4>
-                        </div>
-                        <div className="grid gap-4">
-                          {deviceManager.connectedDevices.map((device: any) => {
-                            const deviceLabel = device.model || device.deviceModel || 'Connected Device';
-                            const isDisconnecting = disconnectMutation.isPending && disconnectMutation.variables === device.id;
-                            return (
-                              <div key={device.id} className="flex items-center justify-between p-5 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-2xl group hover:border-red-500/20 transition-all">
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
-                                    <Smartphone size={24} />
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">{deviceLabel}</p>
-                                    <p className="text-[10px] text-slate-400 dark:text-muted font-mono tracking-widest">{device.macAddress || device.mac || 'No MAC'}</p>
-                                    {device.__fallback && (
-                                      <p className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-amber-500">
-                                        Last Authorized Device
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => disconnectMutation.mutate(device.id)}
-                                  disabled={disconnectMutation.isPending}
-                                  className="px-6 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 shadow-lg shadow-red-500/10 disabled:opacity-60 disabled:cursor-not-allowed"
-                                >
-                                  {isDisconnecting ? <RefreshCw size={14} className="animate-spin" /> : 'KICK'}
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* SECTION 2: DISCOVERY */}
-                    {shouldShowDiscoverySection && (
-                      <div className="space-y-6 mt-10">
-                        <div className="flex items-center justify-between">
+              {deviceManager.connectedDevices.length > 0 ? (
+                <div className="space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-1 rounded-full bg-emerald-500" />
+                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Active Sessions</h4>
+                  </div>
+                  <div className="grid gap-4">
+                    {deviceManager.connectedDevices.map((device: any) => {
+                      const deviceLabel = device.model || device.deviceModel || 'Connected Device';
+                      const isDisconnecting = disconnectMutation.isPending && disconnectMutation.variables === device.id;
+                      return (
+                        <div key={device.id} className="flex items-center justify-between p-5 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-2xl group hover:border-red-500/20 transition-all">
                           <div className="flex items-center gap-4">
-                            <div className="w-10 h-1 rounded-full bg-cyan-500" />
-                            <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Nearby Hardware</h4>
+                            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                              <Smartphone size={24} />
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">{deviceLabel}</p>
+                              <p className="text-[10px] text-slate-400 dark:text-muted font-mono tracking-widest">{device.macAddress || device.mac || 'No MAC'}</p>
+                              {device.__fallback && (
+                                <p className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-amber-500">
+                                  Last Authorized Device
+                                </p>
+                              )}
+                            </div>
                           </div>
-                             <button
-                                onClick={() => {
-                                  const targetSubId = deviceManager.pendingSubId || deviceManager.subId;
-                                  if (!targetSubId) return;
-                                  identifyCurrentDevice(targetSubId);
-                                }}
-                            className="text-[10px] font-black text-cyan-500 uppercase tracking-widest hover:underline flex items-center gap-2"
+                          <button
+                            onClick={() => disconnectMutation.mutate(device.id)}
+                            disabled={disconnectMutation.isPending}
+                            className="px-6 py-2.5 bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-red-500 hover:text-white transition-all active:scale-95 shadow-lg shadow-red-500/10 disabled:opacity-60 disabled:cursor-not-allowed"
                           >
-                            <RefreshCw size={12} />
-                            MANUAL IDENTIFY
+                            {isDisconnecting ? <RefreshCw size={14} className="animate-spin" /> : 'KICK'}
                           </button>
                         </div>
-
-                        {deviceManager.isScanning ? (
-                          <div className="py-12 flex flex-col items-center justify-center gap-6">
-                            <div className="relative">
-                              <div className="w-20 h-20 rounded-full border-[4px] border-cyan-500/20 border-t-cyan-500 animate-spin" />
-                            </div>
-                            <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest animate-pulse">Scanning Network...</p>
-                          </div>
-                        ) : deviceManager.discoveredHosts.length === 0 ? (
-                          <div className="py-10 text-center border-2 border-dashed border-slate-100 dark:border-white/5 rounded-[2rem]">
-                            <p className="text-xs text-slate-400 dark:text-muted font-bold uppercase tracking-widest opacity-60">No new devices detected</p>
-                            <button 
-                              onClick={() => openDeviceManager({ id: deviceManager.subId, package: { maxDevices: deviceManager.maxDevices } }, true, deviceManager.pendingSubId)}
-                              className="mt-4 text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] hover:underline"
-                            >
-                              RE-SCAN
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="grid gap-4">
-                            {deviceManager.discoveredHosts.map((host) => (
-                              <button
-                                key={host.mac}
-                                onClick={() => linkDevice(host)}
-                                className="w-full relative group transition-all duration-500 active:scale-95 text-left"
-                              >
-                                <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-white/5 group-hover:border-cyan-500/40 flex items-center justify-between">
-                                  <div className="flex items-center gap-5">
-                                    <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-950 flex items-center justify-center text-cyan-500 border border-slate-100 dark:border-white/5 shadow-sm">
-                                      {host.deviceName?.toLowerCase().includes('laptop') ? <Laptop size={28} /> : <Smartphone size={28} />}
-                                    </div>
-                                    <div>
-                                       <h5 className="font-black text-slate-900 dark:text-white text-base tracking-tighter uppercase mb-1">{host.deviceName || 'Neighbor Device'}</h5>
-                                       <span className="text-[10px] font-black text-slate-400 dark:text-muted font-mono tracking-widest">{host.mac}</span>
-                                    </div>
-                                  </div>
-                                  <ArrowRight className="text-cyan-500 opacity-0 group-hover:opacity-100 transition-all" size={20} />
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
+                      );
+                    })}
+                  </div>
+                  {deviceManager.pendingSubId && (
+                    <p className="text-[11px] text-slate-500 dark:text-muted font-bold uppercase tracking-[0.18em]">
+                      Kick the active device and we will connect this device next.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="py-10 text-center border-2 border-dashed border-slate-100 dark:border-white/5 rounded-[2rem] space-y-4">
+                  <p className="text-xs text-slate-400 dark:text-muted font-bold uppercase tracking-widest opacity-60">
+                    {deviceManager.pendingSubId
+                      ? 'No active session is locked right now.'
+                      : 'No active devices found.'}
+                  </p>
+                  {deviceManager.pendingSubId && (
+                    <button
+                      onClick={() => identifyCurrentDevice(deviceManager.pendingSubId!)}
+                      className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] hover:underline"
+                    >
+                      CONNECT THIS DEVICE
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Footer */}

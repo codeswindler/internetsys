@@ -1351,6 +1351,21 @@ export class SubscriptionsService {
 
     const hasExplicitDeviceIdentity =
       !!mac || (!!ip && !this.isPublicIpv4(ip));
+    const shouldRequireExplicitIdentity =
+      sub.status === SubscriptionStatus.ACTIVE &&
+      maxAllowed === 1 &&
+      !hasExplicitDeviceIdentity &&
+      limitReferenceSessions.length > 0;
+
+    if (shouldRequireExplicitIdentity) {
+      this.logger.warn(
+        `[START-REJECT] Sub ${sub.id} requires explicit hotspot identity for single-device takeover. Incoming MAC=${mac || 'none'}, IP=${ip || 'none'}`,
+      );
+      throw new BadRequestException(
+        'Unable to identify your device on the hotspot. Please retry Link Device.',
+      );
+    }
+
     const canReuseKnownSessionIdentity =
       !!preferredKnownSession &&
       (hasExplicitDeviceIdentity || currentSubActiveSessions.length === 0);
