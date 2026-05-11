@@ -15,6 +15,7 @@ import {
   matchesStoredHotspotIdentity,
   shouldTriggerHotspotIdentify,
   syncStoredHotspotIdentity,
+  traceHotspot,
 } from '../../services/hotspot';
 
 export default function UserDashboard() {
@@ -119,12 +120,17 @@ export default function UserDashboard() {
   const identifyCurrentDevice = (subId: string) => {
     const targetSub = allActiveSubs.find((sub: any) => sub.id === subId);
     const routerGateway = targetSub?.router?.localGateway || activeSub?.router?.localGateway || '10.5.50.1';
-    window.location.replace(buildHotspotConnectUrl(
+    const connectUrl = buildHotspotConnectUrl(
       subId,
       window.location.pathname,
       routerGateway,
       window.location.origin,
-    ));
+    );
+    traceHotspot('dashboard-link-click', {
+      sub: subId,
+      detail: `router=${routerGateway};target=${connectUrl}`,
+    });
+    window.location.replace(connectUrl);
   };
 
   const startCurrentDevice = (subId: string) => {

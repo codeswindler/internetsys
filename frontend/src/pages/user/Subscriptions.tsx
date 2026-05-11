@@ -15,6 +15,7 @@ import {
   matchesStoredHotspotIdentity,
   shouldTriggerHotspotIdentify,
   syncStoredHotspotIdentity,
+  traceHotspot,
 } from '../../services/hotspot';
 
 export default function Subscriptions() {
@@ -88,12 +89,17 @@ export default function Subscriptions() {
   const startDiscovery = (subId: string) => {
     const targetSub = subHistory.find((sub: any) => sub.id === subId);
     const routerGateway = targetSub?.router?.localGateway || '10.5.50.1';
-    window.location.replace(buildHotspotConnectUrl(
+    const connectUrl = buildHotspotConnectUrl(
       subId,
       window.location.pathname,
       routerGateway,
       window.location.origin,
-    ));
+    );
+    traceHotspot('subscriptions-link-click', {
+      sub: subId,
+      detail: `router=${routerGateway};target=${connectUrl}`,
+    });
+    window.location.replace(connectUrl);
   };
 
   const startCurrentDevice = (subId: string) => {

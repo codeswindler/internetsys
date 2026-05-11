@@ -6,12 +6,39 @@ const HOTSPOT_CONNECT_CONTEXT_PREFIX = 'hotspot_connect_context:';
 const HOTSPOT_LOGIN_PAGE_KEY = 'hotspot_link_login';
 const HOTSPOT_LOGIN_ONLY_KEY = 'hotspot_link_login_only';
 const HOTSPOT_LOGIN_RELEASE_FRAME = 'hotspot-login-release-frame';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 type HotspotConnectContext = {
   subId: string;
   fromPath: string;
   routerIp?: string;
   releaseUrl?: string;
+};
+
+export const traceHotspot = (
+  step: string,
+  details: Record<string, string | number | boolean | undefined | null> = {},
+) => {
+  try {
+    const url = new URL('/hotspot-trace', API_URL);
+    url.searchParams.set('step', step);
+    url.searchParams.set('path', `${window.location.pathname}${window.location.search}`);
+    url.searchParams.set('token', localStorage.getItem('token') ? 'yes' : 'no');
+
+    Object.entries(details).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.set(key, String(value).slice(0, 240));
+      }
+    });
+
+    fetch(url.toString(), {
+      method: 'GET',
+      keepalive: true,
+      mode: 'no-cors',
+    }).catch(() => {});
+  } catch {
+    // Tracing must never interrupt the captive portal handoff.
+  }
 };
 
 const pickStoredHotspotLoginUrl = (preferDirectPost = false) => {

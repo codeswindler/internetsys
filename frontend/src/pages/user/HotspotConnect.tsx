@@ -16,6 +16,7 @@ import {
   storeHotspotDeviceLimitContext,
   submitHotspotLoginRelease,
   syncStoredHotspotIdentity,
+  traceHotspot,
 } from '../../services/hotspot';
 
 export default function HotspotConnect() {
@@ -41,15 +42,22 @@ export default function HotspotConnect() {
     const identifyAttempted = params.get('identified') === '1';
     const token = localStorage.getItem('token');
 
+    traceHotspot('connect-mounted', {
+      sub: subId,
+      detail: `identified=${identifyAttempted};attempt=${attemptId || 'none'}`,
+    });
+
     setFromPath(requestedFrom);
     storeHotspotContext(params, window.location.origin);
 
     if (!subId) {
+      traceHotspot('connect-missing-sub');
       setError('Missing subscription details for this connection attempt.');
       return;
     }
 
     if (!token) {
+      traceHotspot('connect-missing-token', { sub: subId });
       const returnTo = encodeURIComponent(
         `${window.location.pathname}${window.location.search}`,
       );
@@ -78,12 +86,20 @@ export default function HotspotConnect() {
           requestedRouterIp ||
           localStorage.getItem('hotspot_router_id') ||
           '10.5.50.1';
+        traceHotspot('connect-identify-redirect', {
+          sub: subId,
+          detail: `router=${routerIp}`,
+        });
         setStage('Identifying this device on the hotspot...');
         window.location.replace(buildHotspotIdentifyUrl(routerIp, continueUrl.toString()));
         return;
       }
 
       if (!hasIdentity || !hasFreshIdentity) {
+        traceHotspot('connect-no-fresh-identity', {
+          sub: subId,
+          detail: `identity=${hasIdentity ? 'yes' : 'no'}`,
+        });
         setError(
           'We could not identify this device yet. Keep Wi-Fi connected and try again from the hotspot page.',
         );
@@ -91,6 +107,10 @@ export default function HotspotConnect() {
       }
 
       try {
+        traceHotspot('connect-start-api', {
+          sub: subId,
+          detail: `mac=${identity.mac ? 'yes' : 'no'};ip=${identity.ip ? 'yes' : 'no'}`,
+        });
         setStage('Authorizing this device...');
         const res = await api.post(`/subscriptions/${subId}/start`, {
           mac: identity.mac,
@@ -116,6 +136,10 @@ export default function HotspotConnect() {
         setStage('Completing router handoff...');
         toast.success('Device linked. Opening internet...');
         clearHotspotConnectContext(attemptId);
+        traceHotspot('connect-router-release', {
+          sub: subId,
+          detail: `router=${routerGateway};mode=${sub?.authorizationMode || 'unknown'}`,
+        });
 
         const submitted = submitHotspotLoginRelease({
           routerIp: routerGateway,
@@ -132,6 +156,10 @@ export default function HotspotConnect() {
         }
       } catch (err: any) {
         if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
+          traceHotspot('connect-device-limit', {
+            sub: subId,
+            detail: `devices=${err.response.data.connectedDevices?.length || 0}`,
+          });
           storeHotspotDeviceLimitContext(err.response.data);
           const backUrl = new URL(`${window.location.origin}${requestedFrom}`);
           backUrl.searchParams.set('device_limit', '1');
@@ -142,6 +170,10 @@ export default function HotspotConnect() {
         }
 
         if (shouldTriggerHotspotIdentify(err)) {
+          traceHotspot('connect-reidentify-error', {
+            sub: subId,
+            detail: err.response?.data?.message || 'identify error',
+          });
           clearStoredHotspotIdentity();
           setError(
             'We could not confirm this device on the hotspot yet. Please reopen the hotspot login page and try again.',
@@ -149,6 +181,10 @@ export default function HotspotConnect() {
           return;
         }
 
+        traceHotspot('connect-start-error', {
+          sub: subId,
+          detail: err.response?.data?.message || err.message || 'unknown',
+        });
         setError(
           err.response?.data?.message ||
             'We could not connect this device right now.',
