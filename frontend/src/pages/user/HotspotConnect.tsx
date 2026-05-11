@@ -7,6 +7,7 @@ import {
   buildHotspotIdentifyUrl,
   clearHotspotConnectContext,
   clearStoredHotspotIdentity,
+  hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
   readHotspotConnectContext,
   resolveHotspotReleaseUrl,
@@ -68,7 +69,10 @@ export default function HotspotConnect() {
     continueUrl.searchParams.set('identified', '1');
 
     const startConnection = async () => {
-      if (!identifyAttempted) {
+      const identity = getStoredHotspotIdentity();
+      const canUseStoredIdentity = hasFreshHotspotIdentity() || (!!identity.mac && !!identity.ip);
+
+      if (!identifyAttempted && !canUseStoredIdentity) {
         const routerIp =
           requestedRouterIp ||
           localStorage.getItem('hotspot_router_id') ||
@@ -78,7 +82,6 @@ export default function HotspotConnect() {
         return;
       }
 
-      const identity = getStoredHotspotIdentity();
       if (!identity.mac && !identity.ip) {
         setError(
           'We could not identify this device yet. Keep Wi-Fi connected and try again from the hotspot page.',
