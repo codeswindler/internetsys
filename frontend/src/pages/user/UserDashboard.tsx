@@ -123,18 +123,7 @@ export default function UserDashboard() {
   };
 
   const startCurrentDevice = (subId: string) => {
-    const identity = getStoredHotspotIdentity();
-    if (!identity.mac && !identity.ip) {
-      identifyCurrentDevice(subId);
-      return;
-    }
-
-    startMutation.mutate({
-      subId,
-      mac: identity.mac,
-      ip: identity.ip,
-      currentDevice: true,
-    });
+    identifyCurrentDevice(subId);
   };
 
   const startDiscovery = async (subId: string) => {
@@ -306,11 +295,7 @@ export default function UserDashboard() {
 
       if (pendingSubId) {
         setDeviceManager(prev => ({ ...prev, open: false, pendingSubId: null }));
-        if (hasStoredHotspotIdentity()) {
-          startCurrentDevice(pendingSubId);
-        } else {
-          identifyCurrentDevice(pendingSubId);
-        }
+        identifyCurrentDevice(pendingSubId);
       }
     },
     onError: (err: any) => {
