@@ -57,7 +57,7 @@ export default function HotspotConnect() {
       return;
     }
 
-    const continueUrl = new URL('/user/connect', window.location.origin);
+    const continueUrl = new URL('/connect', window.location.origin);
     continueUrl.searchParams.set('sub', subId);
     continueUrl.searchParams.set('from', requestedFrom);
     if (attemptId) {
@@ -123,16 +123,13 @@ export default function HotspotConnect() {
           password: sub?.mikrotikPassword,
           releaseUrl,
           currentOrigin: window.location.origin,
+          target: 'self',
         });
 
         if (!submitted) {
           window.location.replace(releaseUrl);
           return;
         }
-
-        window.setTimeout(() => {
-          window.location.replace(releaseUrl);
-        }, 2500);
       } catch (err: any) {
         if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
           storeHotspotDeviceLimitContext(err.response.data);

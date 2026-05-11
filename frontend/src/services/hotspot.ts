@@ -74,7 +74,7 @@ export const buildHotspotConnectUrl = (
   routerIp?: string,
   currentOrigin?: string,
 ) => {
-  const connectUrl = new URL('/user/connect', currentOrigin || window.location.origin);
+  const connectUrl = new URL('/connect', currentOrigin || window.location.origin);
   const attemptId = `hc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   persistHotspotConnectContext(attemptId, {
@@ -300,12 +300,14 @@ export const submitHotspotLoginRelease = ({
   password,
   releaseUrl,
   currentOrigin,
+  target = 'hidden',
 }: {
   routerIp?: string;
   username?: string;
   password?: string;
   releaseUrl?: string;
   currentOrigin?: string;
+  target?: 'hidden' | 'self';
 }) => {
   if (
     typeof document === 'undefined' ||
@@ -316,22 +318,28 @@ export const submitHotspotLoginRelease = ({
     return false;
   }
 
-  let frame = document.querySelector<HTMLIFrameElement>(
-    `iframe[name="${HOTSPOT_LOGIN_RELEASE_FRAME}"]`,
-  );
+  let frame: HTMLIFrameElement | null = null;
 
-  if (!frame) {
-    frame = document.createElement('iframe');
-    frame.name = HOTSPOT_LOGIN_RELEASE_FRAME;
-    frame.setAttribute('aria-hidden', 'true');
-    frame.style.display = 'none';
-    document.body.appendChild(frame);
+  if (target === 'hidden') {
+    frame = document.querySelector<HTMLIFrameElement>(
+      `iframe[name="${HOTSPOT_LOGIN_RELEASE_FRAME}"]`,
+    );
+
+    if (!frame) {
+      frame = document.createElement('iframe');
+      frame.name = HOTSPOT_LOGIN_RELEASE_FRAME;
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.display = 'none';
+      document.body.appendChild(frame);
+    }
   }
 
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = resolveHotspotLoginUrl(routerIp, { preferDirectPost: true });
-  form.target = HOTSPOT_LOGIN_RELEASE_FRAME;
+  if (target === 'hidden') {
+    form.target = HOTSPOT_LOGIN_RELEASE_FRAME;
+  }
   form.style.display = 'none';
 
   const payload: Record<string, string> = {
@@ -351,8 +359,12 @@ export const submitHotspotLoginRelease = ({
 
   document.body.appendChild(form);
   form.submit();
-  window.setTimeout(() => form.remove(), 1000);
-  window.setTimeout(() => frame?.remove(), 8000);
+
+  if (target === 'hidden') {
+    window.setTimeout(() => form.remove(), 1000);
+    window.setTimeout(() => frame?.remove(), 8000);
+  }
+
   return true;
 };
 

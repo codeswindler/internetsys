@@ -26,11 +26,6 @@ function RootRedirect() {
   return <Navigate to="/login" replace state={{ from: location }} search={location.search} />;
 }
 
-function ConnectRedirect() {
-  const location = useLocation();
-  return <Navigate to={`/user/connect${location.search}`} replace />;
-}
-
 function App() {
   return (
     <Routes>
@@ -42,7 +37,7 @@ function App() {
         <Route path="/register" element={<Register />} />
       </Route>
 
-      <Route path="/connect" element={<ConnectRedirect />} />
+      <Route path="/connect" element={<HotspotConnect />} />
 
       {/* Admin Routes */}
       <Route path="/admin" element={<MainLayout role="admin" />}>
