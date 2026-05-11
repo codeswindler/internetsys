@@ -370,14 +370,19 @@ export const shouldTriggerHotspotIdentify = (error: any) => {
 };
 
 export const storeHotspotDeviceLimitContext = (context: any) => {
-  sessionStorage.setItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY, JSON.stringify(context));
+  const serialized = JSON.stringify(context);
+  sessionStorage.setItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY, serialized);
+  localStorage.setItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY, serialized);
 };
 
 export const consumeHotspotDeviceLimitContext = () => {
-  const raw = sessionStorage.getItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY);
+  const raw =
+    sessionStorage.getItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY) ||
+    localStorage.getItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY);
   if (!raw) return null;
 
   sessionStorage.removeItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY);
+  localStorage.removeItem(HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY);
 
   try {
     return JSON.parse(raw);

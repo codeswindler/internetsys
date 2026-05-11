@@ -187,12 +187,17 @@ export default function Subscriptions() {
 
     if (deviceLimitRequested && deviceLimitSubId) {
       const context = consumeHotspotDeviceLimitContext();
-      if (context && context.subId === deviceLimitSubId) {
-        setPendingStartSubId(context.subId);
-        setDiscoverySubId(context.subId);
-        setDeviceLimitMaxDevices(context.maxDevices || 1);
+      const deviceLimitContext =
+        context && context.subId === deviceLimitSubId
+          ? context
+          : { subId: deviceLimitSubId, connectedDevices: [], maxDevices: 1 };
+
+      if (deviceLimitContext) {
+        setPendingStartSubId(deviceLimitContext.subId);
+        setDiscoverySubId(deviceLimitContext.subId);
+        setDeviceLimitMaxDevices(deviceLimitContext.maxDevices || 1);
         setDeviceLimitSessions(
-          (context.connectedDevices || []).map((device: any) => ({
+          (deviceLimitContext.connectedDevices || []).map((device: any) => ({
             id: device.id,
             macAddress: device.mac,
             ipAddress: device.ip,

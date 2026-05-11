@@ -81,15 +81,20 @@ export default function UserDashboard() {
 
     if (deviceLimitRequested && deviceLimitSubId) {
       const context = consumeHotspotDeviceLimitContext();
-      if (context && context.subId === deviceLimitSubId) {
+      const deviceLimitContext =
+        context && context.subId === deviceLimitSubId
+          ? context
+          : { subId: deviceLimitSubId, connectedDevices: [], maxDevices: 1 };
+
+      if (deviceLimitContext) {
         setDeviceManager({
           open: true,
-          subId: context.subId,
+          subId: deviceLimitContext.subId,
           isScanning: false,
-          connectedDevices: context.connectedDevices || [],
+          connectedDevices: deviceLimitContext.connectedDevices || [],
           discoveredHosts: [],
-          maxDevices: context.maxDevices || 1,
-          pendingSubId: context.subId,
+          maxDevices: deviceLimitContext.maxDevices || 1,
+          pendingSubId: deviceLimitContext.subId,
         });
       }
       window.history.replaceState({}, '', window.location.pathname);
