@@ -30,7 +30,6 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 import {
   buildHotspotConnectUrl,
   buildHotspotIdentifyUrl,
-  clearStoredHotspotIdentity,
   hasStoredHotspotIdentity,
   storeHotspotContext,
   syncStoredHotspotIdentity,
@@ -661,8 +660,7 @@ export default function Packages() {
               </button>
               <button 
                 onClick={() => {
-                  clearStoredHotspotIdentity();
-                  window.location.assign(getIdentifyRedirectUrl());
+                  window.location.href = getIdentifyRedirectUrl();
                 }}
                 className="flex-1 py-4 bg-orange-500 text-white font-black uppercase tracking-widest rounded-2xl shadow-lg shadow-orange-500/20 hover:bg-orange-400 transition-all active:scale-95"
               >
