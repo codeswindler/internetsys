@@ -119,6 +119,7 @@ export default function UserDashboard() {
       window.location.pathname,
       routerGateway,
       window.location.origin,
+      { forceIdentify: true },
     ));
   };
 

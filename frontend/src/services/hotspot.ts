@@ -12,6 +12,7 @@ type HotspotConnectContext = {
   fromPath: string;
   routerIp?: string;
   releaseUrl?: string;
+  forceIdentify?: boolean;
 };
 
 const pickStoredHotspotLoginUrl = (preferDirectPost = false) => {
@@ -73,6 +74,7 @@ export const buildHotspotConnectUrl = (
   fromPath: string,
   routerIp?: string,
   currentOrigin?: string,
+  options: { forceIdentify?: boolean } = {},
 ) => {
   const connectUrl = new URL('/user/connect', currentOrigin || window.location.origin);
   const attemptId = `hc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -82,6 +84,7 @@ export const buildHotspotConnectUrl = (
     fromPath,
     routerIp,
     releaseUrl: getStoredHotspotReleaseUrl(currentOrigin),
+    forceIdentify: !!options.forceIdentify,
   });
 
   connectUrl.searchParams.set('attempt', attemptId);
@@ -89,6 +92,9 @@ export const buildHotspotConnectUrl = (
   connectUrl.searchParams.set('from', fromPath);
   if (routerIp) {
     connectUrl.searchParams.set('routerIp', routerIp);
+  }
+  if (options.forceIdentify) {
+    connectUrl.searchParams.set('forceIdentify', '1');
   }
   return connectUrl.toString();
 };

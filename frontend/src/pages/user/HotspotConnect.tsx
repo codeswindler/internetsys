@@ -39,6 +39,8 @@ export default function HotspotConnect() {
     const requestedRouterIp =
       params.get('routerIp') || connectContext?.routerIp || undefined;
     const identifyAttempted = params.get('identified') === '1';
+    const forceIdentify =
+      params.get('forceIdentify') === '1' || !!connectContext?.forceIdentify;
     const token = localStorage.getItem('token');
 
     setFromPath(requestedFrom);
@@ -66,13 +68,19 @@ export default function HotspotConnect() {
     if (requestedRouterIp) {
       continueUrl.searchParams.set('routerIp', requestedRouterIp);
     }
+    if (forceIdentify) {
+      continueUrl.searchParams.set('forceIdentify', '1');
+    }
     continueUrl.searchParams.set('identified', '1');
 
     const startConnection = async () => {
       const identity = getStoredHotspotIdentity();
       const canUseStoredIdentity = hasFreshHotspotIdentity() || (!!identity.mac && !!identity.ip);
 
-      if (!identifyAttempted && !canUseStoredIdentity) {
+      if (!identifyAttempted && (forceIdentify || !canUseStoredIdentity)) {
+        if (forceIdentify) {
+          clearStoredHotspotIdentity();
+        }
         const routerIp =
           requestedRouterIp ||
           localStorage.getItem('hotspot_router_id') ||
