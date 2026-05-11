@@ -50,28 +50,7 @@ export default function UserDashboard() {
   const getActiveDeviceSessions = (sub?: any) =>
     sub?.deviceSessions?.filter((session: any) => session.isActive) || [];
 
-  const getLatestKnownDeviceSession = (sub?: any) =>
-    [...(sub?.deviceSessions || [])].sort((a: any, b: any) => {
-      const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime();
-      const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime();
-      return bTime - aTime;
-    })[0];
-
-  const getVisibleDeviceSessions = (sub?: any) => {
-    const activeSessions = getActiveDeviceSessions(sub);
-    if (activeSessions.length > 0) {
-      return activeSessions;
-    }
-
-    if (sub?.status?.toLowerCase() === 'active') {
-      const latestSession = getLatestKnownDeviceSession(sub);
-      if (latestSession) {
-        return [{ ...latestSession, __fallback: true }];
-      }
-    }
-
-    return [];
-  };
+  const getVisibleDeviceSessions = (sub?: any) => getActiveDeviceSessions(sub);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -732,11 +711,6 @@ export default function UserDashboard() {
                             <div>
                               <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide">{deviceLabel}</p>
                               <p className="text-[10px] text-slate-400 dark:text-muted font-mono tracking-widest">{device.macAddress || device.mac || 'No MAC'}</p>
-                              {device.__fallback && (
-                                <p className="mt-1 text-[9px] font-black uppercase tracking-[0.2em] text-amber-500">
-                                  Last Authorized Device
-                                </p>
-                              )}
                             </div>
                           </div>
                           <button

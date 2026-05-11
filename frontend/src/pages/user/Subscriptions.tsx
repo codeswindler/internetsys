@@ -63,28 +63,7 @@ export default function Subscriptions() {
   const getActiveDeviceSessions = (sub?: any) =>
     sub?.deviceSessions?.filter((session: any) => session.isActive) || [];
 
-  const getLatestKnownDeviceSession = (sub?: any) =>
-    [...(sub?.deviceSessions || [])].sort((a: any, b: any) => {
-      const aTime = new Date(a?.updatedAt || a?.createdAt || 0).getTime();
-      const bTime = new Date(b?.updatedAt || b?.createdAt || 0).getTime();
-      return bTime - aTime;
-    })[0];
-
-  const getVisibleDeviceSessions = (sub?: any) => {
-    const activeSessions = getActiveDeviceSessions(sub);
-    if (activeSessions.length > 0) {
-      return activeSessions;
-    }
-
-    if (sub?.status?.toLowerCase() === 'active') {
-      const latestSession = getLatestKnownDeviceSession(sub);
-      if (latestSession) {
-        return [{ ...latestSession, __fallback: true }];
-      }
-    }
-
-    return [];
-  };
+  const getVisibleDeviceSessions = (sub?: any) => getActiveDeviceSessions(sub);
 
   const startDiscovery = (subId: string) => {
     const targetSub = subHistory.find((sub: any) => sub.id === subId);

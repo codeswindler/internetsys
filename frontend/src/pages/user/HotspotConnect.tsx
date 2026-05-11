@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, RefreshCw, ShieldCheck, Wifi } from 'lucide-react';
 import api from '../../services/api';
 import {
-  buildHotspotIdentifyUrl,
   clearHotspotConnectContext,
   clearStoredHotspotIdentity,
   hasFreshHotspotIdentity,
@@ -65,59 +64,12 @@ export default function HotspotConnect() {
       return;
     }
 
-    const continueUrl = new URL('/connect', window.location.origin);
-    continueUrl.searchParams.set('sub', subId);
-    continueUrl.searchParams.set('from', requestedFrom);
-    if (attemptId) {
-      continueUrl.searchParams.set('attempt', attemptId);
-    }
-    if (requestedRouterIp) {
-      continueUrl.searchParams.set('routerIp', requestedRouterIp);
-    }
-    continueUrl.searchParams.set('identified', '1');
-
     const startConnection = async () => {
       const identity = getStoredHotspotIdentity();
       const hasIdentity = !!(identity.mac || identity.ip);
       const hasFreshIdentity = hasFreshHotspotIdentity();
 
-      if (!identifyAttempted && !hasFreshIdentity) {
-        const routerIp =
-          requestedRouterIp ||
-          localStorage.getItem('hotspot_router_id') ||
-          '10.5.50.1';
-        traceHotspot('connect-identify-redirect', {
-          sub: subId,
-          detail: `router=${routerIp}`,
-        });
-        setStage('Identifying this device on the hotspot...');
-        window.location.replace(buildHotspotIdentifyUrl(routerIp, continueUrl.toString()));
-        return;
-      }
-
-      if (!hasIdentity || !hasFreshIdentity) {
-        traceHotspot('connect-no-fresh-identity', {
-          sub: subId,
-          detail: `identity=${hasIdentity ? 'yes' : 'no'}`,
-        });
-        setError(
-          'We could not identify this device yet. Keep Wi-Fi connected and try again from the hotspot page.',
-        );
-        return;
-      }
-
-      try {
-        traceHotspot('connect-start-api', {
-          sub: subId,
-          detail: `mac=${identity.mac ? 'yes' : 'no'};ip=${identity.ip ? 'yes' : 'no'}`,
-        });
-        setStage('Authorizing this device...');
-        const res = await api.post(`/subscriptions/${subId}/start`, {
-          mac: identity.mac,
-          ip: identity.ip,
-        });
-
-        const sub = res.data;
+      const completeRouterHandoff = (sub: any) => {
         syncStoredHotspotIdentity({
           mac: sub?.resolvedMac,
           ip: sub?.resolvedIp,
@@ -154,7 +106,38 @@ export default function HotspotConnect() {
           window.location.replace(releaseUrl);
           return;
         }
+      };
+
+      try {
+        traceHotspot('connect-start-api', {
+          sub: subId,
+          detail: `identity=${hasIdentity ? 'yes' : 'no'};fresh=${hasFreshIdentity ? 'yes' : 'no'};mac=${identity.mac ? 'yes' : 'no'};ip=${identity.ip ? 'yes' : 'no'}`,
+        });
+        setStage(hasIdentity ? 'Authorizing this device...' : 'Finding this device on the hotspot...');
+        const res = await api.post(`/subscriptions/${subId}/start`, {
+          mac: identity.mac,
+          ip: identity.ip,
+        });
+
+        completeRouterHandoff(res.data);
       } catch (err: any) {
+        if (hasIdentity && shouldTriggerHotspotIdentify(err)) {
+          clearStoredHotspotIdentity();
+          traceHotspot('connect-stale-identity-fallback', {
+            sub: subId,
+            detail: err.response?.data?.message || 'retry without stored identity',
+          });
+
+          try {
+            setStage('Refreshing hotspot device match...');
+            const retryRes = await api.post(`/subscriptions/${subId}/start`, {});
+            completeRouterHandoff(retryRes.data);
+            return;
+          } catch (retryErr: any) {
+            err = retryErr;
+          }
+        }
+
         if (err.response?.status === 409 && err.response?.data?.connectedDevices) {
           traceHotspot('connect-device-limit', {
             sub: subId,
@@ -174,9 +157,8 @@ export default function HotspotConnect() {
             sub: subId,
             detail: err.response?.data?.message || 'identify error',
           });
-          clearStoredHotspotIdentity();
           setError(
-            'We could not confirm this device on the hotspot yet. Please reopen the hotspot login page and try again.',
+            'We could not confirm this device on the hotspot yet. Keep Wi-Fi connected and tap Retry.',
           );
           return;
         }

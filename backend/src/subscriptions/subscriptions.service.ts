@@ -1323,29 +1323,7 @@ export class SubscriptionsService {
       sub.status === SubscriptionStatus.ACTIVE && !preferredActiveSession
         ? this.pickPreferredActiveSession(currentSubSessions)
         : preferredActiveSession;
-    const lastKnownSessionFallback =
-      sub.status === SubscriptionStatus.ACTIVE &&
-      maxAllowed === 1 &&
-      !preferredKnownSession &&
-      sub.user?.lastMac
-        ? {
-            id: `last-known:${sub.id}`,
-            macAddress: sub.user.lastMac,
-            ipAddress: sub.user.lastIp,
-            deviceModel: sub.user.deviceModel || 'Last Authorized Device',
-            createdAt: sub.updatedAt || sub.createdAt,
-          }
-        : undefined;
-    const limitReferenceSessions =
-      currentSubActiveSessions.length > 0
-        ? currentSubActiveSessions
-        : sub.status === SubscriptionStatus.ACTIVE &&
-            maxAllowed === 1 &&
-            preferredKnownSession
-          ? [preferredKnownSession]
-          : lastKnownSessionFallback
-            ? [lastKnownSessionFallback]
-          : [];
+    const limitReferenceSessions = currentSubActiveSessions;
     let finalIp = ip || undefined;
     let finalMac = mac || undefined;
 
@@ -1355,20 +1333,38 @@ export class SubscriptionsService {
       sub.status === SubscriptionStatus.ACTIVE &&
       maxAllowed === 1 &&
       !hasExplicitDeviceIdentity &&
-      limitReferenceSessions.length > 0;
+      currentSubActiveSessions.length >= maxAllowed;
 
     if (shouldRequireExplicitIdentity) {
+      const connectedDevices = this.buildConnectedDevicesPayload(
+        currentSubActiveSessions,
+        sub.package?.name,
+      );
+
       this.logger.warn(
-        `[START-REJECT] Sub ${sub.id} requires explicit hotspot identity for single-device takeover. Incoming MAC=${mac || 'none'}, IP=${ip || 'none'}`,
+        `[START-LIMIT] Sub ${sub.id} has an active device and no explicit incoming hotspot identity. Incoming MAC=${mac || 'none'}, IP=${ip || 'none'}`,
       );
-      throw new BadRequestException(
-        'Unable to identify your device on the hotspot. Please retry Link Device.',
-      );
+      throw new ConflictException({
+        message: `You've reached your limit of ${maxAllowed} device(s). Disconnect one below to continue.`,
+        error: 'DEVICE_LIMIT_REACHED',
+        connectedDevices,
+        maxDevices: maxAllowed,
+        subId: sub.id,
+      });
     }
 
+    const incomingMac = this.normalizeMac(finalMac);
+    const knownMac = this.normalizeMac(preferredKnownSession?.macAddress);
+    const explicitMacMatchesKnown =
+      !!incomingMac && !!knownMac && incomingMac === knownMac;
+    const explicitIpMatchesKnown =
+      !!finalIp &&
+      !this.isPublicIpv4(finalIp) &&
+      !!preferredKnownSession?.ipAddress &&
+      finalIp === preferredKnownSession.ipAddress;
     const canReuseKnownSessionIdentity =
       !!preferredKnownSession &&
-      (hasExplicitDeviceIdentity || currentSubActiveSessions.length === 0);
+      (explicitMacMatchesKnown || explicitIpMatchesKnown);
 
     if (canReuseKnownSessionIdentity && preferredKnownSession) {
       const reusedMac = !finalMac && preferredKnownSession.macAddress;
@@ -1481,11 +1477,12 @@ export class SubscriptionsService {
         }
       }
 
+      const normalizedFinalMac = this.normalizeMac(finalMac);
       const existingSessionInSub = currentSubSessions.find(
-        (s) => s.macAddress === finalMac,
+        (s) => this.normalizeMac(s.macAddress) === normalizedFinalMac,
       );
       const matchingLimitSession = limitReferenceSessions.find(
-        (s) => s.macAddress === finalMac,
+        (s) => this.normalizeMac(s.macAddress) === normalizedFinalMac,
       );
 
       if (!existingSessionInSub) {
@@ -1726,6 +1723,10 @@ export class SubscriptionsService {
 
   private wait(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private normalizeMac(mac?: string | null): string {
+    return mac ? mac.replace(/[^a-fA-F0-9]/g, '').toUpperCase() : '';
   }
 
   private isPublicIpv4(ip?: string): boolean {
