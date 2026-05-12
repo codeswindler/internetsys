@@ -1353,6 +1353,51 @@ export class SubscriptionsService {
       });
     }
 
+    const shouldCheckRouterSlotOccupancy =
+      sub.status === SubscriptionStatus.ACTIVE &&
+      sub.router.connectionMode !== 'pppoe' &&
+      maxAllowed === 1 &&
+      !hasExplicitDeviceIdentity;
+
+    if (shouldCheckRouterSlotOccupancy) {
+      const routerHasAuthorizedDevice =
+        await this.mikrotikService.hasHotspotAuthorization(
+          sub.router,
+          sub.mikrotikUsername,
+        );
+
+      if (routerHasAuthorizedDevice) {
+        const fallbackSession = preferredKnownSession
+          ? [preferredKnownSession]
+          : sub.user?.lastMac
+            ? [{
+                id: `last-known:${sub.id}`,
+                macAddress: sub.user.lastMac,
+                ipAddress: sub.user.lastIp,
+                deviceModel: sub.user.deviceModel || 'Last Authorized Device',
+                createdAt: sub.updatedAt || sub.createdAt,
+              }]
+            : [];
+        const connectedDevices = this.buildConnectedDevicesPayload(
+          currentSubActiveSessions.length > 0
+            ? currentSubActiveSessions
+            : fallbackSession,
+          sub.package?.name,
+        );
+
+        this.logger.warn(
+          `[START-LIMIT] Router already has an authorized hotspot device for sub ${sub.id}; requiring user handoff before host inference.`,
+        );
+        throw new ConflictException({
+          message: `You've reached your limit of ${maxAllowed} device(s). Disconnect one below to continue.`,
+          error: 'DEVICE_LIMIT_REACHED',
+          connectedDevices,
+          maxDevices: maxAllowed,
+          subId: sub.id,
+        });
+      }
+    }
+
     const incomingMac = this.normalizeMac(finalMac);
     const knownMac = this.normalizeMac(preferredKnownSession?.macAddress);
     const explicitMacMatchesKnown =

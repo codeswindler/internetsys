@@ -1178,6 +1178,34 @@ export class MikrotikService {
     }
   }
 
+  async hasHotspotAuthorization(router: Router, username?: string): Promise<boolean> {
+    if (!username) return false;
+
+    const api = await this.connect(router);
+    try {
+      const active = await api.write('/ip/hotspot/active/print', [
+        `?user=${username}`,
+      ]);
+      if (active && active.length > 0) {
+        return true;
+      }
+
+      const bindings = await api.write('/ip/hotspot/ip-binding/print');
+      return (bindings || []).some((binding: any) => {
+        const type = `${binding['type'] || ''}`.toLowerCase();
+        const comment = `${binding['comment'] || ''}`;
+        return type === 'bypassed' && comment === `Pulselynk: ${username}`;
+      });
+    } catch (e: any) {
+      this.logger.warn(
+        `Failed to check hotspot authorization for ${router.name}: ${e.message}`,
+      );
+      return false;
+    } finally {
+      api.close();
+    }
+  }
+
   async findMacByIp(router: Router, ip: string): Promise<string | null> {
     const api = await this.connect(router);
     try {
