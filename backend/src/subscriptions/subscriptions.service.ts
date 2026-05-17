@@ -1501,6 +1501,63 @@ export class SubscriptionsService {
       );
     }
 
+    const matchesKnownAuthorizedDevice =
+      this.identitiesOverlap(
+        finalMac,
+        finalIp,
+        preferredKnownSession?.macAddress,
+        preferredKnownSession?.ipAddress,
+      ) ||
+      this.identitiesOverlap(finalMac, finalIp, sub.user?.lastMac, sub.user?.lastIp);
+
+    if (
+      sub.status === SubscriptionStatus.ACTIVE &&
+      hasExplicitDeviceIdentity &&
+      matchesKnownAuthorizedDevice &&
+      sub.router.connectionMode !== 'pppoe'
+    ) {
+      const routerHasAuthorizedDevice =
+        await this.mikrotikService.hasHotspotAuthorization(
+          sub.router,
+          sub.mikrotikUsername,
+        );
+
+      if (routerHasAuthorizedDevice) {
+        const existingSessionInSub = currentSubSessions.find((session) =>
+          this.identitiesOverlap(
+            finalMac,
+            finalIp,
+            session.macAddress,
+            session.ipAddress,
+          ),
+        );
+
+        if (existingSessionInSub) {
+          existingSessionInSub.ipAddress =
+            finalIp || existingSessionInSub.ipAddress;
+          existingSessionInSub.deviceModel =
+            model || existingSessionInSub.deviceModel;
+          existingSessionInSub.isActive = true;
+          await this.sessionRepo.save(existingSessionInSub);
+        }
+
+        await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp, model);
+        const savedSub = await this.subRepo.save(sub);
+        this.logger.log(
+          `[CONNECT-REUSE] Sub ${savedSub.id} already authorized on router for MAC ${finalMac} | IP: ${finalIp || 'none'} | Expires: ${savedSub.expiresAt?.toISOString() || 'pending'}`,
+        );
+        return {
+          ...savedSub,
+          handshakeRequired: false,
+          activationPending: false,
+          connectionConfirmed: true,
+          authorizationMode: 'active-login',
+          resolvedMac: finalMac,
+          resolvedIp: finalIp,
+        };
+      }
+    }
+
     // MULTI-DEVICE LOGIC: GHOST-BUSTER - Purge any existing active sessions globally for this MAC
     let reusedCurrentActiveSession = false;
     if (finalMac) {
@@ -1524,10 +1581,14 @@ export class SubscriptionsService {
 
       const normalizedFinalMac = this.normalizeMac(finalMac);
       const existingSessionInSub = currentSubSessions.find(
-        (s) => this.normalizeMac(s.macAddress) === normalizedFinalMac,
+        (s) =>
+          this.normalizeMac(s.macAddress) === normalizedFinalMac ||
+          this.identitiesOverlap(finalMac, finalIp, s.macAddress, s.ipAddress),
       );
       const matchingLimitSession = limitReferenceSessions.find(
-        (s) => this.normalizeMac(s.macAddress) === normalizedFinalMac,
+        (s) =>
+          this.normalizeMac(s.macAddress) === normalizedFinalMac ||
+          this.identitiesOverlap(finalMac, finalIp, s.macAddress, s.ipAddress),
       );
 
       if (!existingSessionInSub) {
@@ -1772,6 +1833,28 @@ export class SubscriptionsService {
 
   private normalizeMac(mac?: string | null): string {
     return mac ? mac.replace(/[^a-fA-F0-9]/g, '').toUpperCase() : '';
+  }
+
+  private identitiesOverlap(
+    leftMac?: string | null,
+    leftIp?: string | null,
+    rightMac?: string | null,
+    rightIp?: string | null,
+  ): boolean {
+    const leftNormalizedMac = this.normalizeMac(leftMac);
+    const rightNormalizedMac = this.normalizeMac(rightMac);
+    const macMatches =
+      !!leftNormalizedMac &&
+      !!rightNormalizedMac &&
+      leftNormalizedMac === rightNormalizedMac;
+    const ipMatches =
+      !!leftIp &&
+      !!rightIp &&
+      !this.isPublicIpv4(leftIp) &&
+      !this.isPublicIpv4(rightIp) &&
+      leftIp === rightIp;
+
+    return macMatches || ipMatches;
   }
 
   private isPublicIpv4(ip?: string): boolean {
