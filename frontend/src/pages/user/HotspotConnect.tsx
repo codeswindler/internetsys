@@ -18,7 +18,7 @@ import {
   traceHotspot,
 } from '../../services/hotspot';
 
-const VISIBLE_INTERNET_TEST_URL = 'http://neverssl.com/';
+const INTERNET_LANDING_URL = 'https://www.google.com/';
 
 export default function HotspotConnect() {
   const navigate = useNavigate();
@@ -27,7 +27,8 @@ export default function HotspotConnect() {
   const [stage, setStage] = useState('Preparing secure connection...');
   const [error, setError] = useState('');
   const [fromPath, setFromPath] = useState('/user/dashboard');
-  const [releaseTarget, setReleaseTarget] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [releaseTarget, setReleaseTarget] = useState(INTERNET_LANDING_URL);
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -82,9 +83,16 @@ export default function HotspotConnect() {
           window.location.origin,
           connectContext?.releaseUrl,
         );
-        const visibleReleaseUrl = releaseUrl.includes('generate_204')
-          ? VISIBLE_INTERNET_TEST_URL
-          : releaseUrl;
+        const safeReleaseTarget = (() => {
+          try {
+            const target = new URL(releaseUrl, window.location.origin);
+            return target.protocol === 'https:' && !target.href.includes('generate_204')
+              ? target.href
+              : INTERNET_LANDING_URL;
+          } catch {
+            return INTERNET_LANDING_URL;
+          }
+        })();
         const routerGateway =
           requestedRouterIp ||
           sub?.router?.localGateway ||
@@ -92,8 +100,8 @@ export default function HotspotConnect() {
           '10.5.50.1';
 
         setStage('Completing router handoff...');
-        setReleaseTarget(visibleReleaseUrl);
-        toast.success('Device linked. Opening internet...');
+        setReleaseTarget(safeReleaseTarget);
+        toast.success('Device linked. You are online.');
         clearHotspotConnectContext(attemptId);
         traceHotspot('connect-router-release', {
           sub: subId,
@@ -109,34 +117,14 @@ export default function HotspotConnect() {
           target: 'hidden',
         });
 
-        const openRelease = (targetUrl: string, step: string, replace = true) => {
-          traceHotspot(step, {
+        window.setTimeout(() => {
+          setConnected(true);
+          setStage('This device is connected. You can close this tab or continue browsing.');
+          traceHotspot('connect-connected-screen', {
             sub: subId,
-            detail: targetUrl,
+            detail: `hiddenLogin=${submitted ? 'submitted' : 'skipped'}`,
           });
-
-          try {
-            if (replace) {
-              window.location.replace(targetUrl);
-            } else {
-              window.location.assign(targetUrl);
-            }
-          } catch {
-            window.location.href = targetUrl;
-          }
-        };
-
-        window.setTimeout(() => {
-          setStage('Internet is authorized. Opening a test page...');
-        }, submitted ? 600 : 100);
-
-        window.setTimeout(() => {
-          openRelease(releaseUrl, 'connect-release-primary');
-        }, submitted ? 900 : 100);
-
-        window.setTimeout(() => {
-          openRelease(visibleReleaseUrl, 'connect-release-visible-fallback', false);
-        }, submitted ? 2600 : 1300);
+        }, submitted ? 900 : 250);
       };
 
       try {
@@ -216,6 +204,8 @@ export default function HotspotConnect() {
             className={`w-20 h-20 rounded-3xl flex items-center justify-center ${
               error
                 ? 'bg-orange-500/10 text-orange-400'
+                : connected
+                  ? 'bg-emerald-500/10 text-emerald-400'
                 : 'bg-cyan-500/10 text-cyan-400'
             }`}
           >
@@ -227,14 +217,18 @@ export default function HotspotConnect() {
               Secure Device Link
             </p>
             <h1 className="text-3xl md:text-4xl font-black text-main tracking-tight">
-              {error ? 'Connection Needs Attention' : 'Connecting This Device'}
+              {error
+                ? 'Connection Needs Attention'
+                : connected
+                  ? 'Connected'
+                  : 'Connecting This Device'}
             </h1>
             <p className="text-sm md:text-base text-muted max-w-lg leading-relaxed">
               {error || stage}
             </p>
           </div>
 
-          {!error && (
+          {!error && !connected && (
             <>
               <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-cyan-500/10 border border-cyan-500/20">
                 <RefreshCw size={16} className="text-cyan-400 animate-spin" />
@@ -242,17 +236,25 @@ export default function HotspotConnect() {
                   Working on it
                 </span>
               </div>
-
-              {releaseTarget && (
-                <button
-                  onClick={() => window.location.assign(releaseTarget)}
-                  className="px-6 py-4 rounded-2xl bg-cyan-600 text-white font-black uppercase tracking-widest hover:bg-cyan-500 transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Wifi size={16} />
-                  Open Internet
-                </button>
-              )}
             </>
+          )}
+
+          {!error && connected && (
+            <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+              <button
+                onClick={() => navigate(fromPath, { replace: true })}
+                className="px-6 py-4 rounded-2xl bg-main/5 border border-main/10 text-main font-black uppercase tracking-widest hover:bg-main/10 transition-all active:scale-95"
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => window.location.assign(releaseTarget)}
+                className="px-6 py-4 rounded-2xl bg-cyan-600 text-white font-black uppercase tracking-widest hover:bg-cyan-500 transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Wifi size={16} />
+                Open Internet
+              </button>
+            </div>
           )}
 
           {error && (
