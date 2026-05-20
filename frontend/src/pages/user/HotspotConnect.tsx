@@ -99,13 +99,12 @@ export default function HotspotConnect() {
           password: sub?.mikrotikPassword,
           releaseUrl,
           currentOrigin: window.location.origin,
-          target: 'self',
+          target: 'hidden',
         });
 
-        if (!submitted) {
+        window.setTimeout(() => {
           window.location.replace(releaseUrl);
-          return;
-        }
+        }, submitted ? 900 : 100);
       };
 
       try {
