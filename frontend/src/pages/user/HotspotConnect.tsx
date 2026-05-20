@@ -18,6 +18,8 @@ import {
   traceHotspot,
 } from '../../services/hotspot';
 
+const VISIBLE_INTERNET_TEST_URL = 'http://neverssl.com/';
+
 export default function HotspotConnect() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -25,6 +27,7 @@ export default function HotspotConnect() {
   const [stage, setStage] = useState('Preparing secure connection...');
   const [error, setError] = useState('');
   const [fromPath, setFromPath] = useState('/user/dashboard');
+  const [releaseTarget, setReleaseTarget] = useState('');
 
   useEffect(() => {
     if (startedRef.current) return;
@@ -79,6 +82,9 @@ export default function HotspotConnect() {
           window.location.origin,
           connectContext?.releaseUrl,
         );
+        const visibleReleaseUrl = releaseUrl.includes('generate_204')
+          ? VISIBLE_INTERNET_TEST_URL
+          : releaseUrl;
         const routerGateway =
           requestedRouterIp ||
           sub?.router?.localGateway ||
@@ -86,6 +92,7 @@ export default function HotspotConnect() {
           '10.5.50.1';
 
         setStage('Completing router handoff...');
+        setReleaseTarget(visibleReleaseUrl);
         toast.success('Device linked. Opening internet...');
         clearHotspotConnectContext(attemptId);
         traceHotspot('connect-router-release', {
@@ -102,9 +109,34 @@ export default function HotspotConnect() {
           target: 'hidden',
         });
 
+        const openRelease = (targetUrl: string, step: string, replace = true) => {
+          traceHotspot(step, {
+            sub: subId,
+            detail: targetUrl,
+          });
+
+          try {
+            if (replace) {
+              window.location.replace(targetUrl);
+            } else {
+              window.location.assign(targetUrl);
+            }
+          } catch {
+            window.location.href = targetUrl;
+          }
+        };
+
         window.setTimeout(() => {
-          window.location.replace(releaseUrl);
+          setStage('Internet is authorized. Opening a test page...');
+        }, submitted ? 600 : 100);
+
+        window.setTimeout(() => {
+          openRelease(releaseUrl, 'connect-release-primary');
         }, submitted ? 900 : 100);
+
+        window.setTimeout(() => {
+          openRelease(visibleReleaseUrl, 'connect-release-visible-fallback', false);
+        }, submitted ? 2600 : 1300);
       };
 
       try {
@@ -203,12 +235,24 @@ export default function HotspotConnect() {
           </div>
 
           {!error && (
-            <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-cyan-500/10 border border-cyan-500/20">
-              <RefreshCw size={16} className="text-cyan-400 animate-spin" />
-              <span className="text-[11px] font-black uppercase tracking-[0.25em] text-cyan-300">
-                Working on it
-              </span>
-            </div>
+            <>
+              <div className="flex items-center gap-3 px-5 py-3 rounded-full bg-cyan-500/10 border border-cyan-500/20">
+                <RefreshCw size={16} className="text-cyan-400 animate-spin" />
+                <span className="text-[11px] font-black uppercase tracking-[0.25em] text-cyan-300">
+                  Working on it
+                </span>
+              </div>
+
+              {releaseTarget && (
+                <button
+                  onClick={() => window.location.assign(releaseTarget)}
+                  className="px-6 py-4 rounded-2xl bg-cyan-600 text-white font-black uppercase tracking-widest hover:bg-cyan-500 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <Wifi size={16} />
+                  Open Internet
+                </button>
+              )}
+            </>
           )}
 
           {error && (
