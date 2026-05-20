@@ -8,6 +8,12 @@ type HotspotActiveLoginResult = {
   attempts: string;
 };
 
+type HotspotAuthorization = {
+  mac?: string;
+  ip?: string;
+  source: 'active' | 'bypass';
+};
+
 @Injectable()
 export class MikrotikService {
   private readonly logger = new Logger(MikrotikService.name);
@@ -807,22 +813,25 @@ export class MikrotikService {
     profile?: string,
     sharedUsersLimit?: number,
   ): Promise<void> {
+    const resolvedProfile = await this.resolveHotspotUserProfile(
+      api,
+      profile,
+      sharedUsersLimit,
+    );
     const users = await api.write('/ip/hotspot/user/print', [
       `?name=${username}`,
     ]);
 
     if (users.length > 0) {
       const args = [`=.id=${users[0]['.id']}`, `=password=${pass}`];
-      if (profile) args.push(`=profile=${profile}`);
+      if (resolvedProfile) args.push(`=profile=${resolvedProfile}`);
       await api.write('/ip/hotspot/user/set', args);
-      await this.ensureHotspotProfileSharedUsers(api, profile, sharedUsersLimit);
       return;
     }
 
     const args = [`=name=${username}`, `=password=${pass}`];
-    if (profile) args.push(`=profile=${profile}`);
+    if (resolvedProfile) args.push(`=profile=${resolvedProfile}`);
     await api.write('/ip/hotspot/user/add', args);
-    await this.ensureHotspotProfileSharedUsers(api, profile, sharedUsersLimit);
   }
 
   private normalizeSharedUsersLimit(maxDevices?: number): string {
@@ -831,38 +840,60 @@ export class MikrotikService {
     return `${Math.floor(parsed)}`;
   }
 
-  private async ensureHotspotProfileSharedUsers(
+  private buildDeviceLimitedProfileName(profile: string, maxDevices?: number): string {
+    const safeProfile = profile.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 32);
+    return `pl_${safeProfile}_d${this.normalizeSharedUsersLimit(maxDevices)}`;
+  }
+
+  private async resolveHotspotUserProfile(
     api: RouterOSAPI,
     profile?: string,
     maxDevices?: number,
-  ): Promise<void> {
-    if (!profile) return;
+  ): Promise<string | undefined> {
+    if (!profile || !maxDevices) return profile;
 
     const desiredSharedUsers = this.normalizeSharedUsersLimit(maxDevices);
-    const profiles = await api.write('/ip/hotspot/user/profile/print', [
+    const limitedProfile = this.buildDeviceLimitedProfileName(profile, maxDevices);
+    const existingLimitedProfiles = await api.write('/ip/hotspot/user/profile/print', [
+      `?name=${limitedProfile}`,
+    ]);
+    const sourceProfiles = await api.write('/ip/hotspot/user/profile/print', [
       `?name=${profile}`,
     ]);
 
-    if (!profiles?.length) {
+    if (!sourceProfiles?.length) {
       this.logger.warn(
-        `[HOTSPOT PROFILE] Profile ${profile} not found; cannot sync shared-users=${desiredSharedUsers}.`,
+        `[HOTSPOT PROFILE] Profile ${profile} not found; using it without per-package shared-users=${desiredSharedUsers}.`,
       );
-      return;
+      return profile;
     }
 
-    const currentSharedUsers = `${profiles[0]['shared-users'] || ''}`;
-    if (currentSharedUsers === desiredSharedUsers) {
-      return;
+    const sourceProfile = sourceProfiles[0];
+    const rateLimit = `${sourceProfile['rate-limit'] || ''}`;
+
+    if (existingLimitedProfiles?.length) {
+      const args = [
+        `=.id=${existingLimitedProfiles[0]['.id']}`,
+        `=shared-users=${desiredSharedUsers}`,
+      ];
+      if (rateLimit) args.push(`=rate-limit=${rateLimit}`);
+
+      await api.write('/ip/hotspot/user/profile/set', args);
+      return limitedProfile;
     }
 
-    await api.write('/ip/hotspot/user/profile/set', [
-      `=.id=${profiles[0]['.id']}`,
+    const args = [
+      `=name=${limitedProfile}`,
       `=shared-users=${desiredSharedUsers}`,
-    ]);
+    ];
+    if (rateLimit) args.push(`=rate-limit=${rateLimit}`);
+
+    await api.write('/ip/hotspot/user/profile/add', args);
 
     this.logger.log(
-      `[HOTSPOT PROFILE] Updated ${profile} shared-users=${desiredSharedUsers} for package device limit.`,
+      `[HOTSPOT PROFILE] Created ${limitedProfile} from ${profile} shared-users=${desiredSharedUsers}.`,
     );
+    return limitedProfile;
   }
 
   private async clearHotspotAuthorization(
@@ -1263,29 +1294,102 @@ export class MikrotikService {
   async hasHotspotAuthorization(router: Router, username?: string): Promise<boolean> {
     if (!username) return false;
 
-    const api = await this.connect(router);
     try {
-      const active = await api.write('/ip/hotspot/active/print', [
-        `?user=${username}`,
-      ]);
-      if (active && active.length > 0) {
-        return true;
-      }
-
-      const bindings = await api.write('/ip/hotspot/ip-binding/print');
-      return (bindings || []).some((binding: any) => {
-        const type = `${binding['type'] || ''}`.toLowerCase();
-        const comment = `${binding['comment'] || ''}`;
-        return type === 'bypassed' && comment === `Pulselynk: ${username}`;
-      });
+      return (await this.listHotspotAuthorizations(router, username)).length > 0;
     } catch (e: any) {
       this.logger.warn(
         `Failed to check hotspot authorization for ${router.name}: ${e.message}`,
       );
       return false;
+    }
+  }
+
+  async listHotspotAuthorizations(
+    router: Router,
+    username?: string,
+  ): Promise<HotspotAuthorization[]> {
+    if (!username) return [];
+
+    const api = await this.connect(router);
+    try {
+      const authorizations: HotspotAuthorization[] = [];
+      const active = await api.write('/ip/hotspot/active/print', [
+        `?user=${username}`,
+      ]);
+
+      for (const session of active || []) {
+        authorizations.push({
+          mac: this.normalizeMac(session?.['mac-address']),
+          ip: session?.['address'],
+          source: 'active',
+        });
+      }
+
+      const bindings = await api.write('/ip/hotspot/ip-binding/print');
+      for (const binding of bindings || []) {
+        const type = `${binding['type'] || ''}`.toLowerCase();
+        const comment = `${binding['comment'] || ''}`;
+        if (type !== 'bypassed' || comment !== `Pulselynk: ${username}`) {
+          continue;
+        }
+
+        authorizations.push({
+          mac: this.normalizeMac(binding?.['mac-address']),
+          ip: binding?.['address'],
+          source: 'bypass',
+        });
+      }
+
+      return this.mergeHotspotAuthorizations(authorizations);
+    } catch (e: any) {
+      this.logger.warn(
+        `Failed to list hotspot authorizations for ${router.name}: ${e.message}`,
+      );
+      return [];
     } finally {
       api.close();
     }
+  }
+
+  private mergeHotspotAuthorizations(
+    authorizations: HotspotAuthorization[],
+  ): HotspotAuthorization[] {
+    const merged: HotspotAuthorization[] = [];
+    const matches = (left: HotspotAuthorization, right: HotspotAuthorization) =>
+      (!!left.mac && !!right.mac && left.mac === right.mac) ||
+      (!!left.ip && !!right.ip && left.ip === right.ip);
+
+    const mergeInto = (
+      target: HotspotAuthorization,
+      source: HotspotAuthorization,
+    ) => {
+      if (!target.mac && source.mac) target.mac = source.mac;
+      if (!target.ip && source.ip) target.ip = source.ip;
+      if (source.source === 'active') target.source = 'active';
+    };
+
+    for (const authorization of authorizations) {
+      let target = merged.find((candidate) => matches(candidate, authorization));
+
+      if (!target) {
+        target = { ...authorization };
+        merged.push(target);
+      } else {
+        mergeInto(target, authorization);
+      }
+
+      for (let index = merged.length - 1; index >= 0; index -= 1) {
+        const candidate = merged[index];
+        if (candidate === target || !matches(candidate, target)) {
+          continue;
+        }
+
+        mergeInto(target, candidate);
+        merged.splice(index, 1);
+      }
+    }
+
+    return merged;
   }
 
   async findMacByIp(router: Router, ip: string): Promise<string | null> {

@@ -1324,14 +1324,18 @@ export class SubscriptionsService {
         ? this.pickPreferredActiveSession(currentSubSessions)
         : preferredActiveSession;
     const limitReferenceSessions = currentSubActiveSessions;
-    const buildDeviceLimitConflict = () => {
+    const buildDeviceLimitConflict = (
+      fallbackOverride?: Array<
+        Pick<DeviceSession, 'id' | 'macAddress' | 'ipAddress' | 'deviceModel' | 'createdAt'>
+      >,
+    ) => {
       const fallbackSessions: Array<
         Pick<DeviceSession, 'id' | 'macAddress' | 'ipAddress' | 'deviceModel' | 'createdAt'>
-      > = [];
+      > = fallbackOverride ? [...fallbackOverride] : [];
 
-      if (preferredKnownSession) {
+      if (!fallbackOverride && preferredKnownSession) {
         fallbackSessions.push(preferredKnownSession);
-      } else if (sub.user?.lastMac) {
+      } else if (!fallbackOverride && sub.user?.lastMac) {
         fallbackSessions.push({
           id: `last-known:${sub.id}`,
           macAddress: sub.user.lastMac,
@@ -1529,6 +1533,62 @@ export class SubscriptionsService {
       throw new BadRequestException(
         `CONFLICT: You already have a live session (${liveSub.package?.name}). You must wait for it to expire before starting a new one.`,
       );
+    }
+
+    const routerLimitFallbackSessions: Array<
+      Pick<DeviceSession, 'id' | 'macAddress' | 'ipAddress' | 'deviceModel' | 'createdAt'>
+    > = [];
+    if (
+      sub.status === SubscriptionStatus.ACTIVE &&
+      sub.router.connectionMode !== 'pppoe' &&
+      sub.mikrotikUsername &&
+      maxAllowed > 0
+    ) {
+      const routerAuthorizations =
+        await this.mikrotikService.listHotspotAuthorizations(
+          sub.router,
+          sub.mikrotikUsername,
+        );
+      const normalizedFinalMacForLimit = this.normalizeMac(finalMac);
+      const matchingRouterAuthorization = routerAuthorizations.some((authorization) => {
+        const authorizationMac = this.normalizeMac(authorization.mac);
+        const macMatches =
+          !!normalizedFinalMacForLimit &&
+          !!authorizationMac &&
+          authorizationMac === normalizedFinalMacForLimit;
+        const ipMatches =
+          !!finalIp &&
+          !!authorization.ip &&
+          authorization.ip === finalIp;
+
+        return macMatches || ipMatches;
+      });
+      const activeRouterAuthorizationCount = routerAuthorizations.length;
+
+      for (const authorization of routerAuthorizations) {
+        routerLimitFallbackSessions.push({
+          id: `router:${sub.id}:${authorization.mac || authorization.ip || routerLimitFallbackSessions.length}`,
+          macAddress: authorization.mac || 'Router authorized device',
+          ipAddress: authorization.ip || '',
+          deviceModel:
+            authorization.source === 'bypass'
+              ? 'Router Bypass Device'
+              : 'Router Active Device',
+          createdAt: new Date(),
+        });
+      }
+
+      const knownActiveDeviceCount = Math.max(
+        limitReferenceSessions.length,
+        activeRouterAuthorizationCount,
+      );
+
+      if (knownActiveDeviceCount >= maxAllowed && !matchingRouterAuthorization) {
+        this.logger.warn(
+          `[START-LIMIT] Router already has ${activeRouterAuthorizationCount} authorized device(s) for sub ${sub.id}; blocking new device ${finalMac || finalIp || 'unknown'} before auth.`,
+        );
+        throw buildDeviceLimitConflict(routerLimitFallbackSessions);
+      }
     }
 
     // MULTI-DEVICE LOGIC: GHOST-BUSTER - Purge any existing active sessions globally for this MAC
