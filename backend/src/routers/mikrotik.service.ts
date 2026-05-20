@@ -11,6 +11,7 @@ type HotspotActiveLoginResult = {
 type HotspotAuthorization = {
   mac?: string;
   ip?: string;
+  deviceName?: string;
   source: 'active' | 'bypass';
 };
 
@@ -1313,14 +1314,39 @@ export class MikrotikService {
     const api = await this.connect(router);
     try {
       const authorizations: HotspotAuthorization[] = [];
+      const deviceNamesByMac = new Map<string, string>();
+      const deviceNamesByIp = new Map<string, string>();
+      const leases = await api.write('/ip/dhcp-server/lease/print').catch(() => []);
+
+      for (const lease of leases || []) {
+        const hostName = `${lease?.['host-name'] || ''}`.trim();
+        if (!hostName) continue;
+
+        const leaseMac = this.normalizeMac(
+          lease?.['active-mac-address'] || lease?.['mac-address'],
+        );
+        const leaseIp = lease?.['active-address'] || lease?.['address'];
+
+        if (leaseMac) deviceNamesByMac.set(leaseMac, hostName);
+        if (leaseIp) deviceNamesByIp.set(leaseIp, hostName);
+      }
+
+      const getDeviceName = (mac?: string, ip?: string) =>
+        (mac && deviceNamesByMac.get(mac)) ||
+        (ip && deviceNamesByIp.get(ip)) ||
+        undefined;
+
       const active = await api.write('/ip/hotspot/active/print', [
         `?user=${username}`,
       ]);
 
       for (const session of active || []) {
+        const mac = this.normalizeMac(session?.['mac-address']);
+        const ip = session?.['address'];
         authorizations.push({
-          mac: this.normalizeMac(session?.['mac-address']),
-          ip: session?.['address'],
+          mac,
+          ip,
+          deviceName: getDeviceName(mac, ip),
           source: 'active',
         });
       }
@@ -1333,9 +1359,12 @@ export class MikrotikService {
           continue;
         }
 
+        const mac = this.normalizeMac(binding?.['mac-address']);
+        const ip = binding?.['address'];
         authorizations.push({
-          mac: this.normalizeMac(binding?.['mac-address']),
-          ip: binding?.['address'],
+          mac,
+          ip,
+          deviceName: getDeviceName(mac, ip),
           source: 'bypass',
         });
       }
@@ -1365,6 +1394,9 @@ export class MikrotikService {
     ) => {
       if (!target.mac && source.mac) target.mac = source.mac;
       if (!target.ip && source.ip) target.ip = source.ip;
+      if (!target.deviceName && source.deviceName) {
+        target.deviceName = source.deviceName;
+      }
       if (source.source === 'active') target.source = 'active';
     };
 

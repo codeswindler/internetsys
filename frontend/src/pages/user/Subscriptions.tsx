@@ -152,8 +152,18 @@ export default function Subscriptions() {
 
   const disconnectMutation = useMutation({
     mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
-    onSuccess: (_data, sessionId) => {
-        toast.success('Device disconnected! You have a free slot.');
+    onSuccess: (response, sessionId) => {
+        const kickedDevice = deviceLimitSessions.find((session: any) => session.id === sessionId);
+        const kickedDeviceLabel =
+          kickedDevice?.model ||
+          kickedDevice?.deviceModel ||
+          kickedDevice?.macAddress ||
+          kickedDevice?.mac;
+        toast.success(
+          kickedDeviceLabel
+            ? `${kickedDeviceLabel} disconnected. You have a free slot.`
+            : response?.data?.message || 'Device disconnected! You have a free slot.',
+        );
         queryClient.invalidateQueries({ queryKey: ['my-subscriptions'] });
         setDeviceLimitSessions((prev) => prev.filter((session) => session.id !== sessionId));
         if (pendingStartSubId) {

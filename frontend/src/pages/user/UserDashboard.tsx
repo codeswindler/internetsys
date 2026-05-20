@@ -273,9 +273,19 @@ export default function UserDashboard() {
 
   const disconnectMutation = useMutation({
     mutationFn: (sessionId: string) => api.post('/subscriptions/disconnect-device', { sessionId }),
-    onSuccess: (_data, sessionId) => {
+    onSuccess: (response, sessionId) => {
       const pendingSubId = deviceManager.pendingSubId;
-      toast.success('Device disconnected! Slot cleared.');
+      const kickedDevice = deviceManager.connectedDevices.find((device: any) => device.id === sessionId);
+      const kickedDeviceLabel =
+        kickedDevice?.model ||
+        kickedDevice?.deviceModel ||
+        kickedDevice?.macAddress ||
+        kickedDevice?.mac;
+      toast.success(
+        kickedDeviceLabel
+          ? `${kickedDeviceLabel} disconnected. Slot cleared.`
+          : response?.data?.message || 'Device disconnected! Slot cleared.',
+      );
       queryClient.invalidateQueries({ queryKey: ['active-all-subscriptions', currentUser?.id] });
 
       setDeviceManager(prev => ({

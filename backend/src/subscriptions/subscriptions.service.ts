@@ -681,6 +681,89 @@ export class SubscriptionsService {
    * and removes the device from the MikroTik router's active/host tables.
    */
   async disconnectDevice(userId: string, sessionId: string): Promise<{ success: boolean; message: string }> {
+    if (sessionId.startsWith('router:')) {
+      const match = sessionId.match(/^router:([0-9a-f-]{36}):(.+)$/i);
+      if (!match) {
+        throw new BadRequestException('Invalid router-backed device session');
+      }
+
+      const subId = match[1];
+      let identity = match[2];
+      try {
+        identity = decodeURIComponent(identity);
+      } catch {
+        // Older router-backed IDs may already be plain text.
+      }
+
+      const sub = await this.subRepo.findOne({
+        where: { id: subId },
+        relations: ['user', 'router', 'deviceSessions'],
+      });
+
+      if (!sub) throw new NotFoundException('Subscription not found');
+      if (sub.user?.id !== userId) {
+        throw new BadRequestException('You can only disconnect your own devices');
+      }
+
+      const normalizedIdentityMac = this.normalizeMac(identity);
+      const isMac = normalizedIdentityMac.length === 12;
+      const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(identity);
+      const targetMac = isMac ? identity : undefined;
+      const targetIp = isIp ? identity : undefined;
+
+      if (!targetMac && !targetIp) {
+        throw new BadRequestException('Could not identify the router-backed device to disconnect');
+      }
+
+      const matchingSessions = (sub.deviceSessions || []).filter((deviceSession) => {
+        const macMatches =
+          !!targetMac &&
+          this.normalizeMac(deviceSession.macAddress) === normalizedIdentityMac;
+        const ipMatches =
+          !!targetIp &&
+          !!deviceSession.ipAddress &&
+          deviceSession.ipAddress === targetIp;
+
+        return deviceSession.isActive && (macMatches || ipMatches);
+      });
+
+      if (matchingSessions.length > 0) {
+        for (const deviceSession of matchingSessions) {
+          deviceSession.isActive = false;
+        }
+        await this.sessionRepo.save(matchingSessions);
+      }
+
+      if (sub.router) {
+        try {
+          await this.mikrotikService.forceLogoutHotspot(
+            sub.router,
+            targetIp,
+            targetMac,
+          );
+          this.logger.log(
+            `[DISCONNECT] Removed router-backed device ${targetMac || targetIp} from router ${sub.router.name}`,
+          );
+        } catch (e: any) {
+          this.logger.warn(
+            `[DISCONNECT] Router-backed cleanup failed for ${targetMac || targetIp}: ${e.message}`,
+          );
+          throw new BadRequestException('Failed to disconnect the router-backed device. Please try again.');
+        }
+      }
+
+      const deviceLabel =
+        matchingSessions[0]?.deviceModel ||
+        targetMac ||
+        targetIp ||
+        'Router device';
+
+      return {
+        success: true,
+        message: `Device ${deviceLabel} disconnected`,
+      };
+    }
+
     if (sessionId.startsWith('last-known:')) {
       const subId = sessionId.replace('last-known:', '');
       const sub = await this.subRepo.findOne({
@@ -1566,14 +1649,34 @@ export class SubscriptionsService {
       const activeRouterAuthorizationCount = routerAuthorizations.length;
 
       for (const authorization of routerAuthorizations) {
+        const matchingKnownSession = currentSubSessions.find((session) => {
+          const sessionMac = this.normalizeMac(session.macAddress);
+          const authorizationMac = this.normalizeMac(authorization.mac);
+          const macMatches =
+            !!sessionMac &&
+            !!authorizationMac &&
+            sessionMac === authorizationMac;
+          const ipMatches =
+            !!session.ipAddress &&
+            !!authorization.ip &&
+            session.ipAddress === authorization.ip;
+
+          return macMatches || ipMatches;
+        });
+        const authorizationIdentity = encodeURIComponent(
+          authorization.mac || authorization.ip || `${routerLimitFallbackSessions.length}`,
+        );
+
         routerLimitFallbackSessions.push({
-          id: `router:${sub.id}:${authorization.mac || authorization.ip || routerLimitFallbackSessions.length}`,
+          id: `router:${sub.id}:${authorizationIdentity}`,
           macAddress: authorization.mac || 'Router authorized device',
           ipAddress: authorization.ip || '',
           deviceModel:
-            authorization.source === 'bypass'
+            matchingKnownSession?.deviceModel ||
+            authorization.deviceName ||
+            (authorization.source === 'bypass'
               ? 'Router Bypass Device'
-              : 'Router Active Device',
+              : 'Router Active Device'),
           createdAt: new Date(),
         });
       }
