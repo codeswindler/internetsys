@@ -1324,6 +1324,36 @@ export class SubscriptionsService {
         ? this.pickPreferredActiveSession(currentSubSessions)
         : preferredActiveSession;
     const limitReferenceSessions = currentSubActiveSessions;
+    const buildDeviceLimitConflict = () => {
+      const fallbackSessions: Array<
+        Pick<DeviceSession, 'id' | 'macAddress' | 'ipAddress' | 'deviceModel' | 'createdAt'>
+      > = [];
+
+      if (preferredKnownSession) {
+        fallbackSessions.push(preferredKnownSession);
+      } else if (sub.user?.lastMac) {
+        fallbackSessions.push({
+          id: `last-known:${sub.id}`,
+          macAddress: sub.user.lastMac,
+          ipAddress: sub.user.lastIp,
+          deviceModel: sub.user.deviceModel || 'Last Authorized Device',
+          createdAt: sub.updatedAt || sub.createdAt,
+        });
+      }
+
+      const connectedDevices = this.buildConnectedDevicesPayload(
+        limitReferenceSessions.length > 0 ? limitReferenceSessions : fallbackSessions,
+        sub.package?.name,
+      );
+
+      return new ConflictException({
+        message: `You've reached your limit of ${maxAllowed} device(s). Disconnect one below to continue.`,
+        error: 'DEVICE_LIMIT_REACHED',
+        connectedDevices,
+        maxDevices: maxAllowed,
+        subId: sub.id,
+      });
+    };
     let finalIp = ip || undefined;
     let finalMac = mac || undefined;
 
@@ -1503,6 +1533,33 @@ export class SubscriptionsService {
 
     // MULTI-DEVICE LOGIC: GHOST-BUSTER - Purge any existing active sessions globally for this MAC
     let reusedCurrentActiveSession = false;
+    let routerAuthSession: DeviceSession | undefined;
+    let routerAuthSessionWasCreated = false;
+    let routerAuthPreviousState:
+      | Pick<DeviceSession, 'ipAddress' | 'deviceModel' | 'isActive'>
+      | undefined;
+    const rollbackRouterAuthSession = async () => {
+      if (!routerAuthSession) return;
+
+      try {
+        if (routerAuthSessionWasCreated) {
+          await this.sessionRepo.remove(routerAuthSession);
+          return;
+        }
+
+        if (routerAuthPreviousState) {
+          routerAuthSession.ipAddress = routerAuthPreviousState.ipAddress;
+          routerAuthSession.deviceModel = routerAuthPreviousState.deviceModel;
+          routerAuthSession.isActive = routerAuthPreviousState.isActive;
+          await this.sessionRepo.save(routerAuthSession);
+        }
+      } catch (rollbackError: any) {
+        this.logger.warn(
+          `[START-ROLLBACK] Failed to rollback router auth session for sub ${sub.id}: ${rollbackError.message}`,
+        );
+      }
+    };
+
     if (finalMac) {
       this.logger.log(`[GHOST-BUSTER] Investigating MAC ${finalMac} for ghost sessions...`);
       
@@ -1557,14 +1614,20 @@ export class SubscriptionsService {
           deviceModel: model,
           isActive: true,
         });
-        await this.sessionRepo.save(newSession);
+        routerAuthSession = await this.sessionRepo.save(newSession);
+        routerAuthSessionWasCreated = true;
       } else {
         // Update existing session
         const wasAlreadyActive = existingSessionInSub.isActive;
+        routerAuthPreviousState = {
+          ipAddress: existingSessionInSub.ipAddress,
+          deviceModel: existingSessionInSub.deviceModel,
+          isActive: existingSessionInSub.isActive,
+        };
         existingSessionInSub.ipAddress = finalIp || existingSessionInSub.ipAddress;
         existingSessionInSub.deviceModel = model;
         existingSessionInSub.isActive = true;
-        await this.sessionRepo.save(existingSessionInSub);
+        routerAuthSession = await this.sessionRepo.save(existingSessionInSub);
         reusedCurrentActiveSession =
           sub.status === SubscriptionStatus.ACTIVE && wasAlreadyActive;
       }
@@ -1602,6 +1665,7 @@ export class SubscriptionsService {
           finalIp,
           finalMac,
           sub.package.bandwidthProfile,
+          maxAllowed,
         );
         
         if (!loginRes?.success) {
@@ -1629,8 +1693,15 @@ export class SubscriptionsService {
           );
         }
       } catch (e) {
-        this.logger.error(`Router Login Failed: ${e.message}`);
-        throw new BadRequestException(`Connection Error: ${e.message}`);
+        const errorMessage = `${e?.message || e}`;
+        this.logger.error(`Router Login Failed: ${errorMessage}`);
+
+        if (errorMessage.includes('HOTSPOT_DEVICE_LIMIT_REACHED')) {
+          await rollbackRouterAuthSession();
+          throw buildDeviceLimitConflict();
+        }
+
+        throw new BadRequestException(`Connection Error: ${errorMessage}`);
       }
     }
 

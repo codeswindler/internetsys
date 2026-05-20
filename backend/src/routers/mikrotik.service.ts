@@ -2,6 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { RouterOSAPI } from 'routeros';
 import { Router } from '../entities/router.entity';
 
+type HotspotActiveLoginResult = {
+  success: boolean;
+  blockedBySessionLimit: boolean;
+  attempts: string;
+};
+
 @Injectable()
 export class MikrotikService {
   private readonly logger = new Logger(MikrotikService.name);
@@ -799,6 +805,7 @@ export class MikrotikService {
     username: string,
     pass: string,
     profile?: string,
+    sharedUsersLimit?: number,
   ): Promise<void> {
     const users = await api.write('/ip/hotspot/user/print', [
       `?name=${username}`,
@@ -808,12 +815,54 @@ export class MikrotikService {
       const args = [`=.id=${users[0]['.id']}`, `=password=${pass}`];
       if (profile) args.push(`=profile=${profile}`);
       await api.write('/ip/hotspot/user/set', args);
+      await this.ensureHotspotProfileSharedUsers(api, profile, sharedUsersLimit);
       return;
     }
 
     const args = [`=name=${username}`, `=password=${pass}`];
     if (profile) args.push(`=profile=${profile}`);
     await api.write('/ip/hotspot/user/add', args);
+    await this.ensureHotspotProfileSharedUsers(api, profile, sharedUsersLimit);
+  }
+
+  private normalizeSharedUsersLimit(maxDevices?: number): string {
+    const parsed = Number(maxDevices);
+    if (!Number.isFinite(parsed) || parsed < 1) return '1';
+    return `${Math.floor(parsed)}`;
+  }
+
+  private async ensureHotspotProfileSharedUsers(
+    api: RouterOSAPI,
+    profile?: string,
+    maxDevices?: number,
+  ): Promise<void> {
+    if (!profile) return;
+
+    const desiredSharedUsers = this.normalizeSharedUsersLimit(maxDevices);
+    const profiles = await api.write('/ip/hotspot/user/profile/print', [
+      `?name=${profile}`,
+    ]);
+
+    if (!profiles?.length) {
+      this.logger.warn(
+        `[HOTSPOT PROFILE] Profile ${profile} not found; cannot sync shared-users=${desiredSharedUsers}.`,
+      );
+      return;
+    }
+
+    const currentSharedUsers = `${profiles[0]['shared-users'] || ''}`;
+    if (currentSharedUsers === desiredSharedUsers) {
+      return;
+    }
+
+    await api.write('/ip/hotspot/user/profile/set', [
+      `=.id=${profiles[0]['.id']}`,
+      `=shared-users=${desiredSharedUsers}`,
+    ]);
+
+    this.logger.log(
+      `[HOTSPOT PROFILE] Updated ${profile} shared-users=${desiredSharedUsers} for package device limit.`,
+    );
   }
 
   private async clearHotspotAuthorization(
@@ -1002,29 +1051,55 @@ export class MikrotikService {
     pass: string,
     ip?: string,
     mac?: string,
-  ): Promise<boolean> {
-    if (!ip || !mac) return false;
+  ): Promise<HotspotActiveLoginResult> {
+    if (!ip || !mac) {
+      return { success: false, blockedBySessionLimit: false, attempts: 'missing-ip-or-mac' };
+    }
 
     const attempts = [
       [`=user=${username}`, `=password=${pass}`, `=mac-address=${mac}`, `=ip=${ip}`],
       [`=user=${username}`, `=password=${pass}`, `=mac-address=${mac}`, `=address=${ip}`],
     ];
     const failures: string[] = [];
+    let blockedBySessionLimit = false;
 
     for (const args of attempts) {
       try {
         await api.write('/ip/hotspot/active/login', args);
-        return true;
+        return { success: true, blockedBySessionLimit: false, attempts: '' };
       } catch (e: any) {
-        failures.push(`${args[3]}: ${e.message}`);
+        const message = `${e?.message || e}`;
+        failures.push(`${args[3]}: ${message}`);
+        if (this.isHotspotSessionLimitFailure(message)) {
+          blockedBySessionLimit = true;
+        }
       }
     }
 
+    const attemptsSummary = failures.join(' | ');
+    const fallbackMessage = blockedBySessionLimit
+      ? 'device limit reached; bypass fallback will not be used'
+      : 'bypass fallback will be used';
+
     this.logger.debug(
-      `[ACTIVE-LOGIN] Direct hotspot login unavailable for ${mac}/${ip}; bypass fallback will be used. attempts=${failures.join(' | ')}`,
+      `[ACTIVE-LOGIN] Direct hotspot login unavailable for ${mac}/${ip}; ${fallbackMessage}. attempts=${attemptsSummary}`,
     );
 
-    return false;
+    return {
+      success: false,
+      blockedBySessionLimit,
+      attempts: attemptsSummary,
+    };
+  }
+
+  private isHotspotSessionLimitFailure(message: string): boolean {
+    const normalized = `${message || ''}`.toLowerCase();
+    return (
+      normalized.includes('no more sessions are allowed') ||
+      normalized.includes('simultaneous session') ||
+      normalized.includes('too many sessions') ||
+      normalized.includes('already logged in')
+    );
   }
 
   async loginUser(
@@ -1034,6 +1109,7 @@ export class MikrotikService {
     ip?: string,
     mac?: string,
     profile?: string,
+    sharedUsersLimit?: number,
   ): Promise<any> {
     const finalMac = this.normalizeMac(mac);
     const api = await this.connect(router);
@@ -1043,10 +1119,10 @@ export class MikrotikService {
       );
 
       await this.ensureHotspotLoginModes(api, router);
-      await this.upsertHotspotUser(api, username, pass, profile);
+      await this.upsertHotspotUser(api, username, pass, profile, sharedUsersLimit);
       await this.clearHotspotAuthorization(api, username, ip, finalMac);
 
-      const activeLoginSucceeded = await this.tryHotspotActiveLogin(
+      const activeLoginResult = await this.tryHotspotActiveLogin(
         api,
         username,
         pass,
@@ -1054,12 +1130,18 @@ export class MikrotikService {
         finalMac,
       );
 
-      if (activeLoginSucceeded) {
+      if (activeLoginResult.success) {
         this.logger.log(
           `[AUTH SUCCESS] Direct hotspot session started for ${finalMac || ip} on ${router.name}.`,
         );
         await this.nudgeHotspotClient(api, ip, finalMac);
         return { success: true, authorizationMode: 'active-login' };
+      }
+
+      if (activeLoginResult.blockedBySessionLimit) {
+        throw new Error(
+          `HOTSPOT_DEVICE_LIMIT_REACHED: RouterOS refused another hotspot session for ${username}. ${activeLoginResult.attempts}`,
+        );
       }
 
       // Compatibility fallback for routers/devices that still refuse direct active login.
