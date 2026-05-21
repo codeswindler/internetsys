@@ -36,11 +36,16 @@ export default function Subscriptions() {
 
   useEffect(() => {
     const ua = navigator.userAgent;
-    if (/Windows NT 10.0/.test(ua)) setLocalDeviceName('Windows 10/11 Device');
-    else if (/Windows NT/.test(ua)) setLocalDeviceName('Windows Device');
-    else if (/Mac OS X/.test(ua)) setLocalDeviceName('Apple Mac');
-    else if (/Android/.test(ua)) setLocalDeviceName('Android Device');
-    else if (/iPhone|iPad|iPod/.test(ua)) setLocalDeviceName('Apple iOS');
+    if (/Windows NT 10.0/.test(ua)) setLocalDeviceName('Windows 10/11');
+    else if (/Windows NT/.test(ua)) setLocalDeviceName('Windows PC');
+    else if (/Mac OS X/.test(ua)) setLocalDeviceName('MacBook');
+    else if (/Android/.test(ua)) {
+      const androidModel = ua.match(/Android\s[0-9.]+;\s([^;)]+)/)?.[1]?.trim();
+      setLocalDeviceName(androidModel || 'Android Device');
+    }
+    else if (/iPhone/.test(ua)) setLocalDeviceName('iPhone');
+    else if (/iPad/.test(ua)) setLocalDeviceName('iPad');
+    else if (/iPod/.test(ua)) setLocalDeviceName('iPod');
     else if (/Linux/.test(ua)) setLocalDeviceName('Linux Device');
     else setLocalDeviceName('Dashboard Browser');
   }, []);
@@ -64,6 +69,39 @@ export default function Subscriptions() {
     sub?.deviceSessions?.filter((session: any) => session.isActive) || [];
 
   const getVisibleDeviceSessions = (sub?: any) => getActiveDeviceSessions(sub);
+
+  const safeDate = (value?: string, pattern = 'MMM d, HH:mm') => {
+    if (!value) return 'Unknown';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 'Unknown' : format(parsed, pattern);
+  };
+
+  const titleCase = (value?: string) => {
+    if (!value) return '';
+    return value
+      .replace(/[_-]+/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  const getPaymentLabel = (sub: any) => titleCase(sub?.paymentMethod) || 'Manual';
+
+  const getRouterLabel = (sub: any) =>
+    sub?.router?.name || sub?.router?.localGateway || 'PulseLynk';
+
+  const getPackageDurationLabel = (sub: any) => {
+    const value = Number(sub?.package?.durationValue);
+    const rawUnit = sub?.package?.durationType ? String(sub.package.durationType) : '';
+    if (!value || !rawUnit) return 'Package';
+    const unit = value === 1 && rawUnit.endsWith('s') ? rawUnit.slice(0, -1) : rawUnit;
+    return `${value} ${unit}`;
+  };
+
+  const getDeviceLabel = (session: any) =>
+    session?.deviceModel || session?.model || session?.deviceName || session?.name || 'Linked Device';
+
+  const getDeviceAddressLabel = (session: any) =>
+    session?.macAddress || session?.mac || session?.ipAddress || session?.ip || 'Address pending';
 
   const startDiscovery = (subId: string) => {
     const targetSub = subHistory.find((sub: any) => sub.id === subId);
@@ -267,7 +305,7 @@ export default function Subscriptions() {
   if (isLoading) return (
     <div className="flex items-center justify-center p-20">
        <RefreshCw className="animate-spin text-cyan-500 mr-2" size={20} />
-       <span className="text-muted font-bold uppercase tracking-widest text-xs">X</span>
+       <span className="text-muted font-bold uppercase tracking-widest text-xs">Synchronizing subscriptions...</span>
     </div>
   );
 
@@ -282,10 +320,10 @@ export default function Subscriptions() {
         </div>
         <div className="relative z-10">
           <h1 className="text-5xl md:text-6xl font-black text-white tracking-tighter mb-4 leading-none">
-             My <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">X</span>
+             My <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">Subscriptions</span>
           </h1>
           <p className="text-blue-100/60 text-sm md:text-lg max-w-xl font-bold uppercase tracking-widest leading-relaxed">
-             Track your active sessions, traffic usage, and historical plans with <span className="text-cyan-400">X</span> precision.
+             Track your active sessions, traffic usage, and historical plans with <span className="text-cyan-400">live</span> precision.
           </p>
         </div>
       </div>
@@ -294,7 +332,9 @@ export default function Subscriptions() {
         <div className="flex items-center gap-4 px-4 overflow-x-auto pb-4 no-scrollbar">
            <div className="flex items-center gap-2 whitespace-nowrap px-6 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/20">
               <Zap size={14} className="text-cyan-500" />
-              <span className="text-[10px] font-black text-cyan-500 uppercase tracking-widest">X</span>
+              <span className="text-[10px] font-black text-cyan-500 uppercase tracking-widest">
+                {activeSubs.length} {activeSubs.length === 1 ? 'current plan' : 'current plans'}
+              </span>
            </div>
         </div>
 
@@ -318,6 +358,30 @@ export default function Subscriptions() {
               const hasActiveSession = sub.deviceSessions?.some((ds: any) => ds.isActive);
               const isOtherDeviceLive = hasActiveSession && !isThisDeviceLive;
               const isLive = isSubLive;
+              const displayDeviceSession =
+                activeCurrentSession || sub.deviceSessions?.find((ds: any) => ds.isActive);
+              const identityLabel = isThisDeviceLive
+                ? 'Verified Identity'
+                : hasActiveSession
+                  ? 'Device Linked'
+                  : isSynced
+                    ? 'Identity Ready'
+                    : 'Ready To Link';
+              const liveStatusLabel = isThisDeviceLive
+                ? 'Surfing Live'
+                : isOtherDeviceLive
+                  ? 'Device Online'
+                  : 'Ready To Connect';
+              const connectionStateLabel = isThisDeviceLive
+                ? 'This Device Connected'
+                : isOtherDeviceLive
+                  ? 'Another Device Active'
+                  : 'No Device Linked';
+              const connectionHintLabel = isThisDeviceLive
+                ? 'Ready'
+                : isOtherDeviceLive
+                  ? 'Manage Devices'
+                  : 'Link Device';
 
               return (
                 <div key={sub.id} className="relative group animate-fade-in">
@@ -330,18 +394,18 @@ export default function Subscriptions() {
                           <div className="flex items-center gap-3 mt-2">
                              <div className="flex items-center gap-1.5 font-black text-[10px] text-slate-900 dark:text-muted uppercase tracking-widest">
                                <Clock size={12} className="text-cyan-500/50" />
-                               Acquired: <span className="opacity-80 font-bold dark:font-normal">X</span>
+                               Acquired: <span className="opacity-80 font-bold dark:font-normal">{safeDate(sub.createdAt)}</span>
                              </div>
                              <div className="w-1 h-1 rounded-full bg-slate-500/20" />
                              <div className="flex items-center gap-1.5 font-black text-[10px] text-slate-900 dark:text-muted uppercase tracking-widest">
                                <CreditCard size={12} className="text-emerald-500/50" />
-                               Via: <span className="text-emerald-600 dark:text-emerald-500 font-bold dark:font-normal opacity-80 dark:opacity-60">X</span>
+                               Via: <span className="text-emerald-600 dark:text-emerald-500 font-bold dark:font-normal opacity-80 dark:opacity-60">{getPaymentLabel(sub)}</span>
                              </div>
                           </div>
                         </div>
                          <div className="flex items-center gap-2 text-xs font-black text-slate-900 dark:text-muted uppercase tracking-widest opacity-80 dark:opacity-60">
                            <Wifi size={14} className="text-cyan-500" />
-                           Location: <span className="text-main font-bold dark:font-normal">X</span>
+                           Location: <span className="text-main font-bold dark:font-normal">{getRouterLabel(sub)}</span>
                          </div>
                       </div>
                       <div className="flex flex-col items-center lg:items-end">
@@ -362,11 +426,11 @@ export default function Subscriptions() {
                             <div className="flex-1 min-w-0">
                               <p className="text-[9px] font-black text-muted uppercase tracking-[0.25em] mb-1 truncate">DEVICE MODEL</p>
                               <h4 className="text-xs font-bold text-main tracking-wide leading-relaxed truncate">
-                                {isThisDeviceLive ? (activeCurrentSession?.deviceModel || localDeviceName) : (sub.deviceSessions?.find((ds: any) => ds.isActive)?.deviceModel || localDeviceName)}
+                                {displayDeviceSession ? getDeviceLabel(displayDeviceSession) : localDeviceName}
                               </h4>
                               <div className="flex items-center gap-2 mt-2">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none truncate">X</span>
+                                <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none truncate">{identityLabel}</span>
                               </div>
                             </div>
                           </div>
@@ -380,7 +444,7 @@ export default function Subscriptions() {
                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/5 to-transparent -translate-x-full animate-[shimmer_3s_infinite]" />
                               <div className="flex items-center gap-4 relative z-10">
                                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                                <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">X</span>
+                                <span className="text-sm font-black text-emerald-400 uppercase tracking-[0.3em]">{liveStatusLabel}</span>
                               </div>
                                <button 
                                  onClick={async (e) => {
@@ -397,13 +461,13 @@ export default function Subscriptions() {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="bg-main/5 rounded-2xl p-5 border border-main/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-main/10 transition-colors">
                                 <Download size={20} className="text-cyan-400 mb-1" />
-                                <span className="text-base font-black text-main">X</span>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">X</span>
+                                <span className="text-base font-black text-main">{traffic.downloadSpeed}</span>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">DOWNLOAD</span>
                               </div>
                               <div className="bg-main/5 rounded-2xl p-5 border border-main/5 flex flex-col items-center justify-center gap-1 shadow-inner hover:bg-main/10 transition-colors">
                                 <Upload size={20} className="text-emerald-400 mb-1" />
-                                <span className="text-base font-black text-main">X</span>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">X</span>
+                                <span className="text-base font-black text-main">{traffic.uploadSpeed}</span>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-tighter">UPLOAD</span>
                               </div>
                             </div>
 
@@ -416,23 +480,23 @@ export default function Subscriptions() {
                             }`}>
                               <div className="flex items-center gap-3">
                                 <div className={`w-2 h-2 rounded-full ${hasActiveSession ? 'bg-cyan-400 animate-[pulse_2s_ease-in-out_infinite]' : 'bg-slate-600'}`} />
-                                <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${hasActiveSession ? 'text-cyan-400' : 'text-slate-400'}`}>X</span>
+                                <span className={`text-[11px] font-black tracking-[0.2em] uppercase ${hasActiveSession ? 'text-cyan-400' : 'text-slate-400'}`}>{connectionStateLabel}</span>
                               </div>
                               
-                              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isThisDeviceLive ? 'text-cyan-400/70' : isOtherDeviceLive ? 'text-amber-500/80' : 'text-slate-500'}`}>X</span>
+                              <span className={`text-[9px] font-black uppercase tracking-[0.2em] ${isThisDeviceLive ? 'text-cyan-400/70' : isOtherDeviceLive ? 'text-amber-500/80' : 'text-slate-500'}`}>{connectionHintLabel}</span>
                             </div>
 
                             <div className="w-full flex items-center justify-between px-6 pt-4 mt-2">
                                <div className="flex items-center gap-4">
                                  <div className="flex items-center gap-2">
                                    <Clock size={16} className="text-muted" />
-                                   <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em]">X</span>
+                                   <span className="text-[11px] font-black text-muted uppercase tracking-[0.1em]">EXPIRES IN</span>
                                  </div>
                                  <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="lg" />
                                </div>
                                <div className="px-6 py-2.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 flex items-center gap-3">
                                  <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]" />
-                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">X</span>
+                                 <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">SYSTEM LIVE</span>
                                </div>
                             </div>
                           </>
@@ -474,18 +538,18 @@ export default function Subscriptions() {
 
                                <div className="w-full lg:w-48 bg-main/5 border border-main/5 rounded-3xl px-8 py-4 text-center">
                                   <p className="text-[9px] font-black text-muted uppercase tracking-widest mb-1">TOTAL TIME</p>
-                                  <span className="text-xl font-black text-main">X</span>
+                                  <span className="text-xl font-black text-main">{getPackageDurationLabel(sub)}</span>
                                </div>
                              </div>
 
                              <div className="flex items-center justify-between w-full px-2 opacity-50">
                                 <div className="flex items-center gap-2">
                                   <Router size={14} className="text-muted" />
-                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">X</span>
+                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">Router: {getRouterLabel(sub)}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <RefreshCw size={14} className="text-muted" />
-                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">X</span>
+                                  <span className="text-[9px] font-black text-muted uppercase tracking-widest">Sync Active</span>
                                 </div>
                              </div>
                           </div>
@@ -549,7 +613,7 @@ export default function Subscriptions() {
                                <div className="flex items-center gap-4 opacity-70">
                                  <div className="flex items-center gap-2">
                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
-                                   <span className="text-[11px] font-black text-slate-600 dark:text-cyan-500/60 font-mono italic">X</span>
+                                   <span className="text-[11px] font-black text-slate-600 dark:text-cyan-500/60 font-mono italic">{getDeviceAddressLabel(session)}</span>
                                  </div>
                                </div>
                             </div>
@@ -565,7 +629,7 @@ export default function Subscriptions() {
                             ) : (
                               <>
                                 <X size={20} className="md:hidden stroke-[3px]" />
-                                <span className="hidden md:inline text-[10px] font-black uppercase tracking-[0.3em]">X</span>
+                                <span className="hidden md:inline text-[10px] font-black uppercase tracking-[0.3em]">Kick</span>
                               </>
                             )}
                           </button>
@@ -608,7 +672,9 @@ export default function Subscriptions() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                     <span className="text-[9px] font-black text-muted uppercase tracking-[0.2em]">X</span>
+                     <span className="text-[9px] font-black text-muted uppercase tracking-[0.2em]">
+                       {titleCase(sub.status) || 'Ended'}
+                     </span>
                      <CountdownBadge expiresAt={sub.expiresAt} startedAt={sub.startedAt} variant="inline" size="sm" />
                   </div>
                </div>
