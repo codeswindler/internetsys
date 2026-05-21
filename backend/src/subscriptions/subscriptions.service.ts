@@ -681,8 +681,9 @@ export class SubscriptionsService {
       return { status: 'none' };
     }
 
-    const nextSub = await this.findOldestPaidCarryOverCandidate(sub);
-    if (!nextSub) {
+    const nextSubs = await this.findPaidCarryOverCandidates(sub);
+    const firstNextSub = nextSubs[0];
+    if (!firstNextSub) {
       return { status: 'none' };
     }
 
@@ -696,9 +697,9 @@ export class SubscriptionsService {
 
     if (currentSessions.length === 0) {
       this.logger.log(
-        `[CARRY-OVER] Sub ${sub.id} has queued package ${nextSub.id}, but no linked device identity was available.`,
+        `[CARRY-OVER] Sub ${sub.id} has queued package ${firstNextSub.id}, but no linked device identity was available.`,
       );
-      return { status: 'waiting', nextSub, reason: 'offline' };
+      return { status: 'waiting', nextSub: firstNextSub, reason: 'offline' };
     }
 
     if (activeSessionRows.length === 0) {
@@ -735,56 +736,142 @@ export class SubscriptionsService {
 
     if (recentlySeenPairs.length === 0) {
       this.logger.log(
-        `[CARRY-OVER] Queued package ${nextSub.id} will wait: no devices from sub ${sub.id} were seen on the router within 5 minutes.`,
+        `[CARRY-OVER] Queued package ${firstNextSub.id} will wait: no devices from sub ${sub.id} were seen on the router within 5 minutes.`,
       );
-      return { status: 'waiting', nextSub, reason: 'offline' };
+      return { status: 'waiting', nextSub: firstNextSub, reason: 'offline' };
     }
 
-    const nextMaxDevices = nextSub.package?.maxDevices || 1;
-    if (recentlySeenPairs.length > nextMaxDevices) {
+    const eligiblePairs: Array<{
+      session: DeviceSession;
+      activity: HotspotDeviceActivity;
+    }> = [];
+
+    for (const pair of recentlySeenPairs) {
+      const conflictSub = await this.findLiveSubscriptionForDevice(
+        sub.user.id,
+        sub.id,
+        pair.activity.mac || pair.session.macAddress,
+        pair.activity.ip || pair.session.ipAddress,
+      );
+
+      if (conflictSub) {
+        this.logger.warn(
+          `[CARRY-OVER] Skipping ${pair.activity.mac || pair.session.macAddress || pair.activity.ip || pair.session.ipAddress || 'unknown device'} because it is already active on sub ${conflictSub.id}.`,
+        );
+        continue;
+      }
+
+      eligiblePairs.push(pair);
+    }
+
+    if (eligiblePairs.length === 0) {
       this.logger.warn(
-        `[CARRY-OVER] Queued package ${nextSub.id} will wait: ${recentlySeenPairs.length} seen device(s) exceed next package limit ${nextMaxDevices}.`,
+        `[CARRY-OVER] Queued package ${firstNextSub.id} will wait: all seen devices are already assigned to other live packages.`,
       );
-      return { status: 'waiting', nextSub, reason: 'device-limit' };
+      return { status: 'waiting', nextSub: firstNextSub, reason: 'device-limit' };
     }
 
-    if (this.ensureSubscriptionCredentials(nextSub)) {
-      await this.subRepo.save(nextSub);
+    const remainingPairs = [...eligiblePairs];
+    const activatedSubs: Subscription[] = [];
+    let oldRouterUserRemoved = false;
+
+    for (const nextSub of nextSubs) {
+      if (remainingPairs.length === 0) break;
+
+      const maxDevices = nextSub.package?.maxDevices || 1;
+      const existingActiveCount = (nextSub.deviceSessions || []).filter(
+        (session) => session.isActive,
+      ).length;
+      const availableSlots = Math.max(maxDevices - existingActiveCount, 0);
+
+      if (availableSlots <= 0) {
+        this.logger.warn(
+          `[CARRY-OVER] Queued package ${nextSub.id} has no free device slots; max=${maxDevices} active=${existingActiveCount}.`,
+        );
+        continue;
+      }
+
+      const pairsForSub = remainingPairs.splice(0, availableSlots);
+      if (pairsForSub.length === 0) continue;
+
+      if (this.ensureSubscriptionCredentials(nextSub)) {
+        await this.subRepo.save(nextSub);
+      }
+
+      if (!oldRouterUserRemoved && sub.mikrotikUsername) {
+        await this.mikrotikService.removeHotspotUser(
+          sub.router,
+          sub.mikrotikUsername,
+        );
+        oldRouterUserRemoved = true;
+      }
+
+      const carriedPairs = await this.authorizeCarryOverDevices(
+        nextSub,
+        pairsForSub,
+      );
+
+      if (carriedPairs.length === 0) {
+        remainingPairs.unshift(...pairsForSub);
+        this.logger.warn(
+          `[CARRY-OVER] Queued package ${nextSub.id} will wait: no router authorizations succeeded.`,
+        );
+        continue;
+      }
+
+      const carriedKeys = new Set(
+        carriedPairs.map((pair) => {
+          const mac = this.normalizeMac(pair.activity.mac || pair.session.macAddress);
+          const ip = pair.activity.ip || pair.session.ipAddress;
+          return mac ? `mac:${mac}` : ip ? `ip:${ip}` : `session:${pair.session.id}`;
+        }),
+      );
+      const failedPairs = pairsForSub.filter((pair) => {
+        const mac = this.normalizeMac(pair.activity.mac || pair.session.macAddress);
+        const ip = pair.activity.ip || pair.session.ipAddress;
+        const key = mac ? `mac:${mac}` : ip ? `ip:${ip}` : `session:${pair.session.id}`;
+        return !carriedKeys.has(key);
+      });
+
+      if (failedPairs.length > 0) {
+        remainingPairs.unshift(...failedPairs);
+      }
+
+      this.activateSubscriptionClock(nextSub);
+      const savedNextSub = await this.subRepo.save(nextSub);
+      await this.moveCarriedDeviceSessions(sub, savedNextSub, carriedPairs);
+      await this.sendActivationConfirmationNotice(savedNextSub);
+      activatedSubs.push(savedNextSub);
+
+      this.logger.log(
+        `[CARRY-OVER] Activated queued sub ${savedNextSub.id} from expired sub ${sub.id}; devices=${carriedPairs.length}; expires=${savedNextSub.expiresAt?.toISOString() || 'pending'}`,
+      );
     }
 
-    const carriedPairs = await this.authorizeCarryOverDevices(
-      sub,
-      nextSub,
-      recentlySeenPairs,
-    );
-
-    if (carriedPairs.length === 0) {
+    if (activatedSubs.length === 0) {
       this.logger.warn(
-        `[CARRY-OVER] Queued package ${nextSub.id} will wait: no router authorizations succeeded.`,
+        `[CARRY-OVER] Queued package ${firstNextSub.id} will wait: no router authorizations succeeded.`,
       );
-      return { status: 'waiting', nextSub, reason: 'authorization-failed' };
+      return { status: 'waiting', nextSub: firstNextSub, reason: 'authorization-failed' };
     }
-
-    this.activateSubscriptionClock(nextSub);
-    const savedNextSub = await this.subRepo.save(nextSub);
-    await this.moveCarriedDeviceSessions(sub, savedNextSub, carriedPairs);
 
     sub.status = SubscriptionStatus.EXPIRED;
     sub.finalExpiryNotified = true;
     await this.subRepo.save(sub);
-    await this.sendActivationConfirmationNotice(savedNextSub);
 
-    this.logger.log(
-      `[CARRY-OVER] Activated queued sub ${savedNextSub.id} from expired sub ${sub.id}; devices=${carriedPairs.length}; expires=${savedNextSub.expiresAt?.toISOString() || 'pending'}`,
-    );
+    if (remainingPairs.length > 0) {
+      this.logger.warn(
+        `[CARRY-OVER] ${remainingPairs.length} device(s) from expired sub ${sub.id} were left uncarried because queued package capacity was exhausted.`,
+      );
+    }
 
-    return { status: 'carried', nextSub: savedNextSub };
+    return { status: 'carried', nextSub: activatedSubs[0] };
   }
 
-  private async findOldestPaidCarryOverCandidate(
+  private async findPaidCarryOverCandidates(
     expiringSub: Subscription,
-  ): Promise<Subscription | null> {
-    if (!expiringSub.user?.id || !expiringSub.router?.id) return null;
+  ): Promise<Subscription[]> {
+    if (!expiringSub.user?.id || !expiringSub.router?.id) return [];
 
     return this.subRepo
       .createQueryBuilder('sub')
@@ -797,7 +884,7 @@ export class SubscriptionsService {
       .andWhere('sub.status = :status', { status: SubscriptionStatus.PAID })
       .andWhere('sub.id != :subId', { subId: expiringSub.id })
       .orderBy('sub.createdAt', 'ASC')
-      .getOne();
+      .getMany();
   }
 
   private ensureSubscriptionCredentials(sub: Subscription): boolean {
@@ -969,17 +1056,9 @@ export class SubscriptionsService {
   }
 
   private async authorizeCarryOverDevices(
-    oldSub: Subscription,
     nextSub: Subscription,
     pairs: Array<{ session: DeviceSession; activity: HotspotDeviceActivity }>,
   ): Promise<Array<{ session: DeviceSession; activity: HotspotDeviceActivity }>> {
-    if (oldSub.mikrotikUsername) {
-      await this.mikrotikService.removeHotspotUser(
-        oldSub.router,
-        oldSub.mikrotikUsername,
-      );
-    }
-
     const carriedPairs: Array<{
       session: DeviceSession;
       activity: HotspotDeviceActivity;
@@ -1873,6 +1952,84 @@ export class SubscriptionsService {
     }));
   }
 
+  private async findLiveSubscriptionForDevice(
+    userId: string,
+    excludeSubId: string,
+    mac?: string | null,
+    ip?: string | null,
+  ): Promise<Subscription | null> {
+    const normalizedMac = this.normalizeMac(mac);
+    const normalizedIp = ip || undefined;
+
+    if (!normalizedMac && !normalizedIp) return null;
+
+    const liveSubs = await this.subRepo
+      .createQueryBuilder('sub')
+      .leftJoinAndSelect('sub.package', 'package')
+      .leftJoinAndSelect('sub.router', 'router')
+      .leftJoinAndSelect('sub.deviceSessions', 'deviceSessions')
+      .leftJoin('sub.user', 'user')
+      .where('user.id = :userId', { userId })
+      .andWhere('sub.id != :excludeSubId', { excludeSubId })
+      .andWhere('sub.status = :status', { status: SubscriptionStatus.ACTIVE })
+      .andWhere('sub.expiresAt > :now', { now: new Date() })
+      .getMany();
+
+    for (const liveSub of liveSubs) {
+      const dbMatch = (liveSub.deviceSessions || []).some((session) => {
+        if (!session.isActive) return false;
+
+        const sessionMac = this.normalizeMac(session.macAddress);
+        const macMatches =
+          !!normalizedMac &&
+          !!sessionMac &&
+          normalizedMac === sessionMac;
+        const ipMatches =
+          !!normalizedIp &&
+          !!session.ipAddress &&
+          normalizedIp === session.ipAddress;
+
+        return macMatches || ipMatches;
+      });
+
+      if (dbMatch) return liveSub;
+
+      if (
+        liveSub.router?.connectionMode === 'hotspot' &&
+        liveSub.mikrotikUsername
+      ) {
+        try {
+          const authorizations =
+            await this.mikrotikService.listHotspotAuthorizations(
+              liveSub.router,
+              liveSub.mikrotikUsername,
+            );
+          const routerMatch = authorizations.some((authorization) => {
+            const authorizationMac = this.normalizeMac(authorization.mac);
+            const macMatches =
+              !!normalizedMac &&
+              !!authorizationMac &&
+              normalizedMac === authorizationMac;
+            const ipMatches =
+              !!normalizedIp &&
+              !!authorization.ip &&
+              normalizedIp === authorization.ip;
+
+            return macMatches || ipMatches;
+          });
+
+          if (routerMatch) return liveSub;
+        } catch (e: any) {
+          this.logger.warn(
+            `[START-CHECK] Could not verify live device assignment on sub ${liveSub.id}: ${e.message}`,
+          );
+        }
+      }
+    }
+
+    return null;
+  }
+
   async startSession(
     userId: string,
     id: string,
@@ -2152,22 +2309,19 @@ export class SubscriptionsService {
     }
     this.logger.log(`[START-STEP] Hotspot host verified for sub ${sub.id}.`);
 
-    // SEQUENTIAL CHECK: Check if any OTHER subscription is already live
-    const allSubs = await this.findAllActive(sub.user.id);
-    const liveSub = allSubs.find(
-      (s) =>
-        s.id !== id &&
-        s.startedAt &&
-        s.expiresAt &&
-        new Date(s.expiresAt) > new Date(),
+    const liveSubUsingThisDevice = await this.findLiveSubscriptionForDevice(
+      sub.user.id,
+      sub.id,
+      finalMac,
+      finalIp,
     );
 
-    if (liveSub) {
+    if (liveSubUsingThisDevice) {
       this.logger.warn(
-        `[START-REJECT] Sub ${sub.id} blocked by live sub ${liveSub.id} (${liveSub.package?.name || 'unknown package'}).`,
+        `[START-REJECT] Device ${finalMac || finalIp || 'unknown'} is already assigned to live sub ${liveSubUsingThisDevice.id} (${liveSubUsingThisDevice.package?.name || 'unknown package'}).`,
       );
       throw new BadRequestException(
-        `CONFLICT: You already have a live session (${liveSub.package?.name}). You must wait for it to expire before starting a new one.`,
+        `This device is already using ${liveSubUsingThisDevice.package?.name || 'another live package'}. Disconnect it there first, or use a different device for this package.`,
       );
     }
 
