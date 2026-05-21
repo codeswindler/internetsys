@@ -16,7 +16,10 @@ import { Package, DurationType } from '../entities/package.entity';
 import { User } from '../entities/user.entity';
 import { Router } from '../entities/router.entity';
 import { DeviceSession } from '../entities/device-session.entity';
-import { MikrotikService } from '../routers/mikrotik.service';
+import {
+  HotspotDeviceActivity,
+  MikrotikService,
+} from '../routers/mikrotik.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { TransactionMethod } from '../entities/transaction.entity';
 import { MpesaService } from './mpesa.service';
@@ -30,6 +33,8 @@ export class SubscriptionsService {
   private readonly stkStillProcessingCodes = new Set(['4999']);
   private readonly stkUserCancelledCodes = new Set(['1032']);
   private readonly staleStkVerificationMs = 5 * 60 * 1000;
+  private readonly carryOverPresenceWindowMs = 5 * 60 * 1000;
+  private readonly liveTrafficThresholdBytes = 50 * 1024;
   private readonly startSessionLocks = new Map<string, Promise<any>>();
   private readonly stkStatusLocks = new Map<string, Promise<any>>();
 
@@ -543,6 +548,11 @@ export class SubscriptionsService {
     });
     if (!sub) return;
 
+    const carryOverResult = await this.tryCarryOverExpiredSubscription(sub);
+    if (carryOverResult.status === 'carried') {
+      return;
+    }
+
     if (sub.mikrotikUsername) {
       try {
         if (sub.router.connectionMode === 'pppoe') {
@@ -569,7 +579,16 @@ export class SubscriptionsService {
 
     sub.status = SubscriptionStatus.EXPIRED;
     await this.subRepo.save(sub);
-    await this.sendExpiryNotice(sub);
+
+    if (carryOverResult.status === 'waiting' && carryOverResult.nextSub) {
+      await this.sendQueuedPackageReadyNotice(
+        sub,
+        carryOverResult.nextSub,
+        carryOverResult.reason,
+      );
+    } else {
+      await this.sendExpiryNotice(sub);
+    }
   }
 
   async expireIfDue(userId: string, subId: string): Promise<{ expired: boolean; status: SubscriptionStatus | string }> {
@@ -589,6 +608,334 @@ export class SubscriptionsService {
     }
 
     return { expired: false, status: sub.status };
+  }
+
+  private async tryCarryOverExpiredSubscription(
+    sub: Subscription,
+  ): Promise<{
+    status: 'none' | 'waiting' | 'carried';
+    nextSub?: Subscription;
+    reason?: 'offline' | 'device-limit' | 'authorization-failed';
+  }> {
+    if (
+      !sub.user?.id ||
+      !sub.router ||
+      sub.router.connectionMode === 'pppoe'
+    ) {
+      return { status: 'none' };
+    }
+
+    const nextSub = await this.findOldestPaidCarryOverCandidate(sub);
+    if (!nextSub) {
+      return { status: 'none' };
+    }
+
+    const currentSessions = (sub.deviceSessions || []).filter(
+      (session) => session.isActive && (session.macAddress || session.ipAddress),
+    );
+
+    if (currentSessions.length === 0) {
+      this.logger.log(
+        `[CARRY-OVER] Sub ${sub.id} has queued package ${nextSub.id}, but no linked active devices were recorded.`,
+      );
+      return { status: 'waiting', nextSub, reason: 'offline' };
+    }
+
+    let activityPairs: Array<{
+      session: DeviceSession;
+      activity: HotspotDeviceActivity;
+    }>;
+
+    try {
+      activityPairs = await this.refreshHotspotSessionActivity(
+        sub.router,
+        currentSessions,
+      );
+    } catch (e: any) {
+      this.logger.warn(
+        `[CARRY-OVER] Could not check router presence for sub ${sub.id}: ${e.message}`,
+      );
+      return { status: 'none' };
+    }
+
+    const now = Date.now();
+    const recentlySeenPairs = this.dedupeCarryOverPairs(
+      activityPairs.filter(({ session, activity }) => {
+        if (activity.isSeen) return true;
+        if (!session.lastSeenAt) return false;
+        return now - new Date(session.lastSeenAt).getTime() <= this.carryOverPresenceWindowMs;
+      }),
+    );
+
+    if (recentlySeenPairs.length === 0) {
+      this.logger.log(
+        `[CARRY-OVER] Queued package ${nextSub.id} will wait: no devices from sub ${sub.id} were seen on the router within 5 minutes.`,
+      );
+      return { status: 'waiting', nextSub, reason: 'offline' };
+    }
+
+    const nextMaxDevices = nextSub.package?.maxDevices || 1;
+    if (recentlySeenPairs.length > nextMaxDevices) {
+      this.logger.warn(
+        `[CARRY-OVER] Queued package ${nextSub.id} will wait: ${recentlySeenPairs.length} seen device(s) exceed next package limit ${nextMaxDevices}.`,
+      );
+      return { status: 'waiting', nextSub, reason: 'device-limit' };
+    }
+
+    if (this.ensureSubscriptionCredentials(nextSub)) {
+      await this.subRepo.save(nextSub);
+    }
+
+    const carriedPairs = await this.authorizeCarryOverDevices(
+      sub,
+      nextSub,
+      recentlySeenPairs,
+    );
+
+    if (carriedPairs.length === 0) {
+      this.logger.warn(
+        `[CARRY-OVER] Queued package ${nextSub.id} will wait: no router authorizations succeeded.`,
+      );
+      return { status: 'waiting', nextSub, reason: 'authorization-failed' };
+    }
+
+    this.activateSubscriptionClock(nextSub);
+    const savedNextSub = await this.subRepo.save(nextSub);
+    await this.moveCarriedDeviceSessions(sub, savedNextSub, carriedPairs);
+
+    sub.status = SubscriptionStatus.EXPIRED;
+    sub.finalExpiryNotified = true;
+    await this.subRepo.save(sub);
+    await this.sendActivationConfirmationNotice(savedNextSub);
+
+    this.logger.log(
+      `[CARRY-OVER] Activated queued sub ${savedNextSub.id} from expired sub ${sub.id}; devices=${carriedPairs.length}; expires=${savedNextSub.expiresAt?.toISOString() || 'pending'}`,
+    );
+
+    return { status: 'carried', nextSub: savedNextSub };
+  }
+
+  private async findOldestPaidCarryOverCandidate(
+    expiringSub: Subscription,
+  ): Promise<Subscription | null> {
+    if (!expiringSub.user?.id || !expiringSub.router?.id) return null;
+
+    return this.subRepo
+      .createQueryBuilder('sub')
+      .leftJoinAndSelect('sub.user', 'user')
+      .leftJoinAndSelect('sub.package', 'package')
+      .leftJoinAndSelect('sub.router', 'router')
+      .leftJoinAndSelect('sub.deviceSessions', 'deviceSessions')
+      .where('user.id = :userId', { userId: expiringSub.user.id })
+      .andWhere('router.id = :routerId', { routerId: expiringSub.router.id })
+      .andWhere('sub.status = :status', { status: SubscriptionStatus.PAID })
+      .andWhere('sub.id != :subId', { subId: expiringSub.id })
+      .orderBy('sub.createdAt', 'ASC')
+      .getOne();
+  }
+
+  private ensureSubscriptionCredentials(sub: Subscription): boolean {
+    let changed = false;
+    const phone = sub.user?.phone || '000000';
+
+    if (!sub.mikrotikUsername) {
+      sub.mikrotikUsername = `net_${phone.substring(phone.length - 6)}_${Date.now().toString().substring(7)}`;
+      changed = true;
+    }
+
+    if (!sub.mikrotikPassword) {
+      sub.mikrotikPassword = Math.random().toString(36).slice(-6);
+      changed = true;
+    }
+
+    return changed;
+  }
+
+  private dedupeCarryOverPairs(
+    pairs: Array<{ session: DeviceSession; activity: HotspotDeviceActivity }>,
+  ): Array<{ session: DeviceSession; activity: HotspotDeviceActivity }> {
+    const seen = new Set<string>();
+
+    return pairs.filter((pair) => {
+      const mac = this.normalizeMac(pair.activity.mac || pair.session.macAddress);
+      const ip = pair.activity.ip || pair.session.ipAddress;
+      const key = mac ? `mac:${mac}` : ip ? `ip:${ip}` : `session:${pair.session.id}`;
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+  }
+
+  private async refreshHotspotSessionActivity(
+    router: Router,
+    sessions: DeviceSession[],
+  ): Promise<Array<{ session: DeviceSession; activity: HotspotDeviceActivity }>> {
+    const activities = await this.mikrotikService.listHotspotDeviceActivity(
+      router,
+      sessions.map((session) => ({
+        mac: session.macAddress,
+        ip: session.ipAddress,
+      })),
+    );
+    const now = new Date();
+    const pairs = sessions.map((session, index) => {
+      const activity =
+        activities[index] ||
+        ({
+          mac: session.macAddress,
+          ip: session.ipAddress,
+          isSeen: false,
+          bytesIn: 0,
+          bytesOut: 0,
+        } as HotspotDeviceActivity);
+      const previousBytesIn = Number.parseInt(`${session.lastBytesIn || '0'}`, 10) || 0;
+      const previousBytesOut = Number.parseInt(`${session.lastBytesOut || '0'}`, 10) || 0;
+      const byteDelta = Math.max(activity.bytesIn - previousBytesIn, 0) +
+        Math.max(activity.bytesOut - previousBytesOut, 0);
+
+      if (activity.isSeen) {
+        session.lastSeenAt = now;
+        if (activity.mac) session.macAddress = activity.mac;
+        if (activity.ip) session.ipAddress = activity.ip;
+        if (activity.deviceName && !session.deviceModel) {
+          session.deviceModel = activity.deviceName;
+        }
+        if (byteDelta >= this.liveTrafficThresholdBytes) {
+          session.lastTrafficAt = now;
+        }
+        session.lastBytesIn = `${activity.bytesIn}`;
+        session.lastBytesOut = `${activity.bytesOut}`;
+      }
+
+      return { session, activity };
+    });
+
+    await this.sessionRepo.save(sessions);
+    return pairs;
+  }
+
+  private async authorizeCarryOverDevices(
+    oldSub: Subscription,
+    nextSub: Subscription,
+    pairs: Array<{ session: DeviceSession; activity: HotspotDeviceActivity }>,
+  ): Promise<Array<{ session: DeviceSession; activity: HotspotDeviceActivity }>> {
+    if (oldSub.mikrotikUsername) {
+      await this.mikrotikService.removeHotspotUser(
+        oldSub.router,
+        oldSub.mikrotikUsername,
+      );
+    }
+
+    const carriedPairs: Array<{
+      session: DeviceSession;
+      activity: HotspotDeviceActivity;
+    }> = [];
+
+    for (const pair of pairs) {
+      const mac = pair.activity.mac || pair.session.macAddress;
+      const ip = pair.activity.ip || pair.session.ipAddress;
+
+      try {
+        const loginRes = await this.mikrotikService.loginUser(
+          nextSub.router,
+          nextSub.mikrotikUsername,
+          nextSub.mikrotikPassword,
+          ip,
+          mac,
+          nextSub.package.bandwidthProfile,
+          nextSub.package.maxDevices || 1,
+        );
+        const authorizationMode =
+          loginRes?.authorizationMode === 'active-login'
+            ? 'active-login'
+            : 'bypass';
+        const confirmed = await this.verifyHotspotConnectionWithRetry(
+          nextSub.router,
+          mac,
+          ip,
+          nextSub.mikrotikUsername,
+          { allowBypassBinding: authorizationMode === 'bypass' },
+        );
+
+        if (!confirmed) {
+          this.logger.warn(
+            `[CARRY-OVER] Router auth was not confirmed for ${mac || ip || 'unknown'} on queued sub ${nextSub.id}.`,
+          );
+          continue;
+        }
+
+        carriedPairs.push(pair);
+      } catch (e: any) {
+        this.logger.warn(
+          `[CARRY-OVER] Failed to authorize ${mac || ip || 'unknown'} on queued sub ${nextSub.id}: ${e.message}`,
+        );
+      }
+    }
+
+    return carriedPairs;
+  }
+
+  private async moveCarriedDeviceSessions(
+    oldSub: Subscription,
+    nextSub: Subscription,
+    pairs: Array<{ session: DeviceSession; activity: HotspotDeviceActivity }>,
+  ): Promise<void> {
+    const now = new Date();
+    const oldSessions = (oldSub.deviceSessions || []).filter(
+      (session) => session.isActive,
+    );
+
+    for (const session of oldSessions) {
+      session.isActive = false;
+    }
+
+    if (oldSessions.length > 0) {
+      await this.sessionRepo.save(oldSessions);
+    }
+
+    for (const pair of pairs) {
+      const normalizedMac = this.normalizeMac(
+        pair.activity.mac || pair.session.macAddress,
+      );
+      const existing = (nextSub.deviceSessions || []).find(
+        (session) => this.normalizeMac(session.macAddress) === normalizedMac,
+      );
+      const session =
+        existing ||
+        this.sessionRepo.create({
+          subscription: nextSub,
+          macAddress: pair.activity.mac || pair.session.macAddress,
+        });
+
+      session.subscription = nextSub;
+      session.macAddress = pair.activity.mac || pair.session.macAddress;
+      session.ipAddress = pair.activity.ip || pair.session.ipAddress;
+      session.deviceModel =
+        pair.activity.deviceName ||
+        pair.session.deviceModel ||
+        oldSub.user?.deviceModel ||
+        'Connected Device';
+      session.isActive = true;
+      session.lastSeenAt = now;
+      session.lastTrafficAt = pair.session.lastTrafficAt || null;
+      session.lastBytesIn = `${pair.activity.bytesIn || pair.session.lastBytesIn || 0}`;
+      session.lastBytesOut = `${pair.activity.bytesOut || pair.session.lastBytesOut || 0}`;
+      await this.sessionRepo.save(session);
+    }
+
+    const preferred = pairs[0];
+    if (preferred) {
+      await this.persistLatestDeviceIdentity(
+        oldSub.user,
+        preferred.activity.mac || preferred.session.macAddress,
+        preferred.activity.ip || preferred.session.ipAddress,
+        preferred.activity.deviceName || preferred.session.deviceModel,
+      );
+    }
   }
 
   async cancelSubscription(subId: string): Promise<Subscription> {
@@ -1133,6 +1480,44 @@ export class SubscriptionsService {
     } catch (e) {
       this.logger.warn(
         `[SMS] Failed to send package request alert to admins: ${e.message}`,
+      );
+    }
+  }
+
+  private async sendQueuedPackageReadyNotice(
+    expiredSub: Subscription,
+    nextSub: Subscription,
+    reason?: 'offline' | 'device-limit' | 'authorization-failed',
+  ): Promise<void> {
+    if (expiredSub.finalExpiryNotified) {
+      return;
+    }
+
+    if (!expiredSub.user?.phone || expiredSub.user.phone.length < 9) {
+      expiredSub.finalExpiryNotified = true;
+      await this.subRepo.save(expiredSub);
+      return;
+    }
+
+    const packageName = nextSub.package?.name || 'next package';
+    const maxDevices = nextSub.package?.maxDevices || 1;
+    const message =
+      reason === 'device-limit'
+        ? `PulseLynk: Your previous plan has ended. Your ${packageName} package is ready, but it supports ${maxDevices} device(s). Reconnect the device you want to use and tap Connect to start it.`
+        : `PulseLynk: Your previous plan has ended. Your ${packageName} package is ready and will start when you reconnect to the Wi-Fi and tap Connect.`;
+
+    try {
+      const sent = await this.smsService.sendSms(expiredSub.user.phone, message);
+      if (sent) {
+        expiredSub.finalExpiryNotified = true;
+        await this.subRepo.save(expiredSub);
+        this.logger.log(
+          `[SMS] Sent queued package ready notice to ${expiredSub.user.phone}`,
+        );
+      }
+    } catch (e) {
+      this.logger.warn(
+        `[SMS] Failed to send queued package notice for sub ${expiredSub.id}: ${e.message}`,
       );
     }
   }
@@ -1776,6 +2161,7 @@ export class SubscriptionsService {
           ipAddress: finalIp,
           deviceModel: model,
           isActive: true,
+          lastSeenAt: new Date(),
         });
         routerAuthSession = await this.sessionRepo.save(newSession);
         routerAuthSessionWasCreated = true;
@@ -1790,6 +2176,7 @@ export class SubscriptionsService {
         existingSessionInSub.ipAddress = finalIp || existingSessionInSub.ipAddress;
         existingSessionInSub.deviceModel = model;
         existingSessionInSub.isActive = true;
+        existingSessionInSub.lastSeenAt = new Date();
         routerAuthSession = await this.sessionRepo.save(existingSessionInSub);
         reusedCurrentActiveSession =
           sub.status === SubscriptionStatus.ACTIVE && wasAlreadyActive;

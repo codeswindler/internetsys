@@ -32,6 +32,18 @@ export class DeviceSession {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: 'timestamp', nullable: true })
+  lastSeenAt: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastTrafficAt: Date | null;
+
+  @Column({ type: 'bigint', default: 0 })
+  lastBytesIn: string;
+
+  @Column({ type: 'bigint', default: 0 })
+  lastBytesOut: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

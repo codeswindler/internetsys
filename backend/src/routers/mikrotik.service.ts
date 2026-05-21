@@ -15,6 +15,16 @@ type HotspotAuthorization = {
   source: 'active' | 'bypass';
 };
 
+export type HotspotDeviceActivity = {
+  mac?: string;
+  ip?: string;
+  deviceName?: string;
+  isSeen: boolean;
+  source?: 'active' | 'host';
+  bytesIn: number;
+  bytesOut: number;
+};
+
 @Injectable()
 export class MikrotikService {
   private readonly logger = new Logger(MikrotikService.name);
@@ -1287,6 +1297,89 @@ export class MikrotikService {
         `Failed to verify hotspot connection for ${router.name}: ${e.message}`,
       );
       return false;
+    } finally {
+      api.close();
+    }
+  }
+
+  async listHotspotDeviceActivity(
+    router: Router,
+    devices: Array<{ mac?: string; ip?: string }>,
+  ): Promise<HotspotDeviceActivity[]> {
+    const api = await this.connect(router);
+    try {
+      const parseBytes = (value: any) => {
+        const parsed = Number.parseInt(`${value || '0'}`, 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const deviceNamesByMac = new Map<string, string>();
+      const deviceNamesByIp = new Map<string, string>();
+      const leases = await api.write('/ip/dhcp-server/lease/print').catch(() => []);
+
+      for (const lease of leases || []) {
+        const hostName = `${lease?.['host-name'] || ''}`.trim();
+        if (!hostName) continue;
+
+        const leaseMac = this.normalizeMac(
+          lease?.['active-mac-address'] || lease?.['mac-address'],
+        );
+        const leaseIp = lease?.['active-address'] || lease?.['address'];
+
+        if (leaseMac) deviceNamesByMac.set(leaseMac, hostName);
+        if (leaseIp) deviceNamesByIp.set(leaseIp, hostName);
+      }
+
+      const activeRows = await api.write('/ip/hotspot/active/print').catch(() => []);
+      const hostRows = await api.write('/ip/hotspot/host/print').catch(() => []);
+      const matchesDevice = (row: any, mac?: string, ip?: string) => {
+        const rowMac = this.normalizeMac(row?.['mac-address']);
+        const rowIp = row?.['address'];
+        return (!!mac && !!rowMac && rowMac === mac) || (!!ip && rowIp === ip);
+      };
+      const getName = (row: any, mac?: string, ip?: string) =>
+        `${row?.['host-name'] || ''}`.trim() ||
+        (mac && deviceNamesByMac.get(mac)) ||
+        (ip && deviceNamesByIp.get(ip)) ||
+        undefined;
+
+      return devices.map((device) => {
+        const mac = this.normalizeMac(device.mac);
+        const ip = device.ip;
+        const active = (activeRows || []).find((row: any) => matchesDevice(row, mac, ip));
+        const host = !active
+          ? (hostRows || []).find((row: any) => matchesDevice(row, mac, ip))
+          : null;
+        const row = active || host;
+
+        if (!row) {
+          return {
+            mac,
+            ip,
+            isSeen: false,
+            bytesIn: 0,
+            bytesOut: 0,
+            deviceName: getName(null, mac, ip),
+          };
+        }
+
+        const rowMac = this.normalizeMac(row?.['mac-address']) || mac;
+        const rowIp = row?.['address'] || ip;
+
+        return {
+          mac: rowMac,
+          ip: rowIp,
+          isSeen: true,
+          source: active ? 'active' : 'host',
+          bytesIn: parseBytes(row?.['bytes-in']),
+          bytesOut: parseBytes(row?.['bytes-out']),
+          deviceName: getName(row, rowMac, rowIp),
+        };
+      });
+    } catch (e: any) {
+      this.logger.warn(
+        `Failed to list hotspot device activity for ${router.name}: ${e.message}`,
+      );
+      throw e;
     } finally {
       api.close();
     }
