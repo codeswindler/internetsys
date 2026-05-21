@@ -630,15 +630,25 @@ export class SubscriptionsService {
       return { status: 'none' };
     }
 
-    const currentSessions = (sub.deviceSessions || []).filter(
+    const activeSessionRows = (sub.deviceSessions || []).filter(
       (session) => session.isActive && (session.macAddress || session.ipAddress),
+    );
+    const currentSessions = await this.buildCarryOverSessionCandidates(
+      sub,
+      activeSessionRows,
     );
 
     if (currentSessions.length === 0) {
       this.logger.log(
-        `[CARRY-OVER] Sub ${sub.id} has queued package ${nextSub.id}, but no linked active devices were recorded.`,
+        `[CARRY-OVER] Sub ${sub.id} has queued package ${nextSub.id}, but no linked device identity was available.`,
       );
       return { status: 'waiting', nextSub, reason: 'offline' };
+    }
+
+    if (activeSessionRows.length === 0) {
+      this.logger.log(
+        `[CARRY-OVER] Sub ${sub.id} has no active DB session rows; probing router and last-known identities for carry-over.`,
+      );
     }
 
     let activityPairs: Array<{
@@ -770,6 +780,84 @@ export class SubscriptionsService {
     });
   }
 
+  private async buildCarryOverSessionCandidates(
+    sub: Subscription,
+    activeSessions: DeviceSession[],
+  ): Promise<DeviceSession[]> {
+    const candidates = [...activeSessions];
+    const findCandidate = (mac?: string | null, ip?: string | null) => {
+      const normalizedMac = this.normalizeMac(mac);
+      return candidates.find((candidate) => {
+        const candidateMac = this.normalizeMac(candidate.macAddress);
+        const macMatches =
+          !!normalizedMac &&
+          !!candidateMac &&
+          normalizedMac === candidateMac;
+        const ipMatches =
+          !!ip &&
+          !!candidate.ipAddress &&
+          ip === candidate.ipAddress;
+
+        return macMatches || ipMatches;
+      });
+    };
+    const addCandidate = (
+      mac?: string | null,
+      ip?: string | null,
+      deviceModel?: string | null,
+    ) => {
+      const normalizedMac = this.normalizeMac(mac);
+      const normalizedIp = ip || undefined;
+      if (!normalizedMac && !normalizedIp) return;
+
+      const existing = findCandidate(normalizedMac, normalizedIp);
+      if (existing) {
+        if (normalizedMac && !existing.macAddress) existing.macAddress = normalizedMac;
+        if (normalizedIp && !existing.ipAddress) existing.ipAddress = normalizedIp;
+        if (deviceModel && !existing.deviceModel) existing.deviceModel = deviceModel;
+        return;
+      }
+
+      candidates.push(
+        this.sessionRepo.create({
+          subscription: sub,
+          macAddress: normalizedMac || '',
+          ipAddress: normalizedIp,
+          deviceModel:
+            deviceModel || sub.user?.deviceModel || 'Connected Device',
+          isActive: true,
+          lastSeenAt: null,
+        }),
+      );
+    };
+
+    if (sub.router && sub.mikrotikUsername) {
+      try {
+        const routerAuthorizations =
+          await this.mikrotikService.listHotspotAuthorizations(
+            sub.router,
+            sub.mikrotikUsername,
+          );
+
+        for (const authorization of routerAuthorizations) {
+          addCandidate(
+            authorization.mac,
+            authorization.ip,
+            authorization.deviceName,
+          );
+        }
+      } catch (e: any) {
+        this.logger.warn(
+          `[CARRY-OVER] Could not read router authorizations for sub ${sub.id}: ${e.message}`,
+        );
+      }
+    }
+
+    addCandidate(sub.user?.lastMac, sub.user?.lastIp, sub.user?.deviceModel);
+
+    return candidates;
+  }
+
   private async refreshHotspotSessionActivity(
     router: Router,
     sessions: DeviceSession[],
@@ -814,7 +902,13 @@ export class SubscriptionsService {
       return { session, activity };
     });
 
-    await this.sessionRepo.save(sessions);
+    const sessionsToSave = pairs
+      .filter(({ session, activity }) => session.id || activity.isSeen)
+      .map(({ session }) => session);
+
+    if (sessionsToSave.length > 0) {
+      await this.sessionRepo.save(sessionsToSave);
+    }
     return pairs;
   }
 
