@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import {
   Subscription,
   SubscriptionStatus,
@@ -46,6 +46,7 @@ export class SubscriptionsService {
     @InjectRepository(Admin) private adminRepo: Repository<Admin>,
     @InjectRepository(DeviceSession)
     private sessionRepo: Repository<DeviceSession>,
+    private dataSource: DataSource,
     private mikrotikService: MikrotikService,
     private mpesaService: MpesaService,
     private transactionsService: TransactionsService,
@@ -542,11 +543,27 @@ export class SubscriptionsService {
   }
 
   async expireSubscription(subId: string): Promise<void> {
+    return this.withSubscriptionExpiryLock(subId, () =>
+      this.expireSubscriptionUnlocked(subId),
+    );
+  }
+
+  private async expireSubscriptionUnlocked(subId: string): Promise<void> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
       relations: ['router', 'deviceSessions', 'user', 'package'],
     });
     if (!sub) return;
+    if (
+      sub.status !== SubscriptionStatus.ACTIVE ||
+      !sub.expiresAt ||
+      sub.expiresAt > new Date()
+    ) {
+      this.logger.debug(
+        `[EXPIRY] Skipping sub ${sub.id}; status=${sub.status} expires=${sub.expiresAt?.toISOString() || 'none'}`,
+      );
+      return;
+    }
 
     const carryOverResult = await this.tryCarryOverExpiredSubscription(sub);
     if (carryOverResult.status === 'carried') {
@@ -588,6 +605,45 @@ export class SubscriptionsService {
       );
     } else {
       await this.sendExpiryNotice(sub);
+    }
+  }
+
+  private async withSubscriptionExpiryLock(
+    subId: string,
+    work: () => Promise<void>,
+  ): Promise<void> {
+    const lockKey = `pulselynk_expire_sub_${subId}`;
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+
+    try {
+      const lockResult = await queryRunner.query(
+        'SELECT GET_LOCK(?, 0) AS lockStatus',
+        [lockKey],
+      );
+      const hasLock = Number(lockResult?.[0]?.lockStatus || 0) === 1;
+
+      if (!hasLock) {
+        this.logger.warn(
+          `[EXPIRY] Skipping sub ${subId}; another request is already processing it.`,
+        );
+        return;
+      }
+
+      try {
+        await work();
+      } finally {
+        try {
+          await queryRunner.query('SELECT RELEASE_LOCK(?)', [lockKey]);
+        } catch (e: any) {
+          this.logger.warn(
+            `[EXPIRY] Failed to release subscription lock for ${subId}: ${e.message}`,
+          );
+        }
+      }
+    } finally {
+      await queryRunner.release();
     }
   }
 
