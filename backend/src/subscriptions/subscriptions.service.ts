@@ -944,17 +944,21 @@ export class SubscriptionsService {
       relations: ['user', 'package', 'router', 'deviceSessions'],
     });
     if (!sub) throw new NotFoundException('Subscription not found');
-    if (sub.status !== SubscriptionStatus.ACTIVE) {
+    if (
+      sub.status !== SubscriptionStatus.ACTIVE &&
+      sub.status !== SubscriptionStatus.PAID
+    ) {
       throw new BadRequestException(
         `Cannot cancel a subscription in ${sub.status} state`,
       );
     }
 
     let captiveResetRequested = false;
+    const isRunningSubscription = sub.status === SubscriptionStatus.ACTIVE;
 
     // Remove from MikroTik. For hotspot cancellations, force the device logout
     // first so the active session identity is still available for captive reset.
-    if (sub.mikrotikUsername) {
+    if (isRunningSubscription && sub.mikrotikUsername) {
       try {
         if (sub.router.connectionMode === 'pppoe') {
           await this.mikrotikService.removePppoeSecret(
@@ -976,11 +980,25 @@ export class SubscriptionsService {
       }
     }
 
-    if (!captiveResetRequested) {
+    if (isRunningSubscription && !captiveResetRequested) {
       await this.forceDisconnectSubscriptionDevices(sub, 'cancel');
+    } else if (!isRunningSubscription) {
+      const activeSessions = (sub.deviceSessions || []).filter(
+        (deviceSession) => deviceSession.isActive,
+      );
+      for (const deviceSession of activeSessions) {
+        deviceSession.isActive = false;
+      }
+      if (activeSessions.length > 0) {
+        await this.sessionRepo.save(activeSessions);
+      }
     }
 
     sub.status = SubscriptionStatus.CANCELLED;
+    if (!isRunningSubscription) {
+      sub.startedAt = null;
+      sub.expiresAt = null;
+    }
     const saved = await this.subRepo.save(sub);
 
     await this.sendCancellationNotice(saved);
