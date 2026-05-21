@@ -27,6 +27,8 @@ import { SmsService } from '../sms/sms.service';
 import { AccessPointsService } from '../access-points/access-points.service';
 import { Admin } from '../entities/admin.entity';
 
+type SubscriptionExpiryResult = 'processed' | 'skipped' | 'not-found';
+
 @Injectable()
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
@@ -542,18 +544,18 @@ export class SubscriptionsService {
     return this.activate(saved.id, PaymentMethod.MANUAL, 'admin-allocated');
   }
 
-  async expireSubscription(subId: string): Promise<void> {
+  async expireSubscription(subId: string): Promise<SubscriptionExpiryResult> {
     return this.withSubscriptionExpiryLock(subId, () =>
       this.expireSubscriptionUnlocked(subId),
     );
   }
 
-  private async expireSubscriptionUnlocked(subId: string): Promise<void> {
+  private async expireSubscriptionUnlocked(subId: string): Promise<SubscriptionExpiryResult> {
     const sub = await this.subRepo.findOne({
       where: { id: subId },
       relations: ['router', 'deviceSessions', 'user', 'package'],
     });
-    if (!sub) return;
+    if (!sub) return 'not-found';
     if (
       sub.status !== SubscriptionStatus.ACTIVE ||
       !sub.expiresAt ||
@@ -562,12 +564,12 @@ export class SubscriptionsService {
       this.logger.debug(
         `[EXPIRY] Skipping sub ${sub.id}; status=${sub.status} expires=${sub.expiresAt?.toISOString() || 'none'}`,
       );
-      return;
+      return 'skipped';
     }
 
     const carryOverResult = await this.tryCarryOverExpiredSubscription(sub);
     if (carryOverResult.status === 'carried') {
-      return;
+      return 'processed';
     }
 
     if (sub.mikrotikUsername) {
@@ -606,12 +608,14 @@ export class SubscriptionsService {
     } else {
       await this.sendExpiryNotice(sub);
     }
+
+    return 'processed';
   }
 
   private async withSubscriptionExpiryLock(
     subId: string,
-    work: () => Promise<void>,
-  ): Promise<void> {
+    work: () => Promise<SubscriptionExpiryResult>,
+  ): Promise<SubscriptionExpiryResult> {
     const lockKey = `pulselynk_expire_sub_${subId}`;
     const queryRunner = this.dataSource.createQueryRunner();
 
@@ -628,11 +632,11 @@ export class SubscriptionsService {
         this.logger.warn(
           `[EXPIRY] Skipping sub ${subId}; another request is already processing it.`,
         );
-        return;
+        return 'skipped';
       }
 
       try {
-        await work();
+        return await work();
       } finally {
         try {
           await queryRunner.query('SELECT RELEASE_LOCK(?)', [lockKey]);
@@ -659,8 +663,16 @@ export class SubscriptionsService {
     }
 
     if (sub.status === SubscriptionStatus.ACTIVE && sub.expiresAt && sub.expiresAt <= new Date()) {
-      await this.expireSubscription(sub.id);
-      return { expired: true, status: SubscriptionStatus.EXPIRED };
+      const result = await this.expireSubscription(sub.id);
+      if (result === 'processed') {
+        return { expired: true, status: SubscriptionStatus.EXPIRED };
+      }
+
+      const currentSub = await this.subRepo.findOne({ where: { id: subId } });
+      return {
+        expired: currentSub?.status === SubscriptionStatus.EXPIRED,
+        status: currentSub?.status || result,
+      };
     }
 
     return { expired: false, status: sub.status };

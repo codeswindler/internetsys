@@ -59,8 +59,14 @@ export class ExpiryJob {
 
       for (const sub of expiredSubs) {
         try {
-          await this.subService.expireSubscription(sub.id);
-          this.logger.log(`Expired subscription ${sub.id}`);
+          const result = await this.subService.expireSubscription(sub.id);
+          if (result === 'processed') {
+            this.logger.log(`Expired subscription ${sub.id}`);
+          } else {
+            this.logger.debug(
+              `Expiry handling for ${sub.id} was ${result}; no duplicate expiry action taken.`,
+            );
+          }
         } catch (err) {
           this.logger.error(`Failed to handle expiry logic for sub ${sub.id}`, err);
         }
