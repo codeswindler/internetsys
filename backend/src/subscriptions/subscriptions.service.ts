@@ -2771,15 +2771,19 @@ export class SubscriptionsService {
     sub.expiryNotified = false;
     sub.finalExpiryNotified = false;
 
-    const duration = sub.package.durationValue;
+    const duration = Number(sub.package.durationValue) || 0;
     const type = sub.package.durationType;
     const expiresAt = new Date(sub.startedAt);
-    if (type === 'minutes')
+    if (type === DurationType.MINUTES)
       expiresAt.setMinutes(expiresAt.getMinutes() + duration);
-    else if (type === 'hours')
+    else if (type === DurationType.HOURS)
       expiresAt.setHours(expiresAt.getHours() + duration);
-    else if (type === 'days')
+    else if (type === DurationType.DAYS)
       expiresAt.setDate(expiresAt.getDate() + duration);
+    else if (type === DurationType.WEEKS)
+      expiresAt.setDate(expiresAt.getDate() + duration * 7);
+    else if (type === DurationType.MONTHS)
+      expiresAt.setMonth(expiresAt.getMonth() + duration);
     sub.expiresAt = expiresAt;
   }
 
