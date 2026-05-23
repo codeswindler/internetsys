@@ -790,6 +790,7 @@ export class SubscriptionsService {
     for (const nextSub of nextSubs) {
       if (remainingPairs.length === 0) break;
 
+      const wasAlreadyActive = nextSub.status === SubscriptionStatus.ACTIVE;
       const maxDevices = nextSub.package?.maxDevices || 1;
       const existingActiveCount = (nextSub.deviceSessions || []).filter(
         (session) => session.isActive,
@@ -849,14 +850,18 @@ export class SubscriptionsService {
         remainingPairs.unshift(...failedPairs);
       }
 
-      this.activateSubscriptionClock(nextSub);
+      if (!wasAlreadyActive) {
+        this.activateSubscriptionClock(nextSub);
+      }
       const savedNextSub = await this.subRepo.save(nextSub);
       await this.moveCarriedDeviceSessions(sub, savedNextSub, carriedPairs);
-      await this.sendActivationConfirmationNotice(savedNextSub);
+      if (!wasAlreadyActive) {
+        await this.sendActivationConfirmationNotice(savedNextSub);
+      }
       activatedSubs.push(savedNextSub);
 
       this.logger.log(
-        `[CARRY-OVER] Activated queued sub ${savedNextSub.id} from expired sub ${sub.id}; devices=${carriedPairs.length}; expires=${savedNextSub.expiresAt?.toISOString() || 'pending'}`,
+        `[CARRY-OVER] ${wasAlreadyActive ? 'Added device(s) to active' : 'Activated queued'} sub ${savedNextSub.id} from expired sub ${sub.id}; devices=${carriedPairs.length}; expires=${savedNextSub.expiresAt?.toISOString() || 'pending'}`,
       );
     }
 
@@ -885,6 +890,7 @@ export class SubscriptionsService {
   ): Promise<Subscription[]> {
     if (!expiringSub.user?.id || !expiringSub.router?.id) return [];
 
+    const now = new Date();
     return this.subRepo
       .createQueryBuilder('sub')
       .leftJoinAndSelect('sub.user', 'user')
@@ -893,9 +899,20 @@ export class SubscriptionsService {
       .leftJoinAndSelect('sub.deviceSessions', 'deviceSessions')
       .where('user.id = :userId', { userId: expiringSub.user.id })
       .andWhere('router.id = :routerId', { routerId: expiringSub.router.id })
-      .andWhere('sub.status = :status', { status: SubscriptionStatus.PAID })
+      .andWhere(
+        '(sub.status = :paidStatus OR (sub.status = :activeStatus AND sub.expiresAt > :now))',
+        {
+          paidStatus: SubscriptionStatus.PAID,
+          activeStatus: SubscriptionStatus.ACTIVE,
+          now,
+        },
+      )
       .andWhere('sub.id != :subId', { subId: expiringSub.id })
-      .orderBy('sub.createdAt', 'ASC')
+      .orderBy(
+        `CASE WHEN sub.status = '${SubscriptionStatus.ACTIVE}' THEN 0 ELSE 1 END`,
+        'ASC',
+      )
+      .addOrderBy('sub.createdAt', 'ASC')
       .getMany();
   }
 
@@ -1532,9 +1549,25 @@ export class SubscriptionsService {
         const sessionIp = session.ipAddress || undefined;
         const sessionMac = session.macAddress || undefined;
         const identityKey = `${sessionMac || ''}|${sessionIp || ''}`;
-        rememberApKickMac(sessionMac);
 
         if ((sessionIp || sessionMac) && !seenIdentities.has(identityKey)) {
+          const activeOwner = await this.findLiveSubscriptionForDevice(
+            sub.user?.id || '',
+            sub.id,
+            sessionMac,
+            sessionIp,
+          );
+
+          if (activeOwner) {
+            this.logger.warn(
+              `[${scopeLabel}] Skipping hardware logout for ${sessionMac || sessionIp || 'unknown device'} because it is active on sub ${activeOwner.id}.`,
+            );
+            session.isActive = false;
+            continue;
+          }
+
+          rememberApKickMac(sessionMac);
+
           try {
             await this.mikrotikService.forceLogoutHotspot(
               sub.router,
@@ -1559,23 +1592,37 @@ export class SubscriptionsService {
     const fallbackIp = sub.user?.lastIp || undefined;
     const fallbackMac = sub.user?.lastMac || undefined;
     const fallbackKey = `${fallbackMac || ''}|${fallbackIp || ''}`;
-    rememberApKickMac(fallbackMac);
 
     if ((fallbackIp || fallbackMac) && !seenIdentities.has(fallbackKey)) {
-      try {
-        await this.mikrotikService.forceLogoutHotspot(
-          sub.router,
-          fallbackIp,
-          fallbackMac,
-          sub.mikrotikUsername,
-        );
-        this.logger.log(
-          `[${scopeLabel}] Applied last-known device logout fallback for sub ${sub.id}.`,
-        );
-      } catch (e) {
+      const activeOwner = await this.findLiveSubscriptionForDevice(
+        sub.user?.id || '',
+        sub.id,
+        fallbackMac,
+        fallbackIp,
+      );
+
+      if (activeOwner) {
         this.logger.warn(
-          `[${scopeLabel}] Last-known device logout fallback failed for sub ${sub.id}: ${e.message}`,
+          `[${scopeLabel}] Skipping last-known logout fallback for ${fallbackMac || fallbackIp || 'unknown device'} because it is active on sub ${activeOwner.id}.`,
         );
+      } else {
+        rememberApKickMac(fallbackMac);
+
+        try {
+          await this.mikrotikService.forceLogoutHotspot(
+            sub.router,
+            fallbackIp,
+            fallbackMac,
+            sub.mikrotikUsername,
+          );
+          this.logger.log(
+            `[${scopeLabel}] Applied last-known device logout fallback for sub ${sub.id}.`,
+          );
+        } catch (e) {
+          this.logger.warn(
+            `[${scopeLabel}] Last-known device logout fallback failed for sub ${sub.id}: ${e.message}`,
+          );
+        }
       }
     }
 
