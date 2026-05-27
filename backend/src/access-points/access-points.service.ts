@@ -95,6 +95,26 @@ export class AccessPointsService {
     const accessPoint = await this.findOne(id);
 
     try {
+      if (accessPoint.provider === AccessPointProvider.UNIFI) {
+        const message =
+          'UniFi bridge-only mode: MikroTik remains the hotspot gateway and PulseLynk control plane.';
+        accessPoint.isOnline = true;
+        accessPoint.lastError = null;
+        accessPoint.lastCheckedAt = new Date();
+        accessPoint.capabilities = {
+          supported: true,
+          mode: 'bridge_only',
+          hotspotControl: 'mikrotik',
+          clientKick: false,
+        };
+        await this.accessPointRepo.save(accessPoint);
+        return {
+          success: true,
+          message,
+          capabilities: accessPoint.capabilities,
+        };
+      }
+
       if (accessPoint.provider !== AccessPointProvider.MIKROTIK_ROUTEROS) {
         const message = `${accessPoint.provider} AP kick driver is registered but not active yet`;
         accessPoint.isOnline = false;
@@ -213,6 +233,19 @@ export class AccessPointsService {
     normalizedMac: string,
     reason: string,
   ): Promise<ApDisconnectResult> {
+    if (accessPoint.provider === AccessPointProvider.UNIFI) {
+      return {
+        accessPointId: accessPoint.id,
+        accessPointName: accessPoint.name,
+        provider: accessPoint.provider,
+        supported: false,
+        success: false,
+        matched: 0,
+        message:
+          'UniFi bridge-only AP: client kick skipped; MikroTik hotspot revocation still applies.',
+      };
+    }
+
     if (accessPoint.provider !== AccessPointProvider.MIKROTIK_ROUTEROS) {
       return {
         accessPointId: accessPoint.id,

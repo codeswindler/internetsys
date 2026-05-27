@@ -143,7 +143,7 @@ export default function Routers() {
     mutationFn: (id: string) => api.post(`/access-points/${id}/test`).then(res => res.data),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['access-points'] });
-      if (data.success) toast.success('AP controller reachable');
+      if (data.success) toast.success(data.message || 'AP controller reachable');
       else toast.error(`AP test failed: ${data.message}`, { duration: 5000 });
     },
     onError: () => toast.error('Unexpected error testing AP controller'),
@@ -173,8 +173,18 @@ export default function Routers() {
 
   const handleApSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingApId) updateApMutation.mutate(apFormData);
-    else createApMutation.mutate(apFormData);
+    const payload = apFormData.provider === 'unifi'
+      ? {
+          ...apFormData,
+          port: 0,
+          apiUsername: '',
+          apiPasswordEncrypted: '',
+          isNated: false,
+          vpnIp: '',
+        }
+      : apFormData;
+    if (editingApId) updateApMutation.mutate(payload);
+    else createApMutation.mutate(payload);
   };
 
   const openEditModal = (r: any) => {
@@ -312,6 +322,7 @@ export default function Routers() {
       profileRows.push({ name: profileName, routers: routersWithProfile });
     });
   }
+  const isUniFiBridgeForm = apFormData.provider === 'unifi';
 
   return (
     <div className="space-y-10">
@@ -506,7 +517,7 @@ export default function Routers() {
               <Wifi size={18} className="text-cyan-400" /> AP Controllers
             </h3>
             <p className="text-sm text-muted mt-0.5">
-              Optional Wi-Fi client kick layer for captive portal reset after cancel or expiry.
+              Add MikroTik APs for optional client kick, or record UniFi AC Mesh as bridge-only.
             </p>
           </div>
           <button
@@ -523,6 +534,7 @@ export default function Routers() {
               const capabilities = ap.capabilities || {};
               const kickMac = apKickMacs[ap.id] || '';
               const isTestingKick = testApKickMutation.isPending;
+              const isUniFiBridge = ap.provider === 'unifi';
               return (
                 <div key={ap.id} className="glass-panel overflow-hidden flex flex-col">
                   <div className="p-5 flex-1 space-y-4">
@@ -534,7 +546,7 @@ export default function Routers() {
                         </p>
                       </div>
                       <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded border ${ap.isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-500 border-slate-700'}`}>
-                        {ap.isOnline ? 'Online' : 'Offline'}
+                        {isUniFiBridge ? 'Bridge Only' : ap.isOnline ? 'Online' : 'Offline'}
                       </span>
                     </div>
 
@@ -542,13 +554,13 @@ export default function Routers() {
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Reachable At</span>
                         <span className="font-mono text-slate-200 truncate">
-                          {(ap.isNated ? ap.vpnIp : ap.host) || 'Not set'}:{ap.port || 8728}
+                          {isUniFiBridge ? 'MikroTik hotspot network' : `${(ap.isNated ? ap.vpnIp : ap.host) || 'Not set'}:${ap.port || 8728}`}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Driver</span>
-                        <span className={`font-bold ${ap.provider === 'mikrotik_routeros' ? 'text-cyan-300' : 'text-amber-300'}`}>
-                          {ap.provider === 'mikrotik_routeros' ? 'Active' : 'Registered fallback'}
+                        <span className={`font-bold ${ap.provider === 'mikrotik_routeros' || isUniFiBridge ? 'text-cyan-300' : 'text-amber-300'}`}>
+                          {ap.provider === 'mikrotik_routeros' ? 'Active' : isUniFiBridge ? 'Bridge-only' : 'Registered fallback'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-3">
@@ -559,9 +571,15 @@ export default function Routers() {
                       </div>
                     </div>
 
-                    {ap.lastError && (
+                    {ap.lastError && !isUniFiBridge && (
                       <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 text-[11px] text-red-300 leading-relaxed">
                         {ap.lastError}
+                      </div>
+                    )}
+
+                    {isUniFiBridge && (
+                      <div className="rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 p-3 text-[11px] text-emerald-100/80 leading-relaxed">
+                        UniFi AC Mesh should stay in bridge/AP mode. MikroTik must provide DHCP, hotspot, gateway, and PulseLynk access control.
                       </div>
                     )}
 
@@ -578,6 +596,7 @@ export default function Routers() {
                       </div>
                     )}
 
+                    {!isUniFiBridge && (
                     <div className="rounded-xl bg-cyan-500/[0.04] border border-cyan-500/10 p-3 space-y-2">
                       <label className="block text-[10px] font-black text-cyan-300 uppercase tracking-widest">Test Client Kick</label>
                       <div className="flex gap-2">
@@ -599,12 +618,13 @@ export default function Routers() {
                         Safe test only disconnects the matching Wi-Fi station if this controller sees it.
                       </p>
                     </div>
+                    )}
                   </div>
 
                   <div className="px-5 py-3 border-t border-white/5 bg-black/10 flex items-center justify-between">
                     <div className="flex gap-3">
                       <button className="text-cyan-400 hover:text-cyan-300 text-xs font-semibold flex items-center gap-1" onClick={() => testApMutation.mutate(ap.id)} disabled={testApMutation.isPending}>
-                        <RefreshCw size={13} className={testApMutation.isPending ? 'animate-spin' : ''} /> Test
+                        <RefreshCw size={13} className={testApMutation.isPending ? 'animate-spin' : ''} /> {isUniFiBridge ? 'Check Setup' : 'Test'}
                       </button>
                       <button className="text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1" onClick={() => openEditApModal(ap)}>
                         <Edit size={13} /> Edit
@@ -635,7 +655,7 @@ export default function Routers() {
               <div>
                 <p className="font-bold text-slate-200">No AP controllers configured yet.</p>
                 <p className="text-sm text-slate-500 mt-1 max-w-3xl">
-                  Your hEX gateway can still revoke access and clear bypasses. Add the actual Wi-Fi AP/controller here when you want cancel/expiry to also force the phone to reconnect without toggling Wi-Fi.
+                  Your MikroTik gateway can still revoke access and clear bypasses. Add UniFi AC Mesh here as bridge-only documentation, or add a MikroTik AP/controller when you want Wi-Fi client kick support.
                 </p>
               </div>
             </div>
@@ -736,7 +756,7 @@ export default function Routers() {
                   {editingApId ? 'Edit AP Controller' : 'Add AP Controller'}
                 </h3>
                 <p className="text-sm text-slate-500 mt-1">
-                  Used only for optional Wi-Fi client reconnect after cancel or expiry.
+                  UniFi AC Mesh should stay bridge-only; MikroTik keeps hotspot control.
                 </p>
               </div>
               <button
@@ -767,18 +787,35 @@ export default function Routers() {
                     <select
                       className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all"
                       value={apFormData.provider}
-                      onChange={e => setApFormData({ ...apFormData, provider: e.target.value })}
+                      onChange={e => {
+                        const provider = e.target.value;
+                        setApFormData({
+                          ...apFormData,
+                          provider,
+                          ...(provider === 'unifi'
+                            ? {
+                                host: '',
+                                port: 0,
+                                apiUsername: '',
+                                apiPasswordEncrypted: '',
+                                isNated: false,
+                                vpnIp: '',
+                              }
+                            : { port: apFormData.port || 8728 }),
+                        });
+                      }}
                     >
                       <option value="mikrotik_routeros">MikroTik RouterOS (active)</option>
-                      <option value="unifi">UniFi (registered fallback)</option>
+                      <option value="unifi">UniFi AC Mesh (bridge-only recommended)</option>
                       <option value="omada">Omada (registered fallback)</option>
                       <option value="generic">Generic API (registered fallback)</option>
                     </select>
                     <p className="text-[11px] text-slate-500 mt-1">
-                      MikroTik RouterOS is active now. Other drivers are stored safely until we wire their APIs.
+                      Use UniFi bridge-only when MikroTik is still the hotspot gateway.
                     </p>
                   </div>
 
+                  {!isUniFiBridgeForm && (
                   <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-sm font-bold text-orange-400 flex items-center gap-2">
@@ -796,9 +833,32 @@ export default function Routers() {
                       Enable if PulseLynk reaches this AP through the VPN instead of a public IP.
                     </p>
                   </div>
+                  )}
                 </div>
 
                 <div className="space-y-5">
+                  {isUniFiBridgeForm ? (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 space-y-4">
+                      <div>
+                        <h4 className="text-sm font-black uppercase tracking-[0.18em] text-emerald-300">
+                          UniFi Bridge Checklist
+                        </h4>
+                        <p className="mt-2 text-xs leading-relaxed text-emerald-50/70">
+                          PulseLynk will not talk to the UniFi API. Keep MikroTik as DHCP, gateway, hotspot, and access-control brain.
+                        </p>
+                      </div>
+                      <ul className="space-y-2 text-xs text-slate-200">
+                        <li className="flex gap-2"><CheckSquare size={14} className="mt-0.5 text-emerald-300" /> UniFi SSID bridges into the MikroTik hotspot network.</li>
+                        <li className="flex gap-2"><CheckSquare size={14} className="mt-0.5 text-emerald-300" /> UniFi guest/captive portal is disabled for this SSID.</li>
+                        <li className="flex gap-2"><CheckSquare size={14} className="mt-0.5 text-emerald-300" /> UniFi DHCP/NAT is disabled; clients receive MikroTik hotspot IPs.</li>
+                        <li className="flex gap-2"><CheckSquare size={14} className="mt-0.5 text-emerald-300" /> Client isolation is off unless you have tested MikroTik MAC/IP visibility.</li>
+                      </ul>
+                      <div className="rounded-xl bg-black/20 border border-white/5 p-3 text-[11px] text-slate-400 leading-relaxed">
+                        Expiry, device limits, and carry-over stay on MikroTik. UniFi client kick can be added later as a separate controller integration.
+                      </div>
+                    </div>
+                  ) : (
+                  <>
                   <div className="flex gap-4">
                     <div className="flex-[3]">
                       <label className="block text-sm font-medium text-slate-300 mb-1.5">
@@ -866,6 +926,8 @@ export default function Routers() {
                       </div>
                     </div>
                   </div>
+                  </>
+                  )}
 
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1.5">Notes</label>
@@ -880,7 +942,9 @@ export default function Routers() {
               </div>
 
               <div className="mt-6 p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/10 text-xs text-cyan-200/70 leading-relaxed">
-                This does not replace hotspot auth. It only gives PulseLynk a way to ask the AP/controller to reconnect a client after access has already been revoked.
+                {isUniFiBridgeForm
+                  ? 'Bridge-only mode does not add UniFi API control. MikroTik must remain the hotspot router that PulseLynk manages.'
+                  : 'This does not replace hotspot auth. It only gives PulseLynk a way to ask the AP/controller to reconnect a client after access has already been revoked.'}
               </div>
 
               <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-white/5">
