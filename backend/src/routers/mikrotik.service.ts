@@ -25,6 +25,12 @@ export type HotspotDeviceActivity = {
   bytesOut: number;
 };
 
+type HotspotHostInferenceOptions = {
+  excludeMacs?: Iterable<string>;
+  excludeMacPrefixes?: string[];
+  excludeHostKeywords?: string[];
+};
+
 @Injectable()
 export class MikrotikService {
   private readonly logger = new Logger(MikrotikService.name);
@@ -150,7 +156,8 @@ export class MikrotikService {
 
   async inferLikelyHotspotHost(
     router: Router,
-  ): Promise<{ mac: string; ip: string } | null> {
+    options: HotspotHostInferenceOptions = {},
+  ): Promise<{ mac: string; ip: string; hostName?: string } | null> {
     const api = await this.connect(router);
     try {
       const hosts = await api.write('/ip/hotspot/host/print');
@@ -158,12 +165,66 @@ export class MikrotikService {
         return null;
       }
 
+      const leases = await api.write('/ip/dhcp-server/lease/print', [
+        '?status=bound',
+      ]);
+      const deviceNamesByMac = new Map<string, string>();
+      for (const lease of leases || []) {
+        const leaseMac = this.normalizeMac(
+          lease['active-mac-address'] || lease['mac-address'],
+        );
+        const hostName = `${lease['host-name'] || ''}`.trim();
+        if (leaseMac && hostName) {
+          deviceNamesByMac.set(leaseMac, hostName);
+        }
+      }
+
+      const excludedMacs = new Set(
+        [...(options.excludeMacs || [])]
+          .map((mac) => this.normalizeMac(mac))
+          .filter(Boolean) as string[],
+      );
+      const excludedMacPrefixes = (options.excludeMacPrefixes || [])
+        .map((prefix) =>
+          prefix
+            .replace(/[^a-fA-F0-9]/g, '')
+            .toUpperCase()
+            .match(/.{1,2}/g)
+            ?.join(':'),
+        )
+        .filter(Boolean) as string[];
+      const excludedHostKeywords = (options.excludeHostKeywords || [])
+        .map((keyword) => keyword.trim().toLowerCase())
+        .filter(Boolean);
+      const isExcludedHost = (mac?: string, hostName?: string) => {
+        if (mac && excludedMacs.has(mac)) return true;
+        if (mac && excludedMacPrefixes.some((prefix) => mac.startsWith(prefix))) {
+          return true;
+        }
+        const normalizedHostName = `${hostName || ''}`.toLowerCase();
+        return excludedHostKeywords.some((keyword) =>
+          normalizedHostName.includes(keyword),
+        );
+      };
+
       const normalizedHosts = hosts
         .filter((host: any) => host['mac-address'])
-        .map((host: any) => ({
-          mac: this.normalizeMac(host['mac-address']) || host['mac-address'],
-          ip: host['address'] || '',
-        }));
+        .map((host: any) => {
+          const mac = this.normalizeMac(host['mac-address']) || host['mac-address'];
+          return {
+            mac,
+            ip: host['address'] || '',
+            hostName: deviceNamesByMac.get(mac),
+          };
+        })
+        .filter((host) => !isExcludedHost(host.mac, host.hostName));
+
+      if (normalizedHosts.length === 0) {
+        this.logger.warn(
+          `[SYNC] No customer hotspot hosts remained on ${router.name} after infrastructure filtering.`,
+        );
+        return null;
+      }
 
       if (normalizedHosts.length === 1) {
         this.logger.warn(
@@ -175,10 +236,6 @@ export class MikrotikService {
       const hostByMac = new Map(
         normalizedHosts.map((host) => [host.mac, host]),
       );
-
-      const leases = await api.write('/ip/dhcp-server/lease/print', [
-        '?status=bound',
-      ]);
 
       const rankedLeaseHosts = (leases || [])
         .map((lease: any) => ({

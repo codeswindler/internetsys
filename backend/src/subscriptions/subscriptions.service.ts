@@ -24,7 +24,10 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { TransactionMethod } from '../entities/transaction.entity';
 import { MpesaService } from './mpesa.service';
 import { SmsService } from '../sms/sms.service';
-import { AccessPointsService } from '../access-points/access-points.service';
+import {
+  AccessPointsService,
+  InfrastructureDeviceHints,
+} from '../access-points/access-points.service';
 import { Admin } from '../entities/admin.entity';
 
 type SubscriptionExpiryResult = 'processed' | 'skipped' | 'not-found';
@@ -56,6 +59,83 @@ export class SubscriptionsService {
     private accessPointsService: AccessPointsService,
   ) {}
 
+  private async getInfrastructureDeviceHints(
+    router?: Router | null,
+  ): Promise<InfrastructureDeviceHints> {
+    try {
+      return await this.accessPointsService.getInfrastructureDeviceHints(router?.name);
+    } catch (e: any) {
+      this.logger.warn(
+        `[INFRA-FILTER] Could not load AP infrastructure hints: ${e.message}`,
+      );
+      return {
+        macs: new Set(),
+        macPrefixes: [],
+        hostKeywords: ['pulselynk', 'unifi', 'ubnt', 'uap'],
+      };
+    }
+  }
+
+  private isInfrastructureDevice(
+    mac?: string | null,
+    hostName?: string | null,
+    hints?: InfrastructureDeviceHints,
+  ): boolean {
+    if (!hints) return false;
+    const normalizedMac = this.normalizeMac(mac);
+    if (normalizedMac && hints.macs.has(normalizedMac)) return true;
+    if (
+      normalizedMac &&
+      hints.macPrefixes.some((prefix) => normalizedMac.startsWith(prefix))
+    ) {
+      return true;
+    }
+
+    const normalizedHostName = `${hostName || ''}`.trim().toLowerCase();
+    if (!normalizedHostName) return false;
+
+    return hints.hostKeywords.some((keyword) =>
+      normalizedHostName.includes(keyword.toLowerCase()),
+    );
+  }
+
+  private filterCustomerHotspotHosts<T extends { mac?: string; hostName?: string }>(
+    hosts: T[],
+    hints: InfrastructureDeviceHints,
+  ): T[] {
+    return hosts.filter((host) => {
+      const isInfrastructure = this.isInfrastructureDevice(
+        host.mac,
+        host.hostName,
+        hints,
+      );
+      if (isInfrastructure) {
+        this.logger.warn(
+          `[INFRA-FILTER] Ignoring infrastructure hotspot host ${host.mac || 'unknown'} (${host.hostName || 'unnamed'}).`,
+        );
+      }
+      return !isInfrastructure;
+    });
+  }
+
+  private filterCustomerAuthorizations<
+    T extends { mac?: string; deviceName?: string },
+  >(authorizations: T[], hints: InfrastructureDeviceHints): T[] {
+    return authorizations.filter((authorization) => {
+      const isInfrastructure = this.isInfrastructureDevice(
+        authorization.mac,
+        authorization.deviceName,
+        hints,
+      );
+      if (isInfrastructure) {
+        this.logger.warn(
+          `[INFRA-FILTER] Ignoring infrastructure hotspot authorization ${authorization.mac || 'unknown'} (${authorization.deviceName || 'unnamed'}).`,
+        );
+      }
+      return !isInfrastructure;
+    });
+  }
+
   /**
    * Sync Device: Finds the user's MAC by querying the router's hotspot host table.
    * Since the VPS sees the router's public IP (NAT), we can't search by client IP.
@@ -76,7 +156,11 @@ export class SubscriptionsService {
     }
 
     const router = userSub.router;
-    const allHosts = await this.mikrotikService.getAllHosts(router);
+    const infrastructureHints = await this.getInfrastructureDeviceHints(router);
+    const allHosts = this.filterCustomerHotspotHosts(
+      await this.mikrotikService.getAllHosts(router),
+      infrastructureHints,
+    );
     
     // 1. Try to find the host matching the client's current IP
     const host = allHosts.find(h => h.ip === clientIp);
@@ -100,7 +184,14 @@ export class SubscriptionsService {
       }
     }
 
-    const inferredHost = await this.mikrotikService.inferLikelyHotspotHost(router);
+    const inferredHost = await this.mikrotikService.inferLikelyHotspotHost(
+      router,
+      {
+        excludeMacs: infrastructureHints.macs,
+        excludeMacPrefixes: infrastructureHints.macPrefixes,
+        excludeHostKeywords: infrastructureHints.hostKeywords,
+      },
+    );
     if (inferredHost) {
       this.logger.warn(
         `[SYNC] Falling back to inferred hotspot host ${inferredHost.mac} (${inferredHost.ip}) for user ${userId}`,
@@ -956,7 +1047,15 @@ export class SubscriptionsService {
     sub: Subscription,
     activeSessions: DeviceSession[],
   ): Promise<DeviceSession[]> {
-    const candidates = [...activeSessions];
+    const infrastructureHints = await this.getInfrastructureDeviceHints(sub.router);
+    const candidates = activeSessions.filter(
+      (session) =>
+        !this.isInfrastructureDevice(
+          session.macAddress,
+          session.deviceModel,
+          infrastructureHints,
+        ),
+    );
     const findCandidate = (mac?: string | null, ip?: string | null) => {
       const normalizedMac = this.normalizeMac(mac);
       return candidates.find((candidate) => {
@@ -981,6 +1080,12 @@ export class SubscriptionsService {
       const normalizedMac = this.normalizeMac(mac);
       const normalizedIp = ip || undefined;
       if (!normalizedMac && !normalizedIp) return;
+      if (this.isInfrastructureDevice(normalizedMac, deviceModel, infrastructureHints)) {
+        this.logger.warn(
+          `[CARRY-OVER] Skipping infrastructure device ${normalizedMac || normalizedIp || 'unknown'} for sub ${sub.id}.`,
+        );
+        return;
+      }
 
       const existing = findCandidate(normalizedMac, normalizedIp);
       if (existing) {
@@ -1006,9 +1111,12 @@ export class SubscriptionsService {
     if (sub.router && sub.mikrotikUsername) {
       try {
         const routerAuthorizations =
-          await this.mikrotikService.listHotspotAuthorizations(
-            sub.router,
-            sub.mikrotikUsername,
+          this.filterCustomerAuthorizations(
+            await this.mikrotikService.listHotspotAuthorizations(
+              sub.router,
+              sub.mikrotikUsername,
+            ),
+            infrastructureHints,
           );
 
         for (const authorization of routerAuthorizations) {
@@ -1407,13 +1515,12 @@ export class SubscriptionsService {
         await this.sessionRepo.save(activeSessions);
       }
 
-      if (sub.router && (sub.user?.lastMac || sub.user?.lastIp || sub.mikrotikUsername)) {
+      if (sub.router && (sub.user?.lastMac || sub.user?.lastIp)) {
         try {
           await this.mikrotikService.forceLogoutHotspot(
             sub.router,
             sub.user?.lastIp || undefined,
             sub.user?.lastMac || undefined,
-            sub.mikrotikUsername,
           );
           this.logger.log(
             `[DISCONNECT] Applied fallback hotspot logout for sub ${sub.id} using last-known identity ${sub.user?.lastMac || 'unknown-mac'}.`,
@@ -1456,7 +1563,6 @@ export class SubscriptionsService {
           router,
           session.ipAddress,
           session.macAddress,
-          session.subscription.mikrotikUsername,
         );
         
         this.logger.log(`[DISCONNECT] Forcefully removed device ${session.macAddress} from router ${router.name}`);
@@ -1481,7 +1587,11 @@ export class SubscriptionsService {
     if (!sub || !sub.router) throw new NotFoundException('Subscription or Router not found');
 
     // 1. Get all hardware hosts from MikroTik
-    const allHosts = await this.mikrotikService.getAllHosts(sub.router);
+    const infrastructureHints = await this.getInfrastructureDeviceHints(sub.router);
+    const allHosts = this.filterCustomerHotspotHosts(
+      await this.mikrotikService.getAllHosts(sub.router),
+      infrastructureHints,
+    );
     if (!allHosts || allHosts.length === 0) return [];
 
     // 2. Get all currently linked active sessions to filter them out
@@ -2162,7 +2272,16 @@ export class SubscriptionsService {
 
     // Resolve the current device from the router itself so device-limit state
     // and "this device" UI stay aligned with the actual connected hardware.
-    const currentSubSessions = await this.getRecentSessionsForSubscription(sub.id);
+    const infrastructureHints = await this.getInfrastructureDeviceHints(sub.router);
+    const currentSubSessions = (await this.getRecentSessionsForSubscription(sub.id))
+      .filter(
+        (session) =>
+          !this.isInfrastructureDevice(
+            session.macAddress,
+            session.deviceModel,
+            infrastructureHints,
+          ),
+      );
     const currentSubActiveSessions = currentSubSessions.filter(
       (session) => session.isActive,
     );
@@ -2213,8 +2332,18 @@ export class SubscriptionsService {
     let finalIp = ip || undefined;
     let finalMac = mac || undefined;
 
+    if (this.isInfrastructureDevice(finalMac, undefined, infrastructureHints)) {
+      this.logger.warn(
+        `[INFRA-FILTER] Ignoring incoming infrastructure identity ${finalMac} for sub ${sub.id}.`,
+      );
+      finalMac = undefined;
+      if (finalIp && !this.isPublicIpv4(finalIp)) {
+        finalIp = undefined;
+      }
+    }
+
     const hasExplicitDeviceIdentity =
-      !!mac || (!!ip && !this.isPublicIpv4(ip));
+      !!finalMac || (!!finalIp && !this.isPublicIpv4(finalIp));
     const shouldRequireExplicitIdentity =
       sub.status === SubscriptionStatus.ACTIVE &&
       maxAllowed === 1 &&
@@ -2246,11 +2375,14 @@ export class SubscriptionsService {
       !hasExplicitDeviceIdentity;
 
     if (shouldCheckRouterSlotOccupancy) {
-      const routerHasAuthorizedDevice =
-        await this.mikrotikService.hasHotspotAuthorization(
+      const routerAuthorizations = this.filterCustomerAuthorizations(
+        await this.mikrotikService.listHotspotAuthorizations(
           sub.router,
           sub.mikrotikUsername,
-        );
+        ),
+        infrastructureHints,
+      );
+      const routerHasAuthorizedDevice = routerAuthorizations.length > 0;
 
       if (routerHasAuthorizedDevice) {
         const fallbackSession = preferredKnownSession
@@ -2322,7 +2454,14 @@ export class SubscriptionsService {
       (!finalMac || !finalIp || this.isPublicIpv4(finalIp));
 
     if (shouldInferHostFromRouter) {
-      const inferredHost = await this.mikrotikService.inferLikelyHotspotHost(sub.router);
+      const inferredHost = await this.mikrotikService.inferLikelyHotspotHost(
+        sub.router,
+        {
+          excludeMacs: infrastructureHints.macs,
+          excludeMacPrefixes: infrastructureHints.macPrefixes,
+          excludeHostKeywords: infrastructureHints.hostKeywords,
+        },
+      );
       if (inferredHost) {
         if (!finalMac) {
           finalMac = inferredHost.mac;
@@ -2338,6 +2477,13 @@ export class SubscriptionsService {
 
     if (!finalMac && finalIp && !this.isPublicIpv4(finalIp)) {
       finalMac = (await this.mikrotikService.findMacByIp(sub.router, finalIp)) || undefined;
+      if (this.isInfrastructureDevice(finalMac, undefined, infrastructureHints)) {
+        this.logger.warn(
+          `[INFRA-FILTER] Ignoring infrastructure MAC ${finalMac} resolved from IP ${finalIp} for sub ${sub.id}.`,
+        );
+        finalMac = undefined;
+        finalIp = undefined;
+      }
     }
 
     if (!finalMac && !finalIp) {
@@ -2394,9 +2540,12 @@ export class SubscriptionsService {
       maxAllowed > 0
     ) {
       const routerAuthorizations =
-        await this.mikrotikService.listHotspotAuthorizations(
-          sub.router,
-          sub.mikrotikUsername,
+        this.filterCustomerAuthorizations(
+          await this.mikrotikService.listHotspotAuthorizations(
+            sub.router,
+            sub.mikrotikUsername,
+          ),
+          infrastructureHints,
         );
       const normalizedFinalMacForLimit = this.normalizeMac(finalMac);
       const matchingRouterAuthorization = routerAuthorizations.some((authorization) => {

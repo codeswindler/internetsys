@@ -44,6 +44,7 @@ export default function Routers() {
     name: '',
     provider: 'mikrotik_routeros',
     host: '',
+    managementMacAddress: '',
     port: 8728,
     apiUsername: '',
     apiPasswordEncrypted: '',
@@ -231,6 +232,7 @@ export default function Routers() {
       name: ap.name || '',
       provider: ap.provider || 'mikrotik_routeros',
       host: ap.host || '',
+      managementMacAddress: ap.managementMacAddress || '',
       port: ap.port || 8728,
       apiUsername: ap.apiUsername || '',
       apiPasswordEncrypted: ap.apiPasswordEncrypted || '',
@@ -250,6 +252,7 @@ export default function Routers() {
       name: '',
       provider: 'mikrotik_routeros',
       host: '',
+      managementMacAddress: '',
       port: 8728,
       apiUsername: '',
       apiPasswordEncrypted: '',
@@ -563,6 +566,12 @@ export default function Routers() {
                           {ap.provider === 'mikrotik_routeros' ? 'Active' : isUniFiBridge ? 'Bridge-only' : 'Registered fallback'}
                         </span>
                       </div>
+                      {ap.managementMacAddress && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-500">Mgmt MAC</span>
+                          <span className="font-mono text-slate-200 truncate">{ap.managementMacAddress}</span>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-slate-500">Last Check</span>
                         <span className="font-mono text-slate-400">
@@ -837,6 +846,19 @@ export default function Routers() {
                 </div>
 
                 <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Management MAC (optional)</label>
+                    <input
+                      className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono"
+                      value={apFormData.managementMacAddress}
+                      onChange={e => setApFormData({ ...apFormData, managementMacAddress: e.target.value })}
+                      placeholder="1C:6A:1B:73:63:BA"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Used to keep AP/router management devices out of customer package slots.
+                    </p>
+                  </div>
+
                   {isUniFiBridgeForm ? (
                     <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 space-y-4">
                       <div>

@@ -17,9 +17,40 @@ export interface ApDisconnectResult {
   message: string;
 }
 
+export interface InfrastructureDeviceHints {
+  macs: Set<string>;
+  macPrefixes: string[];
+  hostKeywords: string[];
+}
+
 @Injectable()
 export class AccessPointsService {
   private readonly logger = new Logger(AccessPointsService.name);
+  private readonly defaultInfrastructureHostKeywords = [
+    'pulselynk',
+    'unifi',
+    'ubnt',
+    'uap',
+  ];
+  private readonly defaultInfrastructureMacPrefixes = [
+    '04:18:D6',
+    '18:E8:29',
+    '1C:6A:1B',
+    '24:A4:3C',
+    '44:D9:E7',
+    '68:D7:9A',
+    '70:A7:41',
+    '74:AC:B9',
+    '78:8A:20',
+    '80:2A:A8',
+    'A8:5E:45',
+    'B4:FB:E4',
+    'D0:21:F9',
+    'E0:63:DA',
+    'F0:9F:C2',
+    'F4:92:BF',
+    'FC:EC:DA',
+  ];
 
   private readonly mikrotikRegistrationTables = [
     {
@@ -47,6 +78,7 @@ export class AccessPointsService {
   async create(createDto: Partial<AccessPoint>): Promise<AccessPoint> {
     const accessPoint = this.accessPointRepo.create({
       ...createDto,
+      managementMacAddress: this.normalizeMac(createDto.managementMacAddress),
       provider:
         createDto.provider || AccessPointProvider.MIKROTIK_ROUTEROS,
       isActive: createDto.isActive ?? true,
@@ -77,6 +109,9 @@ export class AccessPointsService {
     const accessPoint = await this.findOne(id);
     if (updateDto.apiPasswordEncrypted === '') {
       delete updateDto.apiPasswordEncrypted;
+    }
+    if ('managementMacAddress' in updateDto) {
+      updateDto.managementMacAddress = this.normalizeMac(updateDto.managementMacAddress);
     }
     Object.assign(accessPoint, updateDto);
     const saved = await this.accessPointRepo.save(accessPoint);
@@ -205,6 +240,37 @@ export class AccessPointsService {
     }
 
     return results;
+  }
+
+  async getInfrastructureDeviceHints(
+    routerName?: string | null,
+  ): Promise<InfrastructureDeviceHints> {
+    const accessPoints = await this.accessPointRepo.find({
+      where: { isActive: true },
+    });
+    const macs = new Set<string>();
+    const hostKeywords = new Set(this.defaultInfrastructureHostKeywords);
+    const macPrefixes = new Set(this.defaultInfrastructureMacPrefixes);
+
+    const addKeyword = (value?: string | null) => {
+      const normalized = `${value || ''}`.trim().toLowerCase();
+      if (normalized.length >= 3) {
+        hostKeywords.add(normalized);
+      }
+    };
+
+    addKeyword(routerName);
+    for (const accessPoint of accessPoints) {
+      const managementMac = this.normalizeMac(accessPoint.managementMacAddress);
+      if (managementMac) macs.add(managementMac);
+      addKeyword(accessPoint.name);
+    }
+
+    return {
+      macs,
+      macPrefixes: [...macPrefixes],
+      hostKeywords: [...hostKeywords],
+    };
   }
 
   async testKick(id: string, mac: string): Promise<ApDisconnectResult> {

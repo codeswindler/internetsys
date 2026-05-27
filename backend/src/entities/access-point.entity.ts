@@ -31,6 +31,9 @@ export class AccessPoint {
   @Column({ type: 'varchar', length: 255, nullable: true })
   host: string | null;
 
+  @Column({ type: 'varchar', length: 17, nullable: true })
+  managementMacAddress: string | null;
+
   @Column({ default: 8728 })
   port: number;
 
