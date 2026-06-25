@@ -29,6 +29,7 @@ type HotspotHostInferenceOptions = {
   excludeMacs?: Iterable<string>;
   excludeMacPrefixes?: string[];
   excludeHostKeywords?: string[];
+  allowMultiHostFallback?: boolean;
 };
 
 @Injectable()
@@ -231,6 +232,13 @@ export class MikrotikService {
           `[SYNC] Falling back to the only hotspot host on ${router.name}: ${normalizedHosts[0].mac}`,
         );
         return normalizedHosts[0];
+      }
+
+      if (!options.allowMultiHostFallback) {
+        this.logger.warn(
+          `[SYNC] Refusing ambiguous hotspot host inference on ${router.name}; customerHosts=${normalizedHosts.length}.`,
+        );
+        return null;
       }
 
       const hostByMac = new Map(

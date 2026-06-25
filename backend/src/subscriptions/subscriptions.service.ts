@@ -2206,16 +2206,22 @@ export class SubscriptionsService {
     ip?: string,
     userAgent?: string,
   ): Promise<any> {
-    const existingStart = this.startSessionLocks.get(id);
+    const lockIdentity =
+      this.normalizeMac(mac) ||
+      (ip && !this.isPublicIpv4(ip) ? ip : 'no-device-identity');
+    const lockKey = `${id}:${lockIdentity}`;
+    const existingStart = this.startSessionLocks.get(lockKey);
     if (existingStart) {
-      this.logger.warn(`[START-LOCK] Reusing in-flight start request for sub ${id}.`);
+      this.logger.warn(
+        `[START-LOCK] Reusing in-flight start request for sub ${id} | identity=${lockIdentity}.`,
+      );
       return existingStart;
     }
 
     const startPromise = this.startSessionUnlocked(userId, id, mac, ip, userAgent)
-      .finally(() => this.startSessionLocks.delete(id));
+      .finally(() => this.startSessionLocks.delete(lockKey));
 
-    this.startSessionLocks.set(id, startPromise);
+    this.startSessionLocks.set(lockKey, startPromise);
     return startPromise;
   }
 
@@ -2533,6 +2539,7 @@ export class SubscriptionsService {
     const routerLimitFallbackSessions: Array<
       Pick<DeviceSession, 'id' | 'macAddress' | 'ipAddress' | 'deviceModel' | 'createdAt'>
     > = [];
+    let existingRouterAuthorizationMode: 'active-login' | 'bypass' | undefined;
     if (
       sub.status === SubscriptionStatus.ACTIVE &&
       sub.router.connectionMode !== 'pppoe' &&
@@ -2548,7 +2555,7 @@ export class SubscriptionsService {
           infrastructureHints,
         );
       const normalizedFinalMacForLimit = this.normalizeMac(finalMac);
-      const matchingRouterAuthorization = routerAuthorizations.some((authorization) => {
+      const matchingRouterAuthorization = routerAuthorizations.find((authorization) => {
         const authorizationMac = this.normalizeMac(authorization.mac);
         const macMatches =
           !!normalizedFinalMacForLimit &&
@@ -2561,6 +2568,12 @@ export class SubscriptionsService {
 
         return macMatches || ipMatches;
       });
+      if (matchingRouterAuthorization) {
+        existingRouterAuthorizationMode =
+          matchingRouterAuthorization.source === 'active'
+            ? 'active-login'
+            : 'bypass';
+      }
       const activeRouterAuthorizationCount = routerAuthorizations.length;
 
       for (const authorization of routerAuthorizations) {
@@ -2724,7 +2737,24 @@ export class SubscriptionsService {
         handshakeRequired: false,
         activationPending: false,
         connectionConfirmed: true,
-        authorizationMode: 'active-login',
+        authorizationMode: existingRouterAuthorizationMode || 'active-login',
+        resolvedMac: finalMac,
+        resolvedIp: finalIp,
+      };
+    }
+
+    if (sub.status === SubscriptionStatus.ACTIVE && existingRouterAuthorizationMode) {
+      await this.persistLatestDeviceIdentity(sub.user, finalMac, finalIp, model);
+      const savedSub = await this.subRepo.save(sub);
+      this.logger.log(
+        `[CONNECT-REUSE] Sub ${savedSub.id} already authorized on router via ${existingRouterAuthorizationMode} | MAC: ${finalMac} | IP: ${finalIp || 'none'} | Expires: ${savedSub.expiresAt?.toISOString() || 'pending'}`,
+      );
+      return {
+        ...savedSub,
+        handshakeRequired: false,
+        activationPending: false,
+        connectionConfirmed: true,
+        authorizationMode: existingRouterAuthorizationMode,
         resolvedMac: finalMac,
         resolvedIp: finalIp,
       };

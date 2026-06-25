@@ -8,6 +8,8 @@ import {
   clearStoredHotspotIdentity,
   hasFreshHotspotIdentity,
   getStoredHotspotIdentity,
+  markHotspotConnectCompleted,
+  readHotspotConnectCompleted,
   readHotspotConnectContext,
   resolveHotspotReleaseUrl,
   shouldTriggerHotspotIdentify,
@@ -69,6 +71,23 @@ export default function HotspotConnect() {
     }
 
     const startConnection = async () => {
+      const completedAttempt = readHotspotConnectCompleted(attemptId, subId);
+      if (completedAttempt) {
+        syncStoredHotspotIdentity({
+          mac: completedAttempt.resolvedMac,
+          ip: completedAttempt.resolvedIp,
+        });
+        setReleaseTarget(completedAttempt.releaseTarget || INTERNET_LANDING_URL);
+        setConnected(true);
+        setStage('This device is connected. You can close this tab or continue browsing.');
+        clearHotspotConnectContext(attemptId);
+        traceHotspot('connect-attempt-reused', {
+          sub: subId,
+          detail: `mode=${completedAttempt.authorizationMode || 'unknown'}`,
+        });
+        return;
+      }
+
       const identity = getStoredHotspotIdentity();
       const hasIdentity = !!(identity.mac || identity.ip);
       const hasFreshIdentity = hasFreshHotspotIdentity();
@@ -102,6 +121,13 @@ export default function HotspotConnect() {
         setStage('Completing router handoff...');
         setReleaseTarget(safeReleaseTarget);
         toast.success('Device linked. You are online.');
+        markHotspotConnectCompleted(attemptId, {
+          subId,
+          releaseTarget: safeReleaseTarget,
+          resolvedMac: sub?.resolvedMac,
+          resolvedIp: sub?.resolvedIp,
+          authorizationMode: sub?.authorizationMode || 'unknown',
+        });
         clearHotspotConnectContext(attemptId);
         traceHotspot('connect-router-release', {
           sub: subId,

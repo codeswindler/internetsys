@@ -3,6 +3,7 @@ const HOTSPOT_RELEASE_FALLBACK_URL = 'http://connectivitycheck.gstatic.com/gener
 const HOTSPOT_IDENTITY_UPDATED_AT_KEY = 'hotspot_identity_updated_at';
 const HOTSPOT_DEVICE_LIMIT_CONTEXT_KEY = 'hotspot_device_limit_context';
 const HOTSPOT_CONNECT_CONTEXT_PREFIX = 'hotspot_connect_context:';
+const HOTSPOT_CONNECT_COMPLETED_PREFIX = 'hotspot_connect_completed:';
 const HOTSPOT_LOGIN_PAGE_KEY = 'hotspot_link_login';
 const HOTSPOT_LOGIN_ONLY_KEY = 'hotspot_link_login_only';
 const HOTSPOT_LOGIN_RELEASE_FRAME = 'hotspot-login-release-frame';
@@ -13,6 +14,15 @@ type HotspotConnectContext = {
   fromPath: string;
   routerIp?: string;
   releaseUrl?: string;
+};
+
+type HotspotConnectCompletion = {
+  subId: string;
+  releaseTarget?: string;
+  resolvedMac?: string;
+  resolvedIp?: string;
+  authorizationMode?: string;
+  completedAt: number;
 };
 
 export const traceHotspot = (
@@ -212,6 +222,9 @@ const parseHotspotUrl = (value?: string | null, currentOrigin?: string) => {
 const getHotspotConnectContextKey = (attemptId: string) =>
   `${HOTSPOT_CONNECT_CONTEXT_PREFIX}${attemptId}`;
 
+const getHotspotConnectCompletedKey = (attemptId: string) =>
+  `${HOTSPOT_CONNECT_COMPLETED_PREFIX}${attemptId}`;
+
 export const persistHotspotConnectContext = (
   attemptId: string,
   context: HotspotConnectContext,
@@ -240,6 +253,38 @@ export const readHotspotConnectContext = (
 export const clearHotspotConnectContext = (attemptId?: string | null) => {
   if (!attemptId) return;
   sessionStorage.removeItem(getHotspotConnectContextKey(attemptId));
+};
+
+export const markHotspotConnectCompleted = (
+  attemptId: string | null | undefined,
+  completion: Omit<HotspotConnectCompletion, 'completedAt'>,
+) => {
+  if (!attemptId) return;
+
+  sessionStorage.setItem(
+    getHotspotConnectCompletedKey(attemptId),
+    JSON.stringify({ ...completion, completedAt: Date.now() }),
+  );
+};
+
+export const readHotspotConnectCompleted = (
+  attemptId: string | null | undefined,
+  subId: string,
+  maxAgeMs = 10 * 60 * 1000,
+): HotspotConnectCompletion | null => {
+  if (!attemptId) return null;
+
+  const raw = sessionStorage.getItem(getHotspotConnectCompletedKey(attemptId));
+  if (!raw) return null;
+
+  try {
+    const completion = JSON.parse(raw) as HotspotConnectCompletion;
+    if (completion.subId !== subId) return null;
+    if (Date.now() - completion.completedAt > maxAgeMs) return null;
+    return completion;
+  } catch {
+    return null;
+  }
 };
 
 const isAppOrRouterDestination = (url: URL, currentOrigin?: string) => {
