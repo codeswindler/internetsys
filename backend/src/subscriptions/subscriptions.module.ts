@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SubscriptionsController } from './subscriptions.controller';
+import { GuestSubscriptionsController } from './guest-subscriptions.controller';
 import { MpesaWebhookController } from './mpesa-webhook.controller';
 import { SubscriptionsService } from './subscriptions.service';
 import { MpesaService } from './mpesa.service';
@@ -15,6 +16,7 @@ import { Admin } from '../entities/admin.entity';
 import { TransactionsModule } from '../transactions/transactions.module';
 import { SmsModule } from '../sms/sms.module';
 import { AccessPointsModule } from '../access-points/access-points.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -28,11 +30,16 @@ import { AccessPointsModule } from '../access-points/access-points.module';
     ]),
 
     RoutersModule, // To use MikrotikService
+    AuthModule,
     AccessPointsModule,
     TransactionsModule,
     SmsModule,
   ],
-  controllers: [SubscriptionsController, MpesaWebhookController],
+  controllers: [
+    SubscriptionsController,
+    GuestSubscriptionsController,
+    MpesaWebhookController,
+  ],
   providers: [SubscriptionsService, MpesaService],
   exports: [SubscriptionsService],
 })

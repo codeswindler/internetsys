@@ -20,16 +20,19 @@ import UserPackages from './pages/user/Packages';
 import UserSubscriptions from './pages/user/Subscriptions';
 import UserDashboard from './pages/user/UserDashboard';
 import HotspotConnect from './pages/user/HotspotConnect';
+import QuickBuy from './pages/public/QuickBuy';
 
 function RootRedirect() {
   const location = useLocation();
-  return <Navigate to="/login" replace state={{ from: location }} search={location.search} />;
+  return <Navigate to="/buy" replace state={{ from: location }} search={location.search} />;
 }
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<RootRedirect />} />
+      <Route path="/buy" element={<QuickBuy />} />
+      <Route path="/packages" element={<QuickBuy />} />
       
       {/* Auth Routes */}
       <Route element={<AuthLayout />}>

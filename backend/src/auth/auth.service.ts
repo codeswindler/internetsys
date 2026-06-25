@@ -113,6 +113,66 @@ export class AuthService {
     return this.userLogin(phone, pass); // auto login
   }
 
+  async findUserByPhone(phone: string): Promise<User | null> {
+    const formattedPhone = this.smsService.formatPhone(phone);
+    return this.userRepo.findOne({
+      where: [
+        { phone: formattedPhone },
+        { phone: phone?.trim() },
+      ],
+    });
+  }
+
+  async findOrCreateGuestUser(phone: string): Promise<User> {
+    const formattedPhone = this.smsService.formatPhone(phone);
+    if (!formattedPhone || formattedPhone.length < 9) {
+      throw new BadRequestException('Please enter a valid M-Pesa phone number');
+    }
+
+    const existing = await this.findUserByPhone(phone);
+    if (existing) {
+      if (!existing.isActive) {
+        throw new UnauthorizedException('Account is disabled');
+      }
+      return existing;
+    }
+
+    const phoneTail = formattedPhone.slice(-9);
+    let username = `guest_${phoneTail}`;
+    let suffix = 1;
+    while (await this.userRepo.findOne({ where: { username } })) {
+      suffix += 1;
+      username = `guest_${phoneTail}_${suffix}`;
+    }
+
+    const passwordHash = await bcrypt.hash(
+      `${formattedPhone}-${Date.now()}-${Math.random()}`,
+      10,
+    );
+    const user = this.userRepo.create({
+      name: `Customer ${formattedPhone.slice(-4)}`,
+      phone: formattedPhone,
+      username,
+      passwordHash,
+    });
+
+    return this.userRepo.save(user);
+  }
+
+  buildUserAuthResponse(user: User) {
+    const payload = { sub: user.id, phone: user.phone, role: 'user' };
+    return {
+      access_token: this.jwtService.sign(payload),
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        phone: user.phone,
+        role: 'user',
+      },
+    };
+  }
+
   async createInitialAdmin(email: string, pass: string) {
     const count = await this.adminRepo.count();
     if (count > 0) throw new BadRequestException('Admins already exist');

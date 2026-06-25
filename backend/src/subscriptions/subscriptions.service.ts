@@ -247,6 +247,141 @@ export class SubscriptionsService {
     return saved;
   }
 
+  async listGuestPackages() {
+    const packages = await this.pkgRepo.find({
+      where: { isActive: true },
+      order: { price: 'ASC' },
+    });
+
+    return packages.map((pkg) => ({
+      id: pkg.id,
+      name: pkg.name,
+      durationType: pkg.durationType,
+      durationValue: pkg.durationValue,
+      price: pkg.price,
+      dataLimitMB: pkg.dataLimitMB,
+      downloadSpeed: pkg.downloadSpeed,
+      uploadSpeed: pkg.uploadSpeed,
+      maxDevices: pkg.maxDevices,
+    }));
+  }
+
+  async listGuestRouters() {
+    const routers = await this.routerRepo.find({
+      where: { isOnline: true },
+      order: { name: 'ASC' },
+    });
+
+    return routers.map((router) => ({
+      id: router.id,
+      name: router.name,
+      localGateway: router.localGateway,
+      connectionMode: router.connectionMode,
+      isOnline: router.isOnline,
+    }));
+  }
+
+  async createGuestMpesaCheckout(
+    userId: string,
+    packageId: string,
+    routerId: string | undefined,
+    phone: string,
+  ) {
+    const formattedPhone = this.smsService.formatPhone(phone);
+    if (!formattedPhone || formattedPhone.length < 9) {
+      throw new BadRequestException('Please enter a valid M-Pesa phone number');
+    }
+
+    const sub = await this.purchase(userId, packageId, routerId, false);
+    await this.setStatus(sub.id, SubscriptionStatus.VERIFYING);
+
+    try {
+      const amount = Number(sub.package?.price || sub.amountPaid || 0);
+      if (!amount || Number.isNaN(amount)) {
+        throw new BadRequestException('Package price is invalid');
+      }
+
+      const mpesaRes = await this.mpesaService.stkPush(
+        formattedPhone,
+        amount,
+        `SUB-${sub.id.substring(0, 8)}`,
+        'Internet Subscription',
+      );
+
+      if (mpesaRes.CheckoutRequestID) {
+        await this.updateMpesaCheckoutId(sub.id, mpesaRes.CheckoutRequestID);
+      }
+
+      return {
+        success: true,
+        sub: await this.getGuestSubscriptionPayload(sub.id),
+        daraja: mpesaRes,
+      };
+    } catch (e) {
+      await this.setStatus(sub.id, SubscriptionStatus.CANCELLED);
+      throw e;
+    }
+  }
+
+  async getGuestSubscriptionForPhone(
+    subId: string,
+    phone: string,
+  ): Promise<Subscription> {
+    const formattedPhone = this.smsService.formatPhone(phone);
+    const rawPhone = phone?.trim();
+    const sub = await this.subRepo.findOne({
+      where: { id: subId },
+      relations: ['user', 'package', 'router'],
+    });
+    if (!sub) throw new NotFoundException('Subscription not found');
+
+    if (
+      sub.user?.phone !== formattedPhone &&
+      (!rawPhone || sub.user?.phone !== rawPhone)
+    ) {
+      throw new NotFoundException('Subscription not found');
+    }
+
+    return sub;
+  }
+
+  async getGuestSubscriptionPayload(subId: string) {
+    const sub = await this.subRepo.findOne({
+      where: { id: subId },
+      relations: ['package', 'router'],
+    });
+    if (!sub) throw new NotFoundException('Subscription not found');
+
+    return {
+      id: sub.id,
+      status: sub.status,
+      amountPaid: sub.amountPaid,
+      package: sub.package
+        ? {
+            id: sub.package.id,
+            name: sub.package.name,
+            durationType: sub.package.durationType,
+            durationValue: sub.package.durationValue,
+            price: sub.package.price,
+            dataLimitMB: sub.package.dataLimitMB,
+            downloadSpeed: sub.package.downloadSpeed,
+            uploadSpeed: sub.package.uploadSpeed,
+            maxDevices: sub.package.maxDevices,
+          }
+        : null,
+      router: sub.router
+        ? {
+            id: sub.router.id,
+            name: sub.router.name,
+            localGateway: sub.router.localGateway,
+            connectionMode: sub.router.connectionMode,
+          }
+        : null,
+      createdAt: sub.createdAt,
+      updatedAt: sub.updatedAt,
+    };
+  }
+
   async getStatus(subId: string): Promise<{ status: SubscriptionStatus }> {
     const sub = await this.subRepo.findOne({ where: { id: subId } });
     if (!sub) throw new NotFoundException('Subscription not found');
