@@ -437,8 +437,8 @@ export default function Routers() {
                     <button 
                       onClick={() => {
                         const vpnHost = vpnSettings?.host || window.location.hostname;
-                        const script = `/interface sstp-client add name=pulselynk-vpn connect-to=${vpnHost} user=${r.vpnUsername} password=${r.vpnPasswordEncrypted} profile=default-encryption disabled=no;
-/ip dhcp-client add interface=pulselynk-vpn disabled=no;`;
+                        const script = `/interface sstp-client remove [find name=pulselynk-vpn];
+/interface sstp-client add name=pulselynk-vpn connect-to=${vpnHost} user=${r.vpnUsername} password=${r.vpnPasswordEncrypted} profile=default-encryption verify-server-certificate=no add-sni=yes tls-version=only-1.2 disabled=no;`;
                         navigator.clipboard.writeText(script);
                         toast.success('MikroTik CLI Script copied!');
                       }}
