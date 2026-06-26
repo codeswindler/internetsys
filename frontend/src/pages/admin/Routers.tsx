@@ -366,7 +366,7 @@ export default function Routers() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-main leading-tight truncate">{r.name}</h3>
-                    <p className="text-xs text-muted font-mono mt-0.5">{r.host}:{r.port}</p>
+                    <p className="text-xs text-muted font-mono mt-0.5">{(r.isNated && r.vpnIp ? r.vpnIp : r.host) || 'No host'}:{r.port}</p>
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -1094,7 +1094,7 @@ export default function Routers() {
 
                         <div>
                           <div className="flex items-center justify-between mb-1">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase">Static VPN IP (Assigned)</label>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase">Static VPN IP / API Host</label>
                             <button 
                               type="button" 
                               onClick={async () => {
@@ -1116,7 +1116,7 @@ export default function Routers() {
                             onChange={e => setFormData({ ...formData, vpnIp: e.target.value })} 
                             placeholder="10.8.0.50" 
                           />
-                          <p className="text-[10px] text-slate-500 mt-1 italic">PulseLynk will use this IP to reach the router once it's tunneled.</p>
+                          <p className="text-[10px] text-slate-500 mt-1 italic">PulseLynk will use this VPN IP to reach the MikroTik API once tunneled.</p>
                         </div>
                       </div>
 
@@ -1152,6 +1152,18 @@ export default function Routers() {
                         </div>
                       </div>
                     </>
+                  )}
+                  {formData.connectionMode === 'hotspot' && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1.5">Hotspot Gateway (Local)</label>
+                      <input
+                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-cyan-500 transition-all font-medium font-mono"
+                        value={formData.localGateway}
+                        onChange={e => setFormData({ ...formData, localGateway: e.target.value })}
+                        placeholder="10.10.1.1"
+                      />
+                      <p className="text-[10px] text-slate-500 mt-1 italic">This is the MikroTik hotspot gateway clients receive on the Wi-Fi side.</p>
+                    </div>
                   )}
                 </div>
               </div>
