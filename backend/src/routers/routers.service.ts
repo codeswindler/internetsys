@@ -195,11 +195,15 @@ export class RoutersService {
     return { ip: '' };
   }
 
-  getVpnSettings(): { host: string } {
+  getVpnSettings(): { host: string; port: number } {
     return {
       host:
         this.configService.get<string>('VPN_PUBLIC_HOST') ||
         this.configService.get<string>('VPN_HOST', 'localhost'),
+      port: Number(
+        this.configService.get<string>('VPN_PUBLIC_PORT') ||
+          this.configService.get<string>('VPN_PORT', '5555'),
+      ),
     };
   }
 }

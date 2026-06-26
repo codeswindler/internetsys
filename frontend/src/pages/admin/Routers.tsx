@@ -437,8 +437,9 @@ export default function Routers() {
                     <button 
                       onClick={() => {
                         const vpnHost = vpnSettings?.host || window.location.hostname;
+                        const vpnPort = vpnSettings?.port || 5555;
                         const script = `/interface sstp-client remove [find name=pulselynk-vpn];
-/interface sstp-client add name=pulselynk-vpn connect-to=${vpnHost} user=${r.vpnUsername} password=${r.vpnPasswordEncrypted} profile=default-encryption verify-server-certificate=no add-sni=yes tls-version=only-1.2 disabled=no;`;
+/interface sstp-client add name=pulselynk-vpn connect-to=${vpnHost} port=${vpnPort} user=${r.vpnUsername} password=${r.vpnPasswordEncrypted} profile=default-encryption verify-server-certificate=no add-sni=yes tls-version=only-1.2 disabled=no;`;
                         navigator.clipboard.writeText(script);
                         toast.success('MikroTik CLI Script copied!');
                       }}
@@ -449,7 +450,8 @@ export default function Routers() {
                     <button 
                       onClick={() => {
                         const domain = vpnSettings?.host || window.location.hostname;
-                        const text = `MikroTik SSTP VPN Config:\nServer: ${domain}\nUser: ${r.vpnUsername}\nPass: ${r.vpnPasswordEncrypted}\nMode: SSTP Client`;
+                        const vpnPort = vpnSettings?.port || 5555;
+                        const text = `MikroTik SSTP VPN Config:\nServer: ${domain}:${vpnPort}\nUser: ${r.vpnUsername}\nPass: ${r.vpnPasswordEncrypted}\nMode: SSTP Client`;
                         navigator.clipboard.writeText(text);
                         toast.success('Credentials copied!');
                       }}
